@@ -4,6 +4,7 @@
 #include <string>
 #include <cstring>
 #include <vector>
+#include <exception>
 #include "./BehaviorTree/CPPBehaviorTree.h"
 
 using namespace std;
@@ -265,11 +266,23 @@ ControlValue Step(oPlaneData& MyData, int NumOfOthers, oPlaneData* Others, bool 
 
     if(BT_item != BTList.end())
     {
-        StickValue v = BT_item->second->Step(my, NumOfOthers, others, VP, throttle);
-        value.RollCMD = v.RollCMD;
-        value.PitchCMD = v.PitchCMD;
-        value.RudderCMD = v.RudderCMD;
-        value.Throttle = throttle;
+        try
+        {
+            StickValue v = BT_item->second->Step(my, NumOfOthers, others, VP, throttle);
+            value.RollCMD = v.RollCMD;
+            value.PitchCMD = v.PitchCMD;
+            value.RudderCMD = v.RudderCMD;
+            value.Throttle = throttle;
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "WARNING: BT runtime error for MyID: " << my.Resv0 << ": " << e.what() << std::endl;
+            std::cout << "Returning CMD : (0,0,0,0)" << std::endl;
+            value.RollCMD = 0;
+            value.PitchCMD = 0;
+            value.RudderCMD = 0;
+            value.Throttle = 0;
+        }
     }
     else
     {
