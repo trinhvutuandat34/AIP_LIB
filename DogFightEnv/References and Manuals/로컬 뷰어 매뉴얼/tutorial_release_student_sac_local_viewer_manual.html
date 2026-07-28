@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Release SAC MLP 100iter 학습 - 로컬 교전 로그 뷰어 매뉴얼</title>
+  <style>
+
+  :root {
+    --bg: #0b1220;
+    --panel: #111827;
+    --panel-2: #1f2937;
+    --line: #1f2937;
+    --line-2: #374151;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --gold: #fbbf24;
+    --good: #22c55e;
+    --warn: #f59e0b;
+    --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    line-height: 1.65;
+  }
+  header.top {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: linear-gradient(180deg, #0f172a 0%, #0b1220 100%);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header.top .title { font-size: 14px; letter-spacing: 0.4px; }
+  header.top .title b { color: var(--accent); font-weight: 600; }
+  header.top .meta { font-size: 12px; color: var(--muted); }
+  .wrap {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  nav.toc {
+    position: sticky;
+    top: 50px;
+    height: calc(100vh - 50px);
+    padding: 24px 18px;
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    background: var(--bg);
+  }
+  nav.toc h4 {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin: 0 0 10px;
+  }
+  nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: step; }
+  nav.toc li {
+    counter-increment: step;
+    padding: 8px 12px 8px 32px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    color: var(--muted);
+    position: relative;
+    transition: all 0.15s;
+  }
+  nav.toc li::before {
+    content: counter(step, decimal-leading-zero);
+    position: absolute;
+    left: 10px;
+    top: 8px;
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  nav.toc li a { color: inherit; text-decoration: none; display: block; }
+  nav.toc li:hover { background: rgba(56, 189, 248, 0.08); color: var(--text); }
+  main {
+    padding: 36px 48px 100px;
+    min-width: 0;
+  }
+  section { margin-bottom: 60px; scroll-margin-top: 80px; }
+  section:not(.cover-section) {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+  .cover-section {
+    margin-bottom: 56px;
+  }
+  .eyebrow {
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  h1 {
+    font-size: 38px;
+    margin: 0 0 12px;
+    letter-spacing: -0.5px;
+    line-height: 1.15;
+  }
+  .cover-section p {
+    max-width: 920px;
+    font-size: 16px;
+    color: var(--muted);
+    margin: 0;
+  }
+  h2 {
+    font-size: 24px;
+    margin: 0 0 18px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent);
+    display: inline-block;
+    padding-right: 14px;
+  }
+  h2 .step-num {
+    display: inline-block;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    text-align: center;
+    background: var(--accent);
+    color: #0b1220;
+    border-radius: 10px;
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 14px;
+    font-weight: 700;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+  h3 {
+    font-size: 17px;
+    margin: 20px 0 8px;
+    color: var(--accent-2);
+  }
+  p { margin: 8px 0 12px; }
+  a { color: var(--accent); }
+  code {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 13px;
+    background: rgba(148, 163, 184, 0.15);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #f1f5f9;
+  }
+  pre {
+    background: #0a0f1c;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 18px;
+    overflow-x: auto;
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    margin: 12px 0;
+    color: var(--text);
+  }
+  pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    border-radius: 0;
+  }
+  pre.shell::before {
+    content: "PS> ";
+    color: var(--gold);
+    font-weight: 600;
+  }
+  pre.yaml { border-left-color: var(--accent-2); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13px;
+    background: var(--panel);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    background: var(--panel-2);
+    color: var(--accent);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  tr:last-child td { border-bottom: none; }
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    align-items: stretch;
+    margin: 16px 0 22px;
+  }
+  .flow .box {
+    background: var(--panel);
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    padding: 14px 10px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .flow .box .num {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    background: var(--accent);
+    color: #0b1220;
+    border-radius: 50%;
+    font-weight: 700;
+    font-family: "JetBrains Mono", Consolas, monospace;
+    margin-bottom: 6px;
+  }
+  .flow .box b { color: var(--text); font-size: 13px; display: block; margin-top: 2px; }
+  .diagram, .figure {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+  .diagram svg { display: block; width: 100%; max-width: 100%; height: auto; }
+  .figure img { width: 100%; display: block; background: #0a0f1c; border-radius: 8px; }
+  .caption { color: var(--muted); font-size: 12px; margin-top: 8px; text-align: center; }
+  .checklist {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .checklist div {
+    background: var(--panel);
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    padding: 13px 14px;
+    color: var(--muted);
+  }
+  .checklist strong { color: var(--text); }
+  .callout {
+    padding: 12px 16px 12px 44px;
+    border-radius: 8px;
+    margin: 12px 0;
+    font-size: 14px;
+    background: rgba(56, 189, 248, 0.08);
+    border-left: 3px solid var(--accent);
+    position: relative;
+  }
+  .callout::before {
+    content: "ⓘ";
+    position: absolute;
+    left: 16px;
+    top: 10px;
+    color: var(--accent);
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .callout.warn { background: rgba(245, 158, 11, 0.08); border-left-color: var(--warn); }
+  .callout.warn::before { content: "⚠"; color: var(--warn); }
+  .callout.basis { background: rgba(129, 140, 248, 0.08); border-left-color: var(--accent-2); }
+  .callout.basis::before { content: "§"; color: var(--accent-2); }
+  .callout strong { color: var(--accent); }
+  .callout.warn strong { color: var(--warn); }
+  .callout.basis strong { color: var(--accent-2); }
+  footer {
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+    padding-top: 24px;
+    margin-top: 20px;
+    font-size: 13px;
+  }
+  @media (max-width: 900px) {
+    header.top { position: static; padding: 14px 18px; display: block; }
+    header.top .title { line-height: 1.45; margin-bottom: 4px; }
+    .wrap { display: block; max-width: 100%; }
+    nav.toc {
+      position: static;
+      height: auto;
+      padding: 16px;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    nav.toc ol {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 4px;
+    }
+    nav.toc li { margin-bottom: 0; }
+    main { padding: 24px 16px 72px; }
+    section { margin-bottom: 42px; }
+    h1 { font-size: 30px; line-height: 1.2; }
+    .flow { grid-template-columns: 1fr; gap: 8px; }
+    table {
+      table-layout: fixed;
+      display: table;
+      overflow: visible;
+    }
+    th, td, code {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    pre, pre code {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+  }
+
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="title">DogFightEnv · <b>Release SAC MLP 매뉴얼</b> · 학습 → 교전 → 로그 뷰어</div>
+    <div class="meta">원본 내용 유지 · 스타일/목차 형식 적용 · 2026-05-22</div>
+  </header>
+
+  <div class="wrap">
+    <nav class="toc">
+      <h4>목차</h4>
+      <ol>
+    <li><a href="#overview">한눈에 보는 흐름</a></li>
+    <li><a href="#prep">실행 준비</a></li>
+    <li><a href="#yaml">YAML 100iter 설정</a></li>
+    <li><a href="#train">학습 실행</a></li>
+    <li><a href="#dogfight">로컬 교전 로그 생성</a></li>
+    <li><a href="#viewer">로그 뷰어 사용</a></li>
+    <li><a href="#trouble">확인 포인트</a></li>
+      </ol>
+    </nav>
+
+    <main>
+
+    <section id="cover" class="cover-section">
+      <div class="eyebrow">DogFightEnv Release Student Manual</div>
+    <h1>SAC MLP 100iter 학습부터 로컬 교전 로그 뷰어까지</h1>
+    <p>
+      `Release/experiments/student_sac_mlp.yaml`을 이용해 간단한 학습 모델을 만들고,
+      `run_local_dogfight.py`로 `AIP_BASE_target.dll` 상대 교전 로그를 저장한 뒤,
+      웹 로그 뷰어에서 결과를 복기하는 학생용 실습 절차입니다.
+    </p>
+    </section>
+
+
+    <section id="overview">
+      <h2><span class="step-num">00</span> 한눈에 보는 흐름</h2>
+      <div class="flow" aria-label="workflow">
+        <div class="box"><span class="num">1</span><b>실행 준비</b>Release 폴더에서 Python 환경 확인</div>
+        <div class="box"><span class="num">2</span><b>YAML 설정</b><code>runtime.iterations</code>를 100으로 설정</div>
+        <div class="box"><span class="num">3</span><b>학습 실행</b><code>run_experiment.py</code>로 SAC MLP 학습</div>
+        <div class="box"><span class="num">4</span><b>로컬 교전</b>학습 bundle로 <code>AIP_BASE_target.dll</code>과 교전</div>
+        <div class="box"><span class="num">5</span><b>로그 확인</b>웹 Replay 탭에서 CSV 로그 확인</div>
+      </div>
+
+      <div class="diagram">
+        <svg width="1060" height="230" viewBox="0 0 1060 230" role="img" aria-label="training to replay diagram">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#116a7b"></path>
+            </marker>
+          </defs>
+          <rect x="20" y="34" width="180" height="96" rx="8" fill="#ffffff" stroke="#d9dee7"></rect>
+          <text x="110" y="67" text-anchor="middle" font-size="16" font-weight="700" fill="#17202a">student_sac_mlp.yaml</text>
+          <text x="110" y="96" text-anchor="middle" font-size="13" fill="#5b6675">iterations, output tag</text>
+          <line x1="205" y1="82" x2="292" y2="82" stroke="#116a7b" stroke-width="3" marker-end="url(#arrow)"></line>
+          <rect x="300" y="34" width="180" height="96" rx="8" fill="#ffffff" stroke="#d9dee7"></rect>
+          <text x="390" y="67" text-anchor="middle" font-size="16" font-weight="700" fill="#17202a">run_experiment.py</text>
+          <text x="390" y="96" text-anchor="middle" font-size="13" fill="#5b6675">train_rllib.py 호출</text>
+          <line x1="485" y1="82" x2="572" y2="82" stroke="#116a7b" stroke-width="3" marker-end="url(#arrow)"></line>
+          <rect x="580" y="34" width="180" height="96" rx="8" fill="#ffffff" stroke="#d9dee7"></rect>
+          <text x="670" y="67" text-anchor="middle" font-size="16" font-weight="700" fill="#17202a">model bundle</text>
+          <text x="670" y="96" text-anchor="middle" font-size="13" fill="#5b6675">metadata + weights</text>
+          <line x1="765" y1="82" x2="852" y2="82" stroke="#116a7b" stroke-width="3" marker-end="url(#arrow)"></line>
+          <rect x="860" y="34" width="180" height="96" rx="8" fill="#ffffff" stroke="#d9dee7"></rect>
+          <text x="950" y="67" text-anchor="middle" font-size="16" font-weight="700" fill="#17202a">run_local_dogfight.py</text>
+          <text x="950" y="96" text-anchor="middle" font-size="13" fill="#5b6675">AIP_BASE_target.dll</text>
+          <line x1="950" y1="132" x2="950" y2="176" stroke="#116a7b" stroke-width="3" marker-end="url(#arrow)"></line>
+          <rect x="770" y="174" width="280" height="54" rx="8" fill="#eaf6f7" stroke="#b9dde3"></rect>
+          <text x="910" y="196" text-anchor="middle" font-size="14" font-weight="700" fill="#17202a">
+            <tspan x="910" dy="0">logs/*.csv + summary.json</tspan>
+            <tspan x="910" dy="18">Web Replay Viewer</tspan>
+          </text>
+        </svg>
+      </div>
+
+      <div class="callout basis">
+        <strong>판단 근거:</strong>
+        학생에게는 “학습 설정 파일 → 모델 bundle → 로컬 교전 → replay 확인”의 산출물 흐름이 가장 중요합니다.
+        그래서 내부 RLlib 세부 구조보다 파일 위치와 CLI 계약을 먼저 보이도록 구성했습니다.
+      </div>
+    </section>
+
+    <section id="prep">
+      <h2><span class="step-num">01</span> 실행 준비</h2>
+      <p>권장 Python은 프로젝트 기준 conda 환경입니다. 모든 명령은 <code>Release</code> 폴더에서 실행합니다.</p>
+
+      <pre class="shell"><code>cd C:\Users\USER\workspace\DogFightEnv\DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe -m pip install -r requirements.txt</code></pre>
+
+      <div class="callout warn">
+        <strong>주의:</strong>
+        <code>AIP_BASE*.dll</code>, <code>JSBSimAIPLib.dll</code>, <code>Rule_forTraining.xml</code>, <code>aircraft/</code>, <code>engine/</code> 폴더는 런타임 계약에 포함됩니다.
+        실습 중 이름을 바꾸거나 이동하지 않습니다.
+      </div>
+
+      <p>Ray가 이전 학습에서 남아 있으면 시작 전에 정리합니다. 이미 깨끗한 상태라면 건너뛰어도 됩니다.</p>
+
+      <pre class="shell"><code>C:\Users\USER\anaconda3\envs\aip\python.exe -m ray stop --force</code></pre>
+
+      <table>
+        <thead>
+          <tr>
+            <th>항목</th>
+            <th>확인할 위치</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>YAML 템플릿</td>
+            <td><code>experiments\student_sac_mlp.yaml</code></td>
+          </tr>
+          <tr>
+            <td>YAML 실행기</td>
+            <td><code>scripts\run_experiment.py</code></td>
+          </tr>
+          <tr>
+            <td>로컬 교전 실행기</td>
+            <td><code>run_local_dogfight.py</code></td>
+          </tr>
+          <tr>
+            <td>웹 로그 뷰어</td>
+            <td><code>tools\dashboard.py</code> 또는 <code>tools\web_log_viewer.py</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>파일명 메모:</strong>
+        현재 배포본의 실행기는 <code>run_experiment.py</code>입니다. <code>run_experiments.py</code>처럼 복수형 파일은 없습니다.
+      </div>
+    </section>
+
+    <section id="yaml">
+      <h2><span class="step-num">02</span> YAML을 100 iteration 실습용으로 설정</h2>
+      <p>
+        <code>run_experiment.py</code>는 YAML의 <code>runtime.iterations</code> 값을 그대로 읽습니다.
+        명령줄에서 iteration만 덮어쓰는 옵션은 없으므로, 실습용 복사본을 만들어 수정하는 방식을 권장합니다.
+      </p>
+
+      <pre class="shell"><code>Copy-Item experiments\student_sac_mlp.yaml experiments\team01_sac_mlp_100it.yaml</code></pre>
+
+      <p>복사한 YAML에서 아래 항목을 수정합니다.</p>
+
+      <pre class="yaml"><code>output:
+  name: team01
+  tag: sac_mlp_100it
+
+runtime:
+  iterations: 100
+  save_lightweight_bundle: true
+  lightweight_bundle_frequency: 5
+  save_native_checkpoint: true
+  native_checkpoint_frequency: 25</code></pre>
+
+      <h3>학습 상대 모드 선택</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>선택</th>
+            <th>YAML 설정</th>
+            <th>수업에서의 의미</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Release 기본 실습</td>
+            <td><code>env.target_mode: behavior_tree</code> + <code>target_behavior_dll: AIP_BASE_target.dll</code></td>
+            <td>현재 Release 기본값입니다. AIP target DLL을 상대로 학습합니다.</td>
+          </tr>
+          <tr>
+            <td>빠른 기초 확인</td>
+            <td><code>env.target_mode: fixed</code></td>
+            <td>고정 표적을 상대로 짧게 smoke할 때 선택합니다.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout basis">
+        <strong>판단 근거:</strong>
+        최신 <code>student_sac_mlp.yaml</code>의 기본 target mode는 <code>behavior_tree</code>이며
+        <code>AIP_BASE_target.dll</code>을 사용합니다. 더 빠른 기능 확인만 필요하면 복사본에서
+        <code>target_mode</code>를 <code>fixed</code>로 낮춰 smoke한 뒤 다시 BT 상대 학습으로 돌아옵니다.
+      </div>
+    </section>
+
+    <section id="train">
+      <h2><span class="step-num">03</span> 학습 실행</h2>
+      <p>먼저 dry-run으로 YAML이 어떤 <code>train_rllib.py</code> 명령으로 변환되는지 확인합니다.</p>
+
+      <pre class="shell"><code>C:\Users\USER\anaconda3\envs\aip\python.exe scripts\run_experiment.py experiments\team01_sac_mlp_100it.yaml --dry-run</code></pre>
+
+      <p>문제가 없으면 실제 학습을 시작합니다. 100 iteration은 PC 성능과 Ray 초기화 상태에 따라 시간이 걸릴 수 있습니다.</p>
+
+      <pre class="shell"><code>C:\Users\USER\anaconda3\envs\aip\python.exe scripts\run_experiment.py experiments\team01_sac_mlp_100it.yaml</code></pre>
+
+      <h3>생성되는 주요 산출물</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>산출물</th>
+            <th>기본 경로 예시</th>
+            <th>용도</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>모델 bundle</td>
+            <td><code>artifacts\models\team01\sac_mlp_100it</code></td>
+            <td><code>run_local_dogfight.py --ownship-bundle-dir</code>에 넣는 추론 모델</td>
+          </tr>
+          <tr>
+            <td>주기 bundle snapshot</td>
+            <td><code>artifacts\models\team01\sac_mlp_100it\bundle_000005</code></td>
+            <td><code>runtime.lightweight_bundle_frequency</code>가 0보다 클 때 저장되는 중간 추론 후보</td>
+          </tr>
+          <tr>
+            <td>native checkpoint</td>
+            <td><code>artifacts\checkpoints\team01\sac_mlp_100it\checkpoint_final</code></td>
+            <td>optimizer/replay buffer까지 포함하는 학습 재개용 저장물</td>
+          </tr>
+          <tr>
+            <td>학습 로그 CSV</td>
+            <td><code>artifacts\logs\team01\sac_mlp_100it\training_log.csv</code></td>
+            <td>iteration별 reward, 거리, WEZ, 승패 등 확인</td>
+          </tr>
+          <tr>
+            <td>대시보드 로그</td>
+            <td><code>artifacts\dashboard\team01_sac_mlp_100it\metrics.jsonl</code></td>
+            <td>웹 Training 탭 차트 표시</td>
+          </tr>
+          <tr>
+            <td>실험 기록</td>
+            <td><code>artifacts\records\team01\sac_mlp_100it</code></td>
+            <td>YAML, reward/observation/config 스냅샷 보관</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>수업 팁:</strong>
+        reward 평균만 보지 말고 <code>ATA</code>, 거리 접근, <code>ep_min_distance</code>, <code>ep_wez_steps</code>, crash rate, win rate를 함께 확인하도록 안내합니다.
+      </div>
+    </section>
+
+    <section id="dogfight">
+      <h2><span class="step-num">04</span> 학습 모델로 AIP_BASE_target.dll 상대 로컬 교전</h2>
+      <p>
+        학습이 끝나면 ownship은 RL bundle, target은 BT DLL backend로 실행합니다.
+        <code>--save-log</code>를 켜야 <code>logs/</code> 폴더에 replay용 CSV가 남습니다.
+      </p>
+
+      <pre class="shell"><code>C:\Users\USER\anaconda3\envs\aip\python.exe run_local_dogfight.py `
+  --ownship-backend rl `
+  --ownship-bundle-dir artifacts\models\team01\sac_mlp_100it `
+  --target-backend bt `
+  --target-bt-dll AIP_BASE_target.dll `
+  --observation-mode tactical16 `
+  --max-engage-time 120 `
+  --episode-step-limit 7200 `
+  --save-log</code></pre>
+
+      <p>정상 종료되면 터미널에는 종료 조건, 양측 health, total reward가 출력됩니다.</p>
+
+      <pre><code>simulation finished
+end_condition: ...
+terminated: True truncated: False
+total_reward: ...
+ownship_health: ...
+target_health: ...
+tacview log saved</code></pre>
+
+      <h3>로그 파일 이름</h3>
+      <p><code>Release/logs/</code> 아래에 같은 timestamp를 가진 3개 파일이 생성됩니다.</p>
+
+      <pre><code>logs\
+  2026_5_22_10_30_12_ownship_(F-16)[Blue].csv
+  2026_5_22_10_30_12_target_(F-16)[Red].csv
+  2026_5_22_10_30_12_summary.json</code></pre>
+
+      <div class="callout warn">
+        <strong>저장 범위:</strong>
+        <code>--save-log</code>는 정상 episode 종료 후 저장됩니다.
+        reset 실패, provider 예외, 강제 중단처럼 종료 블록에 도달하지 못한 경우까지 항상 보존하는 crash dump 기능은 아닙니다.
+      </div>
+    </section>
+
+    <section id="viewer">
+      <h2><span class="step-num">05</span> tools 로그 뷰어 사용</h2>
+      <p>통합 대시보드의 Replay 탭을 바로 열려면 다음 명령을 사용합니다.</p>
+
+      <pre class="shell"><code>C:\Users\USER\anaconda3\envs\aip\python.exe tools\dashboard.py `
+  --default-tab replay `
+  --logdir logs `
+  --port 7860</code></pre>
+
+      <p>브라우저에서 아래 주소를 엽니다.</p>
+
+      <pre><code>http://127.0.0.1:7860/?tab=replay</code></pre>
+
+      <p>Replay 전용 호환 실행기를 사용해도 됩니다. 기본 포트는 7870입니다.</p>
+
+      <pre class="shell"><code>C:\Users\USER\anaconda3\envs\aip\python.exe tools\web_log_viewer.py --logdir logs --port 7870</code></pre>
+
+      <pre><code>http://127.0.0.1:7870</code></pre>
+
+      <div class="figure">
+        <img src="260519_2043_web_log_viewer_render.png" alt="DogFightEnv web log viewer replay render screenshot">
+        <div class="caption">
+          그림 1. 웹 로그 뷰어 렌더 예시. 실제 실습에서는 <code>run_local_dogfight.py --save-log</code>로 생성한 최신 CSV 쌍을 선택해 재생합니다.
+        </div>
+      </div>
+
+      <h3>뷰어에서 확인할 항목</h3>
+      <div class="checklist">
+        <div><strong>궤적</strong><br>Blue ownship과 Red target의 상대 위치, 접근/이탈 방향을 확인합니다.</div>
+        <div><strong>HUD 지표</strong><br>거리, health, end condition, 시간 진행을 확인합니다.</div>
+        <div><strong>WEZ</strong><br>표적이 유효 교전 구역 안에 들어오는지 봅니다.</div>
+        <div><strong>카메라</strong><br>orbit view로 회전하면서 기동 형태를 복기합니다.</div>
+      </div>
+
+      <div class="callout basis">
+        <strong>판단 근거:</strong>
+        학생 실습에서는 Tacview CSV를 외부 도구로 옮기는 것보다, 배포본에 포함된 웹 뷰어로 바로 확인하는 흐름이 재현성이 높습니다.
+        <code>tools/dashboard.py</code>는 Training 탭과 Replay 탭을 함께 제공하므로 학습 지표와 교전 결과를 한 서버에서 연결해 설명할 수 있습니다.
+      </div>
+    </section>
+
+    <section id="trouble">
+      <h2><span class="step-num">06</span> 확인 포인트와 자주 생기는 실수</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>상황</th>
+            <th>확인 방법</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>100 iteration으로 실행되지 않음</td>
+            <td><code>--dry-run</code> 출력의 <code>--iterations</code> 값을 확인합니다. YAML의 <code>runtime.iterations</code>가 100이어야 합니다.</td>
+          </tr>
+          <tr>
+            <td>모델 경로를 못 찾음</td>
+            <td><code>artifacts\models\<output.name>\<output.tag></code>가 실제 존재하는지 확인합니다.</td>
+          </tr>
+          <tr>
+            <td>DLL 상대가 아닌 것 같음</td>
+            <td>로컬 교전 명령에 <code>--target-backend bt --target-bt-dll AIP_BASE_target.dll</code>이 들어갔는지 확인합니다.</td>
+          </tr>
+          <tr>
+            <td>로그 뷰어 목록이 비어 있음</td>
+            <td><code>--logdir logs</code>가 <code>Release/logs</code>를 가리키는지, ownship/target CSV 쌍이 같은 timestamp로 있는지 확인합니다.</td>
+          </tr>
+          <tr>
+            <td>브라우저가 열리지 않음</td>
+            <td>터미널에 표시된 포트와 주소를 확인하고, 다른 서버가 같은 포트를 쓰면 <code>--port 7871</code>처럼 바꿉니다.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>최소 검증 명령</h3>
+      <pre class="shell"><code>C:\Users\USER\anaconda3\envs\aip\python.exe -m py_compile `
+  scripts\run_experiment.py `
+  run_local_dogfight.py `
+  tools\dashboard.py `
+  tools\web_log_viewer.py
+
+C:\Users\USER\anaconda3\envs\aip\python.exe scripts\run_experiment.py experiments\team01_sac_mlp_100it.yaml --dry-run</code></pre>
+
+      <div class="callout basis">
+        <strong>판단 근거:</strong>
+        긴 Ray 학습을 매뉴얼 작성자가 대신 실행해 “통과”라고 주장하는 것은 재현성과 맞지 않습니다.
+        수업 전에는 위 dry-run과 짧은 1-2 iteration smoke를 먼저 확인하고, 실제 100 iteration은 학생 PC 또는 강의용 PC에서 수행하는 절차로 두는 것이 안전합니다.
+      </div>
+    </section>
+  
+      <footer>작성 기준: 2026-05-22, DogFightEnv Release 배포본 기준. 분석 메모:
+    `LogDevelop/260522_0103_release_student_sac_local_viewer_manual_analysis.md`</footer>
+    </main>
+  </div>
+</body>
+</html>

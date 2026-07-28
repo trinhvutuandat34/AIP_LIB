@@ -1,0 +1,4 @@
+cd 'D:\AIP\AIP_LIB\DogFightEnv\Release'
+conda activate aip
+python run_unreal_inference.py --mode bt --team-name BT+RL --server-ip 10.185.16.247 --server-port 6666
+10.185.16.247

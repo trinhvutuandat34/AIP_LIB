@@ -1,0 +1,25 @@
+# Stale Windows installers (not project source, don't belong in the repo)
+Anaconda3-*.exe
+VSCodeUserSetup-*.exe
+*.lnk
+
+# Build output / IDE cache (regeneratable from source)
+**/.vs/
+**/Debug/
+**/x64/
+build/CMakeFiles/
+build/CMakeCache.txt
+bin/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# Python
+**/__pycache__/
+*.pyc
+
+# Vendored packaged Unreal builds (binaries only, no source, ~1GB — see
+# CLAUDE.md; re-obtain from competition organizers rather than tracking here)
+Windows/

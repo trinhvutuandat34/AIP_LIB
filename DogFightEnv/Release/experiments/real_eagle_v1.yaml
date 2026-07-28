@@ -1,0 +1,70 @@
+# real_eagle - first real curriculum run (COMPETITION_PLAN.md Week 1-2 batch)
+#
+# Uses the built-in 15-stage curriculum (src/dogfight/ai/curriculum.py) as-is -
+# no curriculum.stages_module override. student/my_curriculum.py's toy 2-stage
+# example is deliberately left untouched; see COMPETITION_PLAN.md #9/#7.
+#
+# Env corrections applied at the source, NOT via this YAML - for
+# script: train_curriculum, run_experiment.py never forwards
+# env.max_engage_time / env.episode_step_limit / env_config at all (checked
+# directly in scripts/run_experiment.py's build_argv()); episode length is
+# purely per-CurriculumStage:
+#   - Episode length: full_dogfight's episode_step_limit is now 12000 (200s),
+#     fixed directly in src/dogfight/ai/curriculum.py.
+#   - WEZ phase widening (COMPETITION_RULES.md #6.2): DEFAULT_ENV_CONFIG["wez"]
+#     in src/dogfight/config.py now carries a "phases" list; every stage
+#     inherits it automatically since build_stage_env_config() never touches
+#     the "wez" key.
+#
+# 실행:
+#   python scripts\run_experiment.py experiments\real_eagle_v1.yaml
+# dry-run:
+#   python scripts\run_experiment.py experiments\real_eagle_v1.yaml --dry-run
+
+name: real_eagle_v1
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: v1
+
+env:
+  observation_mode: custom
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  observation_module: student.my_observation  # live-parity-fixed, COMPETITION_PLAN.md #5.2
+
+algo:
+  name: sac
+  framework: torch
+  lr: 3.0e-4
+  gamma: 0.99
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  replay_buffer_capacity: 100000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+runtime:
+  num_env_runners: 2
+  resume: true                      # resuming stage-8 crash, 2026-07-09
+  # start_stage: 0                  # skip to a specific stage (0-indexed)
+  # restore_checkpoint: artifacts/checkpoints/real_eagle/v1/<stage_dir>/<checkpoint>
+
+policy_probe:
+  enabled: true
+  interval: 10
+  steps: 4
+  print: true
+
+notes: >
+  real_eagle v1 (2026-07-08). Cold start against the now-real, now-lethal,
+  now-survivable native BT (COMPETITION_PLAN.md #5.1). Built-in curriculum,
+  ported reward (student/my_reward.py), corrected full_dogfight episode
+  length and phase-aware WEZ applied at the source (see header above).

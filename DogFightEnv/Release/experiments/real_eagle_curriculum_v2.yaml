@@ -1,0 +1,100 @@
+# real_eagle — Survive-first 16-stage curriculum v2
+#
+# NOTE (2026-07-08): renamed from team01_curriculum_v2.yaml for team-name consistency.
+# NOT CURRENTLY RUNNABLE AS-IS: this file references a "v3" student/my_curriculum.py
+# (16 stages) and student/my_reward.py (pursuit_scale/position_scale/wez_bonus_scale
+# tuning) that do not exist in this checkout -- both files are still the bare minimal
+# templates. There is also no artifacts/checkpoints/ or artifacts/curriculum/ data
+# backing the "curriculum_v1 BT-crash exploit" postmortem described below, so that
+# result did not happen in this checkout either. Provenance unclear -- possibly authored
+# against a different/earlier version of student/ (see PROJECT_STRUCTURE.md's note on
+# the separate Desktop copy of this project), or drafted planning notes that were never
+# executed here. Treat as reference/inspiration for curriculum design, not a runnable
+# experiment, until student/my_curriculum.py and student/my_reward.py actually match.
+#
+# Uses my_curriculum.py v3 + my_reward.py v3.
+# COLD START — no init_bundle, no restore_checkpoint.
+# Do NOT seed from curriculum_v1 bundle: that policy learned the BT-crash
+# exploit (fly far, wait 136s for BT to self-crash → draw=-20) and its SAC
+# entropy collapsed to alpha≈0.009 (near-deterministic). Seeding it here
+# would import both problems.
+#
+# Key v3 changes vs v1 curriculum:
+#   Stage 3  — added ep_wez_steps_min=8 gate (agent MUST achieve WEZ contact
+#               with a passive autopilot target before any BT is introduced)
+#   Stage 4  — r_heading 180→60 (convergent spawn prevents BT divergence exploit)
+#              max_iterations 250→300 (more BT-fighting practice before headon)
+#   Stage 15 — r_heading 180→120 (reduces but doesn't eliminate divergence)
+#              max_iterations 400→800
+#   Headon   — win_rate thresholds 0.60/0.55→0.50/0.45 (organic advancement)
+#              max_iterations 70-80→150, advance_window 10→15
+#
+# Key v3 reward changes (in my_reward.py::MY_REWARD_CONFIG):
+#   pursuit_scale   0.5 → 1.0
+#   position_scale  0.15 → 0.3
+#   wez_bonus_scale 0.5 → 1.5
+#
+# Estimated total max iterations: ~3150  (~22-24 h CPU-only).
+#
+# Run:
+#   python scripts\run_experiment.py experiments\real_eagle_curriculum_v2.yaml
+# Dry-run:
+#   python scripts\run_experiment.py experiments\real_eagle_curriculum_v2.yaml --dry-run
+# Resume an interrupted run:
+#   set runtime.resume: true below and re-run the same command.
+
+name: real_eagle_curriculum_v2
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: curriculum_v2
+
+env:
+  observation_mode: tactical16
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  # observation_module: student.my_observation  # uncomment if using custom obs
+
+algo:
+  name: sac
+  framework: torch
+  lr: 3.0e-4
+  gamma: 0.99
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  replay_buffer_capacity: 100000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+curriculum:
+  stages_module: student.my_curriculum
+
+runtime:
+  num_env_runners: 2
+  # resume: true                    # uncomment to resume an interrupted run
+  # start_stage: 0                  # skip to a specific stage (0-indexed)
+  # restore_checkpoint: artifacts/checkpoints/real_eagle/curriculum_v2/stage_0_solo_flight_survival/checkpoint_000070
+  #   ^ full resume (policy + optimizer + replay buffer) from a native checkpoint
+  #   ^ use this if the run is interrupted; do NOT combine with init_bundle
+
+# NOTE: env_config is NOT consumed by train_curriculum.py.
+# Kept here for documentation only.
+env_config:
+  step_ratio: 6
+  wez:
+    angle_deg: 2.0
+    min_range_m: 152.4
+    max_range_m: 914.4
+
+notes: >
+  v2 curriculum run (2026-06-25). Cold start with v3 reward + v3 curriculum.
+  Stage 3 WEZ gate enforces actual WEZ contact before BT introduction.
+  Stage 4 convergent spawn (r_heading=60) blocks the BT-self-crash exploit
+  that caused curriculum_v1 stage15_v1 to produce a pure-evasion policy.

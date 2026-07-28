@@ -1,0 +1,73 @@
+# *** DO NOT --resume THIS RUN AFTER 2026-07-12 ***
+# student/my_curriculum.py was rebuilt for v4 (12 stages, different order);
+# resuming v3 would key its 17-stage state file against the new stage list
+# and silently mis-map stage indices. v4 (experiments/real_eagle_v4.yaml)
+# supersedes this run -- see the audit notes there.
+#
+# real_eagle v3 - v2's clean restart PLUS the two OBFM asymmetric-start stages.
+#
+# Same as real_eagle_v2 (fully-fixed BT, corrected 2500ft main-match spawn,
+# phase-aware WEZ + pursuit, active position reward), but the curriculum comes
+# from student/my_curriculum.py instead of the built-in one: it splices an
+# offensive-BFM and a defensive-BFM stage (the ~556m OBFM_RED/OBFM_BLUE preset
+# geometry, confirmed 2026-07-11) in after autopilot_pursuit. Those give a clean
+# win/loss signal the neutral stages lack, where BT-vs-BT stalemates.
+#
+# This is a SEPARATE run from v2 - adding curriculum stages shifts stage indices,
+# so v3 must start fresh (it does; new tag). Leave v2 alone or stop it first.
+#
+# NOTE: keep this file pure ASCII (run_experiment.py prints notes to a cp949
+# console, which crashes on non-ASCII).
+#
+# run:
+#   python scripts\run_experiment.py experiments\real_eagle_v3.yaml
+# dry-run:
+#   python scripts\run_experiment.py experiments\real_eagle_v3.yaml --dry-run
+
+name: real_eagle_v3
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: v3
+
+env:
+  observation_mode: custom
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  observation_module: student.my_observation
+
+curriculum:
+  stages_module: student.my_curriculum
+
+algo:
+  name: sac
+  framework: torch
+  lr: 3.0e-4
+  gamma: 0.99
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  replay_buffer_capacity: 100000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+runtime:
+  num_env_runners: 2
+  resume: false                     # fresh start from stage 0 (no prior v3 state)
+
+policy_probe:
+  enabled: true
+  interval: 10
+  steps: 4
+  print: true
+
+notes: >
+  real_eagle v3 (2026-07-11). v2's fully-fixed setup plus two OBFM asymmetric
+  stages (offensive + defensive, ~556m attacker-on-six) from
+  student/my_curriculum.py, spliced after autopilot_pursuit.

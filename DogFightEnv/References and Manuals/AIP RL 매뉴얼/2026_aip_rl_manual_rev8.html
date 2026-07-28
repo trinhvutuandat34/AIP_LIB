@@ -1,0 +1,1648 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>2026 AI Pilot Top Gun Challenge · 학생 매뉴얼 (rev7 개선판)</title>
+<style>
+  :root {
+    --bg: #050a18;
+    --bg-grad: radial-gradient(ellipse at top, #0b1729 0%, #050a18 60%);
+    --panel: rgba(15, 23, 42, 0.85);
+    --panel-2: #1e293b;
+    --line: #1e293b;
+    --line-2: #374151;
+    --grid: rgba(56, 189, 248, 0.06);
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --gold: #fbbf24;
+    --blue: #60a5fa;
+    --red: #f87171;
+    --good: #22c55e;
+    --warn: #f59e0b;
+    --bad: #ef4444;
+    --purple: #c084fc;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg-grad);
+    color: var(--text);
+    font-family: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    overflow: hidden;
+  }
+
+  .deck { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+  .slide {
+    position: absolute; inset: 0;
+    padding: 44px 64px 88px;
+    display: none;
+    flex-direction: column;
+    animation: fadeIn 0.3s ease;
+  }
+  .slide.active { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .chapter-tag {
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .slide h1 {
+    margin: 0 0 10px;
+    font-size: 32px;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+  }
+  .slide h1 .accent { color: var(--accent); }
+  .slide h1 .gold   { color: var(--gold); }
+  .slide .lead {
+    font-size: 15px;
+    color: var(--muted);
+    margin: 0 0 18px;
+    max-width: 1000px;
+  }
+
+  /* Body grid */
+  .body { flex: 1; display: grid; gap: 22px; min-height: 0; }
+  .body.col-1 { grid-template-columns: 1fr; }
+  .body.col-2 { grid-template-columns: 1fr 1fr; }
+  .body.col-2-wide-left { grid-template-columns: 1.4fr 1fr; }
+  .body.col-2-wide-right { grid-template-columns: 1fr 1.4fr; }
+  .body.col-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .body.col-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    overflow: hidden;
+  }
+  .card h3 {
+    margin: 0 0 8px;
+    font-size: 15px;
+    color: var(--accent);
+    letter-spacing: 0.2px;
+  }
+  .card.good { border-left: 3px solid var(--good); }
+  .card.warn { border-left: 3px solid var(--warn); }
+  .card.bad  { border-left: 3px solid var(--bad); }
+  .card.info { border-left: 3px solid var(--accent); }
+  .card.gold { border-left: 3px solid var(--gold); }
+  .card.purple { border-left: 3px solid var(--purple); }
+  .card.good h3 { color: #86efac; }
+  .card.warn h3 { color: #fde68a; }
+  .card.bad  h3 { color: #fca5a5; }
+  .card.purple h3 { color: var(--purple); }
+  .card p { margin: 4px 0; font-size: 13px; line-height: 1.55; }
+  .card ul { margin: 4px 0 0 18px; padding: 0; }
+  .card li { margin: 4px 0; font-size: 13px; line-height: 1.45; }
+
+  /* Numbered cards */
+  .nbox {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+    position: relative;
+    padding-left: 56px;
+  }
+  .nbox::before {
+    content: attr(data-n);
+    position: absolute;
+    left: 14px; top: 16px;
+    width: 30px; height: 30px;
+    line-height: 30px;
+    text-align: center;
+    background: var(--accent);
+    color: #0b1220;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 8px;
+  }
+  .nbox h3 { margin: 0 0 4px; font-size: 14px; color: var(--accent); }
+  .nbox p { margin: 2px 0; font-size: 13px; color: var(--text); }
+  .nbox small { color: var(--muted); font-size: 12px; }
+
+  /* Code blocks */
+  code {
+    font-family: "JetBrains Mono", "Consolas", monospace;
+    background: rgba(148, 163, 184, 0.15);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 12.5px;
+    color: #f1f5f9;
+  }
+  pre {
+    background: #050912;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 16px;
+    overflow-x: auto;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 8px 0;
+  }
+  pre.yaml { border-left-color: var(--accent-2); }
+  pre.shell::before { content: "PS> "; color: var(--gold); font-weight: 600; }
+  pre .cmt { color: #6b7280; }
+  pre .key { color: #93c5fd; }
+  pre .val { color: #fde68a; }
+  pre .flag { color: #86efac; }
+  pre .py { color: #c4b5fd; }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    background: var(--panel);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 6px 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    background: var(--panel-2);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 11.5px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  tr:last-child td { border-bottom: none; }
+
+  /* Section divider slide */
+  .section-divider {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding-left: 32px;
+  }
+  .section-divider .num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 90px;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 20px;
+    text-shadow: 0 0 60px rgba(56, 189, 248, 0.3);
+  }
+  .section-divider .stitle {
+    font-size: 48px;
+    margin-bottom: 14px;
+    letter-spacing: -1px;
+  }
+  .section-divider .ssub {
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 700px;
+  }
+
+  /* Cover */
+  .cover { flex: 1; display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 36px; }
+  .cover h1 { font-size: 56px; line-height: 1.05; letter-spacing: -1.2px; margin-bottom: 14px; }
+  .cover .sub { font-size: 18px; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
+  .cover .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .cover .tag {
+    padding: 5px 14px;
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--accent);
+  }
+  .cover .meta {
+    margin-top: 22px;
+    padding: 12px 16px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .cover .meta b { color: var(--text); }
+
+  /* Callout */
+  .callout {
+    background: rgba(56, 189, 248, 0.08);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 8px 0;
+  }
+  .callout.warn { background: rgba(245, 158, 11, 0.08); border-left-color: var(--warn); }
+  .callout.tip  { background: rgba(34, 197, 94, 0.08); border-left-color: var(--good); }
+  .callout strong { color: var(--accent); }
+  .callout.warn strong { color: var(--warn); }
+  .callout.tip strong { color: var(--good); }
+
+  /* Pills */
+  .pill {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    margin-right: 4px;
+  }
+  .pill.good { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+  .pill.bad  { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
+  .pill.info { background: rgba(56, 189, 248, 0.18); color: #7dd3fc; }
+  .pill.warn { background: rgba(245, 158, 11, 0.18); color: #fde68a; }
+  .pill.purple { background: rgba(192, 132, 252, 0.18); color: var(--purple); }
+
+  /* SVG container */
+  .scene {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px;
+    overflow: hidden;
+  }
+  .scene svg { display: block; width: 100%; height: 100%; max-height: 340px; }
+  .scene-caption {
+    text-align: center; color: var(--muted); font-size: 11px; margin-top: 4px;
+  }
+
+  /* Flow */
+  .flow-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+    align-items: center;
+    margin: 6px 0;
+  }
+  .flow-step {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 8px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    position: relative;
+  }
+  .flow-step .n {
+    display: inline-block; width: 20px; height: 20px;
+    line-height: 20px; background: var(--accent); color: #0b1220;
+    border-radius: 50%; font-weight: 700;
+    font-family: "JetBrains Mono", monospace; font-size: 11px;
+    margin-bottom: 4px;
+  }
+  .flow-step b { color: var(--text); font-size: 12.5px; display: block; margin-top: 2px; }
+
+  /* Checklist */
+  ul.checklist { list-style: none; padding: 0; margin: 0; }
+  ul.checklist li {
+    padding: 8px 10px 8px 32px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    position: relative;
+    font-size: 13px;
+  }
+  ul.checklist li::before {
+    content: "✓"; position: absolute; left: 12px; top: 7px;
+    color: var(--good); font-weight: 700; font-size: 14px;
+  }
+
+  /* Tree */
+  .tree {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    white-space: pre;
+    overflow-x: auto;
+    background: #050912;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+  .tree .dir { color: var(--accent); font-weight: 600; }
+  .tree .file { color: var(--gold); }
+  .tree .cmt { color: #6b7280; }
+
+  /* Nav */
+  .nav {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 32px;
+    background: rgba(5, 10, 24, 0.92);
+    border-top: 1px solid var(--line);
+    backdrop-filter: blur(8px);
+    z-index: 10;
+  }
+  .nav-title { font-size: 12.5px; color: var(--muted); letter-spacing: 0.4px; }
+  .nav-title b { color: var(--text); font-weight: 600; }
+  .nav-buttons { display: flex; align-items: center; gap: 12px; }
+  .nav button {
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: var(--accent);
+    width: 38px; height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  .nav button:hover {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: var(--accent);
+  }
+  .nav .counter {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--muted); font-size: 12.5px;
+    min-width: 64px; text-align: center;
+  }
+  .nav .counter b { color: var(--accent); }
+
+  .svg-label { fill: #e5e7eb; font-family: "Segoe UI", sans-serif; font-size: 11px; }
+  .svg-label.muted { fill: var(--muted); font-size: 10px; }
+  .svg-label.bold { font-weight: 700; }
+  .svg-label.gold { fill: var(--gold); }
+  .svg-label.blue { fill: var(--blue); }
+  .svg-label.red  { fill: var(--red); }
+  .svg-label.good { fill: #86efac; }
+
+  /* Tiny labels for compact tables */
+  td.mono, .mono { font-family: "JetBrains Mono", monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<!-- ===== SVG SYMBOL DEFS ===== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="f16-blue" viewBox="-40 -28 90 56" overflow="visible">
+      <polygon points="-16,-22 25,-3 25,3 -16,22 -22,18 -22,-18" fill="#3b82f6" stroke="#1e3a8a" stroke-width="0.6" stroke-linejoin="round"/>
+      <polygon points="-26,-3 30,-2.5 38,-1 40,0 38,1 30,2.5 -26,3 -29,2 -29,-2" fill="#93c5fd" stroke="#1e3a8a" stroke-width="0.6" stroke-linejoin="round"/>
+      <line x1="40" y1="0" x2="44" y2="0" stroke="#1e3a8a" stroke-width="0.8"/>
+      <polygon points="-23,-3 -32,-12 -25,-10 -22,-3" fill="#2563eb" stroke="#1e3a8a" stroke-width="0.4"/>
+      <polygon points="-23,3 -32,12 -25,10 -22,3" fill="#2563eb" stroke="#1e3a8a" stroke-width="0.4"/>
+      <polygon points="-22,-1.5 -30,0 -22,1.5" fill="#1e40af"/>
+      <ellipse cx="18" cy="0" rx="6" ry="2.5" fill="#1e293b"/>
+      <circle cx="-27" cy="0" r="1.6" fill="#0f172a"/>
+    </symbol>
+    <symbol id="f16-red" viewBox="-40 -28 90 56" overflow="visible">
+      <polygon points="-16,-22 25,-3 25,3 -16,22 -22,18 -22,-18" fill="#ef4444" stroke="#7f1d1d" stroke-width="0.6" stroke-linejoin="round"/>
+      <polygon points="-26,-3 30,-2.5 38,-1 40,0 38,1 30,2.5 -26,3 -29,2 -29,-2" fill="#fca5a5" stroke="#7f1d1d" stroke-width="0.6" stroke-linejoin="round"/>
+      <line x1="40" y1="0" x2="44" y2="0" stroke="#7f1d1d" stroke-width="0.8"/>
+      <polygon points="-23,-3 -32,-12 -25,-10 -22,-3" fill="#dc2626" stroke="#7f1d1d" stroke-width="0.4"/>
+      <polygon points="-23,3 -32,12 -25,10 -22,3" fill="#dc2626" stroke="#7f1d1d" stroke-width="0.4"/>
+      <polygon points="-22,-1.5 -30,0 -22,1.5" fill="#991b1b"/>
+      <ellipse cx="18" cy="0" rx="6" ry="2.5" fill="#1e293b"/>
+      <circle cx="-27" cy="0" r="1.6" fill="#0f172a"/>
+    </symbol>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-gold" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#fbbf24"/>
+    </marker>
+  </defs>
+</svg>
+
+<div class="deck">
+
+<!-- ========== SLIDE 1: COVER ========== -->
+<section class="slide active" data-title="표지" data-chapter="">
+  <div class="cover">
+    <div>
+      <div class="chapter-tag">DogFightEnv Release · Student Manual</div>
+      <h1>2026 <span class="accent">AI Pilot</span><br/>Top Gun Challenge<br/><span class="gold">학생 매뉴얼</span></h1>
+      <div class="sub">
+        나만의 AI Pilot을 만드는 워크플로 — 보상·관측·커리큘럼 설계부터<br/>
+        학습·로컬 검증·Unreal 제출까지 단대단 안내.
+      </div>
+      <div class="tags">
+        <span class="tag">PPO / SAC</span>
+        <span class="tag">YAML 실험</span>
+        <span class="tag">RL vs BT</span>
+        <span class="tag">Tacview Replay</span>
+        <span class="tag">Unreal 제출</span>
+      </div>
+      <div class="meta">
+        <b>버전</b> rev7-improved (HTML 슬라이드판) · <b>기준</b> DogFightEnv Release · <b>날짜</b> 2026-05-21<br/>
+        <b>키보드</b> ← → 이동, Space 다음, Home/End 처음·끝
+      </div>
+    </div>
+    <div class="scene" style="height:480px;">
+      <svg viewBox="0 0 500 460" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <radialGradient id="bg-glow" cx="50%" cy="40%" r="60%">
+            <stop offset="0%" stop-color="#1e3a8a" stop-opacity="0.4"/>
+            <stop offset="100%" stop-color="transparent"/>
+          </radialGradient>
+        </defs>
+        <rect width="500" height="460" fill="url(#bg-glow)"/>
+        <!-- world frame coordinate hint -->
+        <g opacity="0.25">
+          <line x1="80" y1="200" x2="420" y2="200" stroke="#38bdf8" stroke-dasharray="2 6" stroke-width="0.8"/>
+          <line x1="250" y1="40" x2="250" y2="430" stroke="#38bdf8" stroke-dasharray="2 6" stroke-width="0.8"/>
+        </g>
+        <!-- engagement curves -->
+        <path d="M 90 360 Q 200 280, 280 200 T 410 80" fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-dasharray="6 4" opacity="0.8"/>
+        <path d="M 410 360 Q 320 280, 250 220 T 90 110" fill="none" stroke="#f87171" stroke-width="2.5" stroke-dasharray="6 4" opacity="0.8"/>
+        <!-- planes -->
+        <g transform="translate(380,110) rotate(-35)">
+          <use href="#f16-blue" x="-45" y="-30" width="90" height="60"/>
+        </g>
+        <g transform="translate(120,360) rotate(145)">
+          <use href="#f16-red" x="-45" y="-30" width="90" height="60"/>
+        </g>
+        <!-- LOS connecting -->
+        <line x1="370" y1="125" x2="135" y2="345" stroke="#fbbf24" stroke-width="2" stroke-dasharray="5 4" opacity="0.7"/>
+        <text x="250" y="245" class="svg-label gold bold" text-anchor="middle" font-size="13">LOS</text>
+        <!-- labels -->
+        <text x="395" y="80" class="svg-label blue bold" font-size="12">Ownship (RL)</text>
+        <text x="115" y="395" class="svg-label red bold" font-size="12">Target (BT)</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 2: 매뉴얼 목적 ========== -->
+<section class="slide" data-title="매뉴얼 목적" data-chapter="01. 접근법">
+  <div class="chapter-tag">01 · 접근법</div>
+  <h1>이 매뉴얼이 <span class="accent">전달하려는 것</span></h1>
+  <p class="lead">RLlib 기반 실험 공통 플랫폼 사용 가이드. <b>학생은 보상·관측·커리큘럼·YAML 조건을 자유롭게 설계</b>하고, 공통 코드는 <b>실행 계약과 기록 방식</b>을 제공합니다. 아이디어는 작게 돌리고, 로그로 읽고, 다음 가설로 잇습니다.</p>
+  <div class="body col-3">
+    <div class="nbox" data-n="1">
+      <h3>실행 위치 · 런타임 자산</h3>
+      <p>모든 명령은 <code>Release/</code>에서 실행. DLL · Rule XML · aircraft · engine · scripts는 <strong>이름 변경·이동 금지</strong>.</p>
+    </div>
+    <div class="nbox" data-n="2">
+      <h3>관측 mode / module 일치</h3>
+      <p>학습 · 로컬 검증 · 제출 추론에서 같은 <code>observation_mode</code>와 <code>observation_module</code>을 사용해야 차원이 맞습니다.</p>
+    </div>
+    <div class="nbox" data-n="3">
+      <h3>bundle ↔ 관측 차원 호환</h3>
+      <p><code>artifacts/models/&lt;team&gt;/&lt;tag&gt;/metadata.json</code>의 <code>obs_mode</code>가 추론 환경과 같아야 합니다.</p>
+    </div>
+  </div>
+  <div class="callout">
+    <strong>한 줄 원칙:</strong> 작게 돌리고 · 기록되게 두고 · 로그로 읽는다. 이 매뉴얼의 모든 단계는 이 세 가지를 반복하는 방식으로 구성되어 있습니다.
+  </div>
+</section>
+
+<!-- ========== SLIDE 3: 작은 루프 철학 ========== -->
+<section class="slide" data-title="작은 루프" data-chapter="01. 접근법">
+  <div class="chapter-tag">01 · 접근법</div>
+  <h1>좋은 실험은 <span class="gold">작은 루프</span>입니다</h1>
+  <p class="lead">가설 1개, 조건 1개만 바꾸기. 짧게 돌리고, 로그를 비교하고, 다음 가설로 잇기.</p>
+
+  <div class="flow-row" style="margin: 8px 0 14px;">
+    <div class="flow-step"><span class="n">1</span><b>가설</b>한 가지 질문</div>
+    <div class="flow-step"><span class="n">2</span><b>YAML 기록</b>조건 보존</div>
+    <div class="flow-step"><span class="n">3</span><b>짧은 학습</b>smoke 우선</div>
+    <div class="flow-step"><span class="n">4</span><b>로그 확인</b>지표·궤적</div>
+    <div class="flow-step"><span class="n">5</span><b>수정</b>다음 가설로</div>
+  </div>
+
+  <div class="body col-3">
+    <div class="card good">
+      <h3>작게</h3>
+      <ul>
+        <li>가설 1개에 조건 1개만 변경</li>
+        <li>iterations는 처음엔 1–10 smoke</li>
+        <li>여러 변수를 동시에 건드리지 않기</li>
+      </ul>
+    </div>
+    <div class="card info">
+      <h3>기록되게</h3>
+      <ul>
+        <li>YAML로 조건 보존 (`experiments/*.yaml`)</li>
+        <li>`output.name` + `tag`로 폴더 분리</li>
+        <li>`config.json`도 자동 함께 저장</li>
+      </ul>
+    </div>
+    <div class="card gold">
+      <h3>읽히게</h3>
+      <ul>
+        <li>dashboard에서 여러 run 동시 비교</li>
+        <li>metric은 reward 외에 4–5종 함께</li>
+        <li>의심스러우면 Replay 탭에서 궤적 직접 확인</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 4: 5대 지표 ========== -->
+<section class="slide" data-title="5대 지표" data-chapter="01. 접근법">
+  <div class="chapter-tag">01 · 접근법</div>
+  <h1>관찰 가능한 지표는 <span class="accent">결과의 이유</span>를 읽습니다</h1>
+  <p class="lead">승률 하나로 판단하지 않습니다. "왜 그렇게 됐는지"를 metric으로 같이 봅니다.</p>
+  <div class="body col-3">
+    <div class="card">
+      <h3>reward_mean</h3>
+      <p>에피소드 평균 reward. 추세로 학습 안정성 확인.</p>
+      <p><span class="pill info">우선순위</span> 가장 기본. 단독으로는 부족.</p>
+    </div>
+    <div class="card">
+      <h3>crash_rate</h3>
+      <p>추락 발생률. 보상 과격도와 함께 봄.</p>
+      <p><span class="pill bad">주의</span> 0.05 이상이면 보상·안전 페널티 재검토.</p>
+    </div>
+    <div class="card">
+      <h3>ep_min_distance</h3>
+      <p>에피소드 내 최소 접근 거리. 접근/회피 행동 진단.</p>
+      <p><span class="pill info">의미</span> 줄어들면 추격, 늘면 회피 학습.</p>
+    </div>
+    <div class="card">
+      <h3>ep_wez_steps</h3>
+      <p>WEZ 안에서 머문 step. 교전 점유 시간.</p>
+      <p><span class="pill good">목표</span> 점진 증가가 추격형 정책의 신호.</p>
+    </div>
+    <div class="card">
+      <h3>win_rate</h3>
+      <p>승률. 최종 평가지표.</p>
+      <p><span class="pill warn">함정</span> reward는 같은데 win이 낮은 경우 있음 (reward shaping ↔ outcome 분리).</p>
+    </div>
+    <div class="card gold">
+      <h3>해석 팁</h3>
+      <p>같은 reward에도 행동 양상은 다양합니다. 다섯 지표를 묶어 <b>"무엇이 잘 됐고, 무엇이 안 됐는가"</b>를 한 그림으로 그립니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 5: 섹션 디바이더 - 환경 준비 ========== -->
+<section class="slide" data-title="환경 준비" data-chapter="02. 환경 준비">
+  <div class="section-divider">
+    <div class="num">02</div>
+    <div class="stitle">환경 <span class="accent">준비</span></div>
+    <div class="ssub">
+      Release 폴더 구조 이해 → Python 환경 설치 → 의존성 + smoke 검증 →
+      런타임 자산 점검 → 실패 원인 대응. 학습 코드를 만지기 전 반드시 통과해야 하는 단계입니다.
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 6: Release 폴더 ========== -->
+<section class="slide" data-title="Release 폴더" data-chapter="02. 환경 준비">
+  <div class="chapter-tag">02 · 환경 준비</div>
+  <h1>Release 폴더를 <span class="accent">루트로 사용</span>합니다</h1>
+  <p class="lead">수정 중심 / 공통 플랫폼 / 런타임 자산을 명확히 구분하세요.</p>
+  <div class="body col-2-wide-left">
+    <div class="card">
+      <h3>폴더 구조</h3>
+      <div class="tree" style="margin-top: 6px;">
+<span class="dir">Release/</span>
+├── <span class="dir">src/dogfight/</span>        <span class="cmt"># 공통 플랫폼 — 수정 지양</span>
+├── <span class="dir">student/</span>             <span class="cmt"># 학생 작성 템플릿</span>
+│   ├── <span class="file">my_reward.py</span>
+│   ├── <span class="file">my_observation.py</span>
+│   ├── <span class="file">my_curriculum.py</span>
+│   ├── <span class="file">my_train.py</span>
+│   └── <span class="file">my_submission.py</span>
+├── <span class="dir">experiments/</span>         <span class="cmt"># YAML 실험 템플릿</span>
+├── <span class="file">train_rllib.py</span>     <span class="cmt"># 단일 학습 본체</span>
+├── <span class="file">train_curriculum.py</span> <span class="cmt"># 커리큘럼 학습 본체</span>
+├── <span class="file">run_local_dogfight.py</span>
+├── <span class="file">run_unreal_inference.py</span>
+└── DLL · Rule XML · aircraft/ · engine/ · scripts/  <span class="cmt"># 런타임 자산</span>
+      </div>
+    </div>
+    <div>
+      <div class="card good" style="margin-bottom: 12px;">
+        <h3>수정 중심 영역</h3>
+        <ul>
+          <li><code>student/</code> 학생 파일</li>
+          <li><code>experiments/*.yaml</code></li>
+        </ul>
+      </div>
+      <div class="card info" style="margin-bottom: 12px;">
+        <h3>공통 플랫폼</h3>
+        <ul>
+          <li><code>src/dogfight/</code> 실행 계약</li>
+          <li>기본적으로 직접 수정하지 않음</li>
+        </ul>
+      </div>
+      <div class="card bad">
+        <h3>런타임 자산</h3>
+        <ul>
+          <li>DLL · XML · aircraft · engine · scripts</li>
+          <li><strong>이름 변경 · 이동 금지</strong></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 7: Python · 가상환경 · smoke ========== -->
+<section class="slide" data-title="Python 가상환경" data-chapter="02. 환경 준비">
+  <div class="chapter-tag">02 · 환경 준비</div>
+  <h1>가상환경 → 의존성 → <span class="gold">smoke</span> 순서로</h1>
+  <p class="lead">학습보다 <b>import와 dry-run 확인</b>이 먼저입니다. Ray/Torch 문제는 가상환경과 버전 충돌부터 보세요.</p>
+  <div class="body col-2">
+    <div>
+      <h3 style="font-size:14px; color:var(--accent-2); margin: 4px 0 6px;">STEP 1 · Anaconda 가상환경 생성</h3>
+<pre class="shell">conda create -n <span class="val">aip</span> python=<span class="val">3.11</span>
+conda activate <span class="val">aip</span></pre>
+
+      <h3 style="font-size:14px; color:var(--accent-2); margin: 12px 0 6px;">STEP 2 · 의존성 설치</h3>
+<pre class="shell">cd <span class="val">DogFightEnv\Release</span>
+<span class="py">python</span> -m pip install -r <span class="val">requirements.txt</span></pre>
+
+      <h3 style="font-size:14px; color:var(--accent-2); margin: 12px 0 6px;">STEP 3 · import smoke</h3>
+<pre class="shell"><span class="py">python</span> -c <span class="val">"import JSBSimWrapper; print('OK')"</span></pre>
+
+      <h3 style="font-size:14px; color:var(--accent-2); margin: 12px 0 6px;">STEP 4 · dry-run으로 첫 학습 명령 점검</h3>
+<pre class="shell"><span class="py">python</span> <span class="val">scripts\run_experiment.py</span> <span class="val">experiments\student_sac_mlp.yaml</span> <span class="flag">--dry-run</span></pre>
+    </div>
+    <div>
+      <div class="card warn">
+        <h3>Anaconda 설치 시 주의</h3>
+        <ul>
+          <li>Python 3.11.x 권장</li>
+          <li>설치 시 "Add to PATH" 체크박스 확인 (시스템에 따라 다름)</li>
+          <li>Command Prompt에서 진행 권장</li>
+        </ul>
+      </div>
+      <div class="card purple">
+        <h3>STEP 5 (선택) · SAC LSTM 패치</h3>
+        <p>LSTM 학습 경로를 쓰려면 RLlib 설치본을 패치합니다. 먼저 dry-run.</p>
+<pre class="shell" style="font-size:11.5px;"><span class="py">python</span> <span class="val">RLLibLstm\tools\apply_rllib_sac_lstm_patch.py</span> ^
+  <span class="val">C:\Users\USER\anaconda3\envs\aip</span> <span class="flag">--dry-run</span></pre>
+        <p><span class="pill purple">Advanced</span> Appendix C에서 자세히 설명.</p>
+      </div>
+      <div class="callout">
+        <strong>순서가 중요한 이유:</strong> 의존성이 깨진 상태에서 학습을 시작하면 Ray 초기화 단계에서 길게 멈추거나 의미 없는 오류를 보게 됩니다. 1–4단계가 모두 통과한 후에만 본 학습을 시작합니다. 최신 Release YAML은 <code>runtime.save_lightweight_bundle</code>과 <code>runtime.native_checkpoint_frequency</code>도 dry-run 출력에서 확인합니다.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 8: 런타임 자산 계약 ========== -->
+<section class="slide" data-title="런타임 자산" data-chapter="02. 환경 준비">
+  <div class="chapter-tag">02 · 환경 준비</div>
+  <h1>런타임 자산은 <span class="accent">실행 계약</span>입니다</h1>
+  <p class="lead">아래 파일·폴더는 함부로 이름 변경하거나 이동하지 않습니다. 어떤 자산이 어떤 역할을 하는지 알면 오류 메시지를 훨씬 빨리 해석할 수 있습니다.</p>
+  <table>
+    <thead><tr><th>종류</th><th>파일 / 폴더</th><th>주의</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>JSBSim 커널</td>
+        <td class="mono">JSBSimAIPLib.dll</td>
+        <td>Release 루트에 존재해야 함. <code>ctypes</code>로 직접 로드됨.</td>
+      </tr>
+      <tr>
+        <td>BT DLL</td>
+        <td class="mono">AIP_BASE.dll<br/>AIP_BASE_target.dll</td>
+        <td>기본 / target DLL 구분. 팀 DLL은 CLI 인자로 지정.</td>
+      </tr>
+      <tr>
+        <td>Rule XML</td>
+        <td class="mono">Rule_forTraining.xml<br/>Rule_&lt;팀이름&gt;.xml</td>
+        <td>기본 Rule 유지. 팀별 Rule은 <code>--bt-rule-xml</code>로 임시 활성화.</td>
+      </tr>
+      <tr>
+        <td>Aircraft / Engine</td>
+        <td class="mono">aircraft/, engine/</td>
+        <td>폴더 이동 금지. F-16 등 항공기 모델 XML.</td>
+      </tr>
+      <tr>
+        <td>JSBSim scripts</td>
+        <td class="mono">scripts/</td>
+        <td>초기 실행 자산. cruise XML 등 JSBSim 진입 스크립트.</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="callout warn">
+    <strong>왜 강제인가:</strong> JSBSim과 BT DLL은 컴파일 타임에 폴더 구조를 가정하고 빌드되어 있습니다. 자산 이동 시 추적이 어려운 segfault 또는 silent fallback이 발생할 수 있습니다.
+  </div>
+</section>
+
+<!-- ========== SLIDE 9: 실패 원인과 해결 ========== -->
+<section class="slide" data-title="실패 원인" data-chapter="02. 환경 준비">
+  <div class="chapter-tag">02 · 환경 준비</div>
+  <h1>실패 원인은 <span class="bad" style="color:#fca5a5">4가지</span>부터 확인합니다</h1>
+  <p class="lead">대부분의 첫 실행 실패는 아래 네 경로 안에 있습니다. 증상 → 확인 → 해결로 차분히.</p>
+  <div class="body col-2">
+    <div class="card bad">
+      <h3>DLL을 찾지 못함</h3>
+      <p><b>확인:</b> Release 루트에서 실행 중인가? <code>JSBSimAIPLib.dll</code>이 같은 폴더에?</p>
+      <p><b>해결:</b> <code>cd DogFightEnv\Release</code>로 이동 후 재실행. 파일명·DLL 누락 여부 확인.</p>
+    </div>
+    <div class="card bad">
+      <h3>import 실패</h3>
+      <p><b>확인:</b> 가상환경이 활성화되어 있는가? <code>requirements.txt</code> 설치 완료?</p>
+      <p><b>해결:</b> <code>conda activate aip</code> → <code>pip install -r requirements.txt</code> 재실행.</p>
+    </div>
+    <div class="card bad">
+      <h3>모델 로드 실패</h3>
+      <p><b>확인:</b> <code>metadata.json</code> + <code>policy_weights.pkl.gz</code> 두 파일이 동일 폴더에?</p>
+      <p><b>해결:</b> <code>BUNDLE_DIR</code> 경로 확인. <code>artifacts/models/&lt;team&gt;/&lt;tag&gt;</code> 형식.</p>
+    </div>
+    <div class="card bad">
+      <h3>관측 차원 오류 (가장 흔함)</h3>
+      <p><b>확인:</b> 학습 때 <code>observation_mode</code>와 추론 때가 다른가? <code>OBSERVATION_SIZE</code> 일치?</p>
+      <p><b>해결:</b> 학습/검증/제출 세 곳을 한 모듈로 통일. 자세한 체인은 슬라이드 30 참고.</p>
+    </div>
+  </div>
+  <div class="callout tip">
+    <strong>대원칙:</strong> 실패 메시지보다 위 4가지 체크리스트를 먼저 돌리세요. 매뉴얼 작성자 경험상 새 학생의 95%의 첫 실행 오류는 이 4가지 안에 있습니다.
+  </div>
+</section>
+
+<!-- ========== SLIDE 10: 섹션 디바이더 - 환경 계약 ========== -->
+<section class="slide" data-title="환경 계약" data-chapter="03. 환경 계약">
+  <div class="section-divider">
+    <div class="num">03</div>
+    <div class="stitle">환경 <span class="accent">계약</span></div>
+    <div class="ssub">
+      Observation · Action · Reward · Termination —
+      네 가지 계약으로 환경이 움직입니다. 무엇을 자유롭게 바꿔도 되고, 무엇은 절대 깨면 안 되는지를 분명히 합니다.
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 11: 네 가지 계약 ========== -->
+<section class="slide" data-title="4가지 계약" data-chapter="03. 환경 계약">
+  <div class="chapter-tag">03 · 환경 계약</div>
+  <h1>환경은 <span class="accent">네 개의 계약</span>으로 움직입니다</h1>
+  <p class="lead">네 가지의 입출력 모양을 알면 어디를 자유롭게 바꿀 수 있는지, 어디를 건드리면 안 되는지 명확해집니다.</p>
+  <div class="body col-2">
+    <div class="card info">
+      <h3>① Observation</h3>
+      <p>정책 입력 벡터. mode / module / shape이 학습·검증·제출에서 일치해야 함.</p>
+      <p><span class="pill info">자유도</span> 높음 — <code>student/my_observation.py</code>에서 자유롭게 설계.</p>
+    </div>
+    <div class="card info">
+      <h3>② Action</h3>
+      <p>4차원 연속 제어 <code>[-1, 1]⁴</code>. throttle은 내부에서 <code>[0, 1]</code>로 변환.</p>
+      <p><span class="pill bad">자유도</span> 낮음 — 환경 계약. 바꾸면 BT/JSBSim 연동이 깨집니다.</p>
+    </div>
+    <div class="card info">
+      <h3>③ Reward</h3>
+      <p><code>float</code> 보상 + <code>components</code> dict 반환. 분석 가능한 이름으로 컴포넌트 기록.</p>
+      <p><span class="pill info">자유도</span> 높음 — <code>student/my_reward.py</code>의 핵심 설계 영역.</p>
+    </div>
+    <div class="card info">
+      <h3>④ Termination / Info</h3>
+      <p>종료 사유와 부가 정보. 로그·metric의 해석 근거. 환경에서 자동으로 채움.</p>
+      <p><span class="pill warn">자유도</span> 읽기 전용 — 직접 수정하지 않고 해석합니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 12: 관측 모드 ========== -->
+<section class="slide" data-title="관측 모드" data-chapter="03. 환경 계약">
+  <div class="chapter-tag">03 · 환경 계약</div>
+  <h1>관측 모드: <span class="accent">기본 4종 + custom</span></h1>
+  <p class="lead"><code>tactical16</code>은 기본 제공 예시일 뿐 정답이 아닙니다. 본인의 가설에 맞는 관측을 직접 설계하는 것이 핵심.</p>
+  <div class="body col-2">
+    <div>
+      <table>
+        <thead><tr><th>모드</th><th>차원</th><th>특징</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">classic12</td><td>12</td><td>기본 비교용 (baseline)</td></tr>
+          <tr><td class="mono">relative14</td><td>14</td><td>상대 위치 중심</td></tr>
+          <tr><td class="mono">tactical16</td><td>16</td><td>기본 제공 예시 (templates default)</td></tr>
+          <tr><td class="mono">legacy37</td><td>37</td><td>구환경 호환 (연구용)</td></tr>
+          <tr><td class="mono">custom</td><td>?</td><td>학생 직접 설계</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <strong>core 메시지:</strong> 정답을 외우지 말고 <b>가설을 만들어 직접 관측을 설계</b>하세요. 학습된 정책 성능은 결국 관측 설계에 강하게 의존합니다.
+      </div>
+    </div>
+    <div class="card purple">
+      <h3>custom 모드 사용법</h3>
+      <p>학생용 관측을 만들려면 <code>student/my_observation.py</code>를 작성하고 다음 인자를 사용합니다.</p>
+<pre class="shell" style="font-size:11.5px;"><span class="py">python</span> train_rllib.py ^
+  <span class="flag">--observation-mode</span> <span class="val">custom</span> ^
+  <span class="flag">--observation-module</span> <span class="val">student.my_observation</span></pre>
+      <p>같은 학습/검증/제출 어디에서나 <strong>동일한 module path</strong>를 지정해야 차원이 일치합니다.</p>
+      <ul>
+        <li><code>OBSERVATION_MODE = "student8"</code></li>
+        <li><code>OBSERVATION_SIZE = 8</code></li>
+        <li><code>build_observation(...) → np.float32 (N,)</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 13: 액션 + 종료 ========== -->
+<section class="slide" data-title="액션·종료" data-chapter="03. 환경 계약">
+  <div class="chapter-tag">03 · 환경 계약</div>
+  <h1>액션과 종료는 <span class="accent">결과 해석의 기준</span></h1>
+  <p class="lead">승패만 보지 마세요. 종료 조건은 정답이 아니라 분석 기준입니다.</p>
+  <div class="body col-2">
+    <div class="card info">
+      <h3>액션 공간 — 4축 연속 [-1, 1]</h3>
+      <table style="margin-top: 4px;">
+        <thead><tr><th>축</th><th>의미</th><th>범위</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>roll</td><td class="mono">[-1, 1]</td></tr>
+          <tr><td>1</td><td>pitch</td><td class="mono">[-1, 1]</td></tr>
+          <tr><td>2</td><td>rudder / yaw</td><td class="mono">[-1, 1]</td></tr>
+          <tr><td>3</td><td>throttle</td><td class="mono">[-1, 1] → [0, 1]</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:12.5px; color: var(--muted); margin-top: 6px;">
+        throttle은 정책 입장에선 <code>[-1, 1]</code>로 통일된 표현이지만, JSBSim에 전달될 때 내부에서 <code>[0, 1]</code>로 변환됩니다.
+      </p>
+    </div>
+    <div class="card info">
+      <h3>종료 조건 — 7+종</h3>
+      <table style="margin-top: 4px;">
+        <thead><tr><th>그룹</th><th>조건</th></tr></thead>
+        <tbody>
+          <tr><td>Health</td><td>ownship/target HP 0 이하</td></tr>
+          <tr><td>Altitude</td><td>최저 고도 미만</td></tr>
+          <tr><td>Time</td><td><code>max_engage_time</code> 도달</td></tr>
+          <tr><td>Step</td><td><code>episode_step_limit</code> 도달</td></tr>
+          <tr><td>FDM</td><td>JSBSim 오류, NaN</td></tr>
+          <tr><td>Guard</td><td>연구용 2-circle 가드 등</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:12.5px; color: var(--muted); margin-top: 6px;">
+        <code>summary.json</code>의 <code>end_condition</code>이 어떤 카테고리인지가 정책 개선의 1차 단서입니다.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 14: 섹션 디바이더 - 학생 작성 ========== -->
+<section class="slide" data-title="학생 작성" data-chapter="04. 학생 작성">
+  <div class="section-divider">
+    <div class="num">04</div>
+    <div class="stitle">학생 <span class="accent">수정 영역</span></div>
+    <div class="ssub">
+      보상 · 관측 · 커리큘럼 · YAML — 네 가지 파일이 학생의 창의력을 담는 곳입니다. 공통 학습 루프는 본체가 담당하므로, 학생 파일은 가능한 한 얇게 유지하는 것이 좋습니다.
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 15: 학생 수정 영역 ========== -->
+<section class="slide" data-title="학생 수정 영역" data-chapter="04. 학생 작성">
+  <div class="chapter-tag">04 · 학생 작성</div>
+  <h1>학생 수정 영역은 <span class="accent">분리</span>되어 있습니다</h1>
+  <p class="lead">공통 학습 루프를 담은 본체(<code>train_rllib.py</code> 등) 수정은 지양합니다. 아이디어는 아래 네 파일과 YAML로 주입합니다.</p>
+  <div class="body col-2">
+    <div class="card good">
+      <h3>student/my_reward.py</h3>
+      <p>보상 아이디어. <code>compute_reward()</code> 반환 계약을 지키면 자유 설계.</p>
+      <p><code>MY_REWARD_CONFIG</code> dict + <code>components</code> dict로 분석 가능하게.</p>
+    </div>
+    <div class="card good">
+      <h3>student/my_observation.py</h3>
+      <p>관측 아이디어. <code>OBSERVATION_SIZE</code>와 <code>build_observation()</code> shape 계약.</p>
+      <p>차원을 바꾸면 bundle은 새로 학습해야 함 (호환 불가).</p>
+    </div>
+    <div class="card good">
+      <h3>student/my_curriculum.py</h3>
+      <p>커리큘럼 단계 아이디어. <code>get_stages()</code>가 <code>list[CurriculumStage]</code> 반환.</p>
+      <p>기본 stage 0~14는 참고용 — 자유롭게 재구성 가능.</p>
+    </div>
+    <div class="card good">
+      <h3>experiments/*.yaml</h3>
+      <p>실험 조건을 파일로 보존. <code>output</code>/<code>env</code>/<code>algo</code>/<code>runtime</code> 섹션.</p>
+      <p>Python 모듈은 module path로 주입 (<code>reward_module</code>, <code>observation_module</code>, <code>stages_module</code>).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 16: my_reward.py ========== -->
+<section class="slide" data-title="my_reward.py" data-chapter="04. 학생 작성">
+  <div class="chapter-tag">04 · 학생 작성</div>
+  <h1>my_reward.py: <span class="gold">공식보다 반환 계약</span></h1>
+  <p class="lead">어떤 공식을 쓰든 자유지만, 두 가지는 지켜야 합니다: <b>float 총 보상</b>과 <b>components dict</b>.</p>
+  <div class="body col-2">
+    <div>
+<pre class="yaml">MY_REWARD_CONFIG = {
+    <span class="key">"pursuit_scale"</span>: <span class="val">0.3</span>,
+    <span class="key">"closure_scale"</span>: <span class="val">0.1</span>,
+    <span class="key">"damage_scale"</span>: <span class="val">20.0</span>,
+    <span class="key">"low_altitude_penalty"</span>: <span class="val">0.1</span>,
+    <span class="key">"step_penalty"</span>: -<span class="val">0.01</span>,
+}
+
+<span class="cmt"># 본체에서 자동 호출</span>
+<span class="py">def</span> <span class="key">compute_reward</span>(
+    obs, action, geo_info, info, config=None,
+):
+    components = {}
+    components[<span class="val">"pursuit"</span>] = ...
+    components[<span class="val">"closure"</span>] = ...
+    components[<span class="val">"damage"</span>]   = ...
+    components[<span class="val">"safety"</span>]   = ...
+    components[<span class="val">"step"</span>]     = ...
+    total = sum(components.values())
+    <span class="py">return</span> float(total), components</pre>
+    </div>
+    <div>
+      <div class="card good">
+        <h3>지켜야 할 것 (계약)</h3>
+        <ul>
+          <li>반환 = <code>(float total, dict components)</code></li>
+          <li><code>components</code>의 키는 <strong>분석 가능한 이름</strong>으로 (예: <code>pursuit</code>, <code>damage</code>, <code>step</code>)</li>
+          <li>각 컴포넌트는 step 단위 스칼라</li>
+        </ul>
+      </div>
+      <div class="card info">
+        <h3>이름 짓기 팁</h3>
+        <ul>
+          <li>의도가 보이는 이름 — <code>safety</code>, <code>pursuit</code> ⓞ</li>
+          <li>축약 금지 — <code>r1</code>, <code>x</code> ✗</li>
+          <li>dashboard에서 component별 그래프로 자동 추적</li>
+        </ul>
+      </div>
+      <div class="callout">
+        <strong>설계는 별도 가이드 참고:</strong> ATA/AA/LOS/WEZ 등 보상 컴포넌트의 직관은 <b>“보상 설계 직관 슬라이드”</b>에서 자세히 다룹니다.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 17: my_observation.py ========== -->
+<section class="slide" data-title="my_observation.py" data-chapter="04. 학생 작성">
+  <div class="chapter-tag">04 · 학생 작성</div>
+  <h1>my_observation.py: <span class="accent">차원 계약</span></h1>
+  <p class="lead">관측을 새로 만들면 이전 bundle과 호환되지 않습니다. 차원을 바꾸는 결정은 신중하게.</p>
+  <div class="body col-2">
+    <div class="card info">
+      <h3>필수</h3>
+      <ul>
+        <li><code>OBSERVATION_SIZE</code> — int</li>
+        <li><code>build_observation(ownship, target, geo_info, wez_config=None) → np.float32(N,)</code></li>
+      </ul>
+      <h3 style="margin-top: 10px;">선택</h3>
+      <ul>
+        <li><code>OBSERVATION_MODE</code> — 식별자 (예: "student8")</li>
+        <li><code>OBSERVATION_LOW</code>, <code>OBSERVATION_HIGH</code> — 박스 범위</li>
+        <li><code>describe_observation()</code> — 차원별 의미 설명</li>
+      </ul>
+    </div>
+    <div class="card bad">
+      <h3>차원 변경 위험</h3>
+      <ul>
+        <li>기존 <code>checkpoint</code> / <code>bundle</code>과 호환 불가 — 새로 학습</li>
+        <li>학습/로컬/Unreal 세 곳에 모두 같은 module path 지정 필요</li>
+        <li><code>metadata.json</code>의 <code>obs_mode</code>가 정답 — 추론 환경이 이것을 본다</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout warn">
+    <strong>일관성 기록 위치 3곳:</strong>
+    ① YAML <code>env.observation_module</code> · ② <code>metadata.json</code> <code>observation_module</code> · ③ <code>my_submission.py</code> <code>OBSERVATION_MODULE</code>. 세 곳이 같은 값을 가져야 추론 시 차원이 맞습니다. (자세한 일관성 체인은 슬라이드 30 참고)
+  </div>
+</section>
+
+<!-- ========== SLIDE 18: my_curriculum.py ========== -->
+<section class="slide" data-title="my_curriculum.py" data-chapter="04. 학생 작성">
+  <div class="chapter-tag">04 · 학생 작성</div>
+  <h1>my_curriculum.py: <span class="accent">get_stages() 계약</span></h1>
+  <p class="lead">기본 stage는 출발점이 아니라 계약 확인용 참고입니다. 본인의 학습 시나리오에 맞춰 자유롭게 재구성하세요.</p>
+  <div class="body col-2">
+    <div>
+<pre class="yaml"><span class="py">from</span> dogfight.ai.curriculum <span class="py">import</span> CurriculumStage
+
+<span class="py">def</span> <span class="key">get_stages</span>() -> list[CurriculumStage]:
+    <span class="py">return</span> [
+        CurriculumStage(
+            name=<span class="val">"my_stage_0"</span>,
+            initial_scenario=...,
+            target_mode=<span class="val">"fixed"</span>,
+            promote_when={<span class="val">"reward_mean"</span>: <span class="val">5.0</span>},
+            ...
+        ),
+        CurriculumStage(
+            name=<span class="val">"my_stage_1"</span>,
+            target_mode=<span class="val">"behavior_tree"</span>,
+            ...
+        ),
+        ...
+    ]</pre>
+<pre class="shell"><span class="py">python</span> train_curriculum.py ^
+  <span class="flag">--stages-module</span> <span class="val">student.my_curriculum</span></pre>
+    </div>
+    <div>
+      <div class="card info">
+        <h3>기본 curriculum 참고용 14단계</h3>
+        <ul>
+          <li><b>Stage 0–3</b>: survival / pursuit / WEZ / autopilot</li>
+          <li><b>Stage 4–13</b>: two-circle head-on alpha 0°–180°</li>
+          <li><b>Stage 14</b>: full dogfight</li>
+        </ul>
+      </div>
+      <div class="card good">
+        <h3>설계 방향 예시</h3>
+        <ul>
+          <li>고정 표적으로 안정 비행부터</li>
+          <li>loiter / autopilot으로 추종 행동</li>
+          <li>BT 상대로 점진적 난이도 상승</li>
+          <li>각 stage <code>promote_when</code>으로 자동 진급 조건 명시</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 19: 섹션 디바이더 - 실험 관리 ========== -->
+<section class="slide" data-title="실험 관리" data-chapter="05. 실험 관리">
+  <div class="section-divider">
+    <div class="num">05</div>
+    <div class="stitle">실험 <span class="accent">관리</span></div>
+    <div class="ssub">
+      YAML 템플릿 6종 · dry-run · 두 실험 비교 · 모델 번들. 코드 외부에서 실험을 “기록되게” 만드는 방법입니다.
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 20: YAML 6종 ========== -->
+<section class="slide" data-title="YAML 6종" data-chapter="05. 실험 관리">
+  <div class="chapter-tag">05 · 실험 관리</div>
+  <h1>YAML 템플릿 <span class="accent">6종</span> — 실험 조건을 보존</h1>
+  <p class="lead">YAML은 조건을 기록하고, Python 아이디어는 module로 주입합니다.</p>
+  <table>
+    <thead><tr><th>템플릿</th><th>용도</th><th>주요 키</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">student_sac_mlp.yaml<br/>student_ppo_mlp.yaml</td>
+        <td>일반 학생 시작점 · MLP baseline</td>
+        <td><code>algo.mlp</code>, <code>reward_module</code>, <code>observation_module</code></td>
+      </tr>
+      <tr>
+        <td class="mono">student_sac_lstm.yaml<br/>student_ppo_lstm.yaml</td>
+        <td>LSTM 경로 (SAC는 RLLibLstm 패치 필요)</td>
+        <td><code>algo.lstm</code>, <code>algo.network</code></td>
+      </tr>
+      <tr>
+        <td class="mono">student_mixed_initial_sac_mlp.yaml</td>
+        <td>BT / loiter target 혼합 · MLP 예시</td>
+        <td><code>env_config.initial_scenario</code></td>
+      </tr>
+      <tr>
+        <td class="mono">student_mixed_initial_sac_lstm.yaml</td>
+        <td>mixed initial + SAC LSTM (고급)</td>
+        <td><code>RLLibLstm</code>, <code>initial_scenario</code></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="callout tip">
+    <strong>운영 원칙:</strong> 원본 YAML을 직접 수정하지 말고, <code>Copy-Item</code>으로 복사해 <code>team01_sac_mlp_v1.yaml</code>처럼 실험명을 붙입니다. 그래야 어떤 조건으로 돌렸는지 나중에 추적할 수 있습니다.
+  </div>
+</section>
+
+<!-- ========== SLIDE 21: dry-run → smoke → 본실행 ========== -->
+<section class="slide" data-title="dry-run·smoke" data-chapter="05. 실험 관리">
+  <div class="chapter-tag">05 · 실험 관리</div>
+  <h1><span class="gold">dry-run</span> → <span class="accent">smoke</span> → <span class="good" style="color:#86efac">본실행</span></h1>
+  <p class="lead">긴 학습 전에 두 번의 안전망을 둡니다. dry-run으로 명령어 변환을 보고, smoke로 1–10 iteration만 짧게 돌립니다.</p>
+  <div class="body col-3">
+    <div class="card gold">
+      <h3>STEP 1 · dry-run</h3>
+      <p>YAML → CLI 변환만 출력. 학습은 시작하지 않음.</p>
+<pre class="shell" style="font-size:11.5px;"><span class="py">python</span> scripts\run_experiment.py ^
+  experiments\team01_v1.yaml <span class="flag">--dry-run</span></pre>
+      <p><b>확인:</b> output.name/tag, observation_module, env_config 분기.</p>
+    </div>
+    <div class="card info">
+      <h3>STEP 2 · smoke (1–10 iter)</h3>
+      <p>실제로 짧게 돌려보기. 관측 shape · reward 반환 · bundle 저장 확인.</p>
+<pre class="shell" style="font-size:11.5px;"><span class="py">python</span> train_rllib.py ^
+  <span class="flag">--algorithm</span> sac <span class="flag">--iterations</span> 1 ^
+  <span class="flag">--output-name</span> team01 <span class="flag">--output-tag</span> smoke</pre>
+      <p><b>이상 신호:</b> NaN reward, shape mismatch, bundle 미생성.</p>
+    </div>
+    <div class="card good">
+      <h3>STEP 3 · 본실행</h3>
+      <p>위 두 단계가 통과한 뒤에만 긴 학습 시작.</p>
+<pre class="shell" style="font-size:11.5px;"><span class="py">python</span> scripts\run_experiment.py ^
+  experiments\team01_v1.yaml</pre>
+      <p>이 시점에서는 reward 곡선이 의미 있게 변화할 만큼 충분히 돌립니다.</p>
+    </div>
+  </div>
+      <div class="callout">
+        <strong>Ray 정리 권장:</strong> smoke 직전 <code>python -m ray stop --force</code>로 잔존 노드 정리. 이전 학습이 비정상 종료된 후에는 거의 필수.
+      </div>
+      <div class="callout tip" style="margin-top: 10px;">
+        <strong>저장 정책:</strong> <code>runtime.save_lightweight_bundle</code> /
+        <code>runtime.lightweight_bundle_frequency</code>는 추론용 bundle 저장을,
+        <code>runtime.save_native_checkpoint</code> /
+        <code>runtime.native_checkpoint_frequency</code>는 학습 재개용 checkpoint 저장을 제어합니다.
+        <code>0</code> 주기는 최종본만 저장한다는 뜻입니다.
+      </div>
+</section>
+
+<!-- ========== SLIDE 22: 두 실험 비교 ========== -->
+<section class="slide" data-title="실험 비교" data-chapter="05. 실험 관리">
+  <div class="chapter-tag">05 · 실험 관리</div>
+  <h1>두 실험을 비교할 때는 <span class="accent">3개 로그</span>를 함께 봅니다</h1>
+  <p class="lead">숫자(metric)와 조건(config)을 함께 보지 않으면 “왜 그렇게 됐는지” 알 수 없습니다.</p>
+  <div class="body col-2">
+    <div class="card info">
+      <h3>Run A · sac_mlp_v1</h3>
+      <ul>
+        <li>YAML: <code>student_sac_mlp.yaml</code></li>
+        <li><code>config.json</code> · observation_module 확인</li>
+        <li><code>metrics.jsonl</code> · reward_mean, crash_rate</li>
+      </ul>
+    </div>
+    <div class="card info">
+      <h3>Run B · mixed_initial_sac_mlp_v1</h3>
+      <ul>
+        <li>YAML: <code>student_mixed_initial_sac_mlp.yaml</code></li>
+        <li><code>config.json</code> · initial_scenario 분포 확인</li>
+        <li><code>metrics.jsonl</code> · win_rate, ep_min_distance</li>
+      </ul>
+    </div>
+  </div>
+  <table style="margin-top: 12px;">
+    <thead><tr><th>파일</th><th>볼 것</th><th>역할</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">metrics.jsonl</td><td>reward_mean 추세, crash_rate, win_rate</td><td>dashboard scalar 차트의 원천</td></tr>
+      <tr><td class="mono">config.json</td><td>YAML/CLI/module 설정</td><td>조건 비교의 정답지</td></tr>
+      <tr><td class="mono">metadata.json</td><td>obs_mode / observation_module</td><td>bundle 해석 기준</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ========== SLIDE 23: 모델 번들 ========== -->
+<section class="slide" data-title="모델 번들" data-chapter="05. 실험 관리">
+  <div class="chapter-tag">05 · 실험 관리</div>
+  <h1>모델 번들은 <span class="gold">제출 단위</span>입니다</h1>
+  <p class="lead">두 파일만 있으면 어디서든 같은 정책을 추론할 수 있습니다 (호환 환경 가정).</p>
+  <div class="body col-2-wide-left">
+    <div>
+      <div class="tree">
+<span class="dir">artifacts/models/&lt;team&gt;/&lt;tag&gt;/</span>
+├── <span class="file">metadata.json</span>           <span class="cmt"># 관측 모드·LSTM 여부·구조 메타</span>
+└── <span class="file">policy_weights.pkl.gz</span>   <span class="cmt"># 정책 가중치</span>
+      </div>
+
+      <h3 style="font-size:14px; color:var(--accent-2); margin-top: 12px;">metadata.json 핵심 키</h3>
+<pre class="yaml" style="font-size:11.5px;">{
+  <span class="key">"algorithm"</span>: <span class="val">"sac"</span>,
+  <span class="key">"obs_mode"</span>: <span class="val">"tactical16"</span>,
+  <span class="key">"observation_module"</span>: <span class="val">""</span>,
+  <span class="key">"use_lstm_sac"</span>: <span class="val">false</span>,
+  <span class="key">"lstm_cell_size"</span>: <span class="val">64</span>,
+  ...
+}</pre>
+    </div>
+    <div>
+      <div class="card good">
+        <h3>제출에 필요한 것</h3>
+        <ul>
+          <li><code>BUNDLE_DIR</code> = <code>artifacts/models/&lt;team&gt;/&lt;tag&gt;</code></li>
+          <li>두 파일이 같은 폴더에 있어야 함</li>
+          <li><code>my_submission.py</code>에서 <code>BUNDLE_DIR</code> 설정</li>
+        </ul>
+      </div>
+      <div class="card warn">
+        <h3>주의</h3>
+        <ul>
+          <li>관측 차원이 다르면 추론 즉시 실패</li>
+          <li>LSTM 학습 모델은 LSTM 옵션을 켠 환경에서만 동작</li>
+          <li><code>metadata.json</code>이 누락되면 RLlib가 구조를 모름</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 24: 섹션 디바이더 - 학습 + 검증 ========== -->
+<section class="slide" data-title="학습+검증" data-chapter="06. 학습 + 검증">
+  <div class="section-divider">
+    <div class="num">06</div>
+    <div class="stitle">학습 + <span class="accent">로컬 검증</span></div>
+    <div class="ssub">
+      PPO/SAC · 재개 방식 · 로컬 교전 · 종료 사유 분석. 학습한 모델을 실제로 돌려보는 단계입니다.
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 25: PPO vs SAC + 재개 ========== -->
+<section class="slide" data-title="PPO/SAC·재개" data-chapter="06. 학습 + 검증">
+  <div class="chapter-tag">06 · 학습 + 검증</div>
+  <h1>PPO · SAC · <span class="accent">재개 방식</span></h1>
+  <p class="lead">알고리즘과 재개 방식 선택은 실험 목적에 맞춰. 도구일 뿐, 정답은 아닙니다.</p>
+  <div class="body col-2">
+    <div>
+      <h3 style="font-size:14px; color:var(--accent-2); margin: 0 0 6px;">알고리즘 선택</h3>
+      <div class="card info">
+        <h3>PPO</h3>
+        <p>정책 업데이트 폭 제한. 비교적 안정적인 baseline. 주 옵션: <code>clip-param</code>, <code>gae-lambda</code>.</p>
+      </div>
+      <div class="card info" style="margin-top: 10px;">
+        <h3>SAC</h3>
+        <p>Entropy 기반 탐색. 연속 제어 실험에 적합. 주 옵션: <code>tau</code>, <code>target-entropy</code>.</p>
+      </div>
+      <div class="callout warn" style="margin-top: 10px;">
+        <strong>LSTM 경로:</strong> SAC LSTM은 RLlib 설치본 패치가 필요합니다 (<code>RLLibLstm/</code>). Appendix C 참고.
+      </div>
+    </div>
+    <div>
+      <h3 style="font-size:14px; color:var(--accent-2); margin: 0 0 6px;">재개 방식 — 보존 상태가 다름</h3>
+      <table>
+        <thead><tr><th>방식</th><th>옵션</th><th>보존</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>Native checkpoint</b></td>
+            <td class="mono">--restore-checkpoint</td>
+            <td>policy + optimizer + replay</td>
+          </tr>
+          <tr>
+            <td><b>Lightweight bundle</b></td>
+            <td class="mono">--init-bundle</td>
+            <td>policy weight only</td>
+          </tr>
+          <tr>
+            <td><b>Curriculum resume</b></td>
+            <td class="mono">--resume</td>
+            <td>stage/iteration 위치</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <strong>구분 기준:</strong> 중단된 학습 그대로 이어가려면 native checkpoint. 좋은 정책을 시드로 새 실험을 시작하려면 lightweight bundle.
+      </div>
+      <div class="callout tip" style="margin-top: 10px;">
+        <strong>저장 위치:</strong> final bundle은 <code>artifacts/models/&lt;name&gt;/&lt;tag&gt;</code>,
+        주기 bundle은 <code>bundle_000010</code>, final native checkpoint는
+        <code>artifacts/checkpoints/&lt;name&gt;/&lt;tag&gt;/checkpoint_final</code>,
+        주기 checkpoint는 <code>checkpoint_000010</code> 형태로 남습니다.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 26: 로컬 검증 ========== -->
+<section class="slide" data-title="로컬 검증" data-chapter="06. 학습 + 검증">
+  <div class="chapter-tag">06 · 학습 + 검증</div>
+  <h1>로컬 검증은 <span class="gold">제출 전 안전 점검</span></h1>
+  <p class="lead">bundle을 ownship에 태우고, BT target과 1v1 교전을 돌려 종료 사유부터 확인합니다.</p>
+
+  <div class="flow-row" style="margin: 6px 0 14px;">
+    <div class="flow-step"><span class="n">1</span><b>bundle 선택</b></div>
+    <div class="flow-step"><span class="n">2</span><b>backend 조합</b></div>
+    <div class="flow-step"><span class="n">3</span><b>교전 실행</b></div>
+    <div class="flow-step"><span class="n">4</span><b>종료 사유</b></div>
+    <div class="flow-step"><span class="n">5</span><b>다음 실험</b></div>
+  </div>
+
+  <div class="body col-2-wide-left">
+    <div>
+<pre class="shell"><span class="py">python</span> <span class="val">run_local_dogfight.py</span> ^
+  <span class="flag">--ownship-backend</span> <span class="val">rl</span> ^
+  <span class="flag">--ownship-bundle-dir</span> <span class="val">artifacts\models\team01\v1</span> ^
+  <span class="flag">--target-backend</span> <span class="val">bt</span> ^
+  <span class="flag">--target-bt-dll</span> <span class="val">AIP_BASE_target.dll</span> ^
+  <span class="flag">--observation-mode</span> <span class="val">tactical16</span> ^
+  <span class="flag">--save-log</span></pre>
+
+      <p style="font-size: 12.5px; color: var(--muted);">
+        custom 관측을 사용한 정책은 <code>--observation-mode custom --observation-module student.my_observation</code> 함께 지정.
+      </p>
+    </div>
+    <div>
+      <div class="card good">
+        <h3>backend 조합</h3>
+        <table style="margin-top: 4px;">
+          <tbody>
+            <tr><td class="mono">rl</td><td>학습된 정책</td></tr>
+            <tr><td class="mono">bt</td><td>C++ 행동트리 DLL</td></tr>
+            <tr><td class="mono">hybrid</td><td>RL + BT 결합</td></tr>
+            <tr><td class="mono">fixed</td><td>고정/단순 행동</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 27: 종료 사유 분석 ========== -->
+<section class="slide" data-title="종료 사유" data-chapter="06. 학습 + 검증">
+  <div class="chapter-tag">06 · 학습 + 검증</div>
+  <h1>먼저 볼 것은 <span class="accent">승률</span>보다 <span class="bad" style="color:#fca5a5">실패 원인</span></h1>
+  <p class="lead"><code>summary.json</code>의 <code>end_condition</code>이 어떤 카테고리에 몰려 있는지로 정책의 약점을 진단합니다.</p>
+  <div class="body col-2">
+    <div class="card bad">
+      <h3>ownship_dead</h3>
+      <p><b>해석:</b> 적의 사거리에 들어갔거나 추격 실패 후 역공받음.</p>
+      <p><b>조치:</b> AA 페널티 강화, WEZ 회피 보상 추가, 회피 기동 학습.</p>
+    </div>
+    <div class="card warn">
+      <h3>ownship_alt (저고도)</h3>
+      <p><b>해석:</b> 강하 기동 학습 후 저고도 복구 실패.</p>
+      <p><b>조치:</b> low_altitude_penalty 강화, 최저고도 가드 점검.</p>
+    </div>
+    <div class="card good">
+      <h3>target_dead</h3>
+      <p><b>해석:</b> 성공. 단, WEZ 점유 시간이 적정한지 함께 확인 (한 방 운인지, 점진 추격인지).</p>
+      <p><b>조치:</b> 다음 단계 난이도(behavior_tree) 도입 고려.</p>
+    </div>
+    <div class="card info">
+      <h3>max_time / step_limit</h3>
+      <p><b>해석:</b> 결판 못 냄. 추격 의지 부족 또는 둘 다 회피 학습.</p>
+      <p><b>조치:</b> closure 보상 강화, step 페널티 검토.</p>
+    </div>
+  </div>
+  <div class="callout">
+    <strong>분석 절차:</strong> 10–20회 교전을 돌려 <code>end_condition</code> 카운트 분포를 봅니다. 한 카테고리에 70% 이상 몰리면 그 방향의 보상·관측 수정이 가장 큰 영향.
+  </div>
+</section>
+
+<!-- ========== SLIDE 28: 섹션 디바이더 - Unreal ========== -->
+<section class="slide" data-title="Unreal 제출" data-chapter="07. Unreal 제출">
+  <div class="section-divider">
+    <div class="num">07</div>
+    <div class="stitle">Unreal <span class="accent">제출</span></div>
+    <div class="ssub">
+      경진대회 Unreal 서버에 학습된 정책을 연결하는 단계. 로컬 검증과 동일한 입력 계약을 사용합니다.
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 29: Unreal 흐름 + submission ========== -->
+<section class="slide" data-title="Unreal 흐름" data-chapter="07. Unreal 제출">
+  <div class="chapter-tag">07 · Unreal 제출</div>
+  <h1>Unreal 접속도 <span class="accent">같은 입력 계약</span>을 씁니다</h1>
+  <p class="lead">PlaneInfo → Observation → Policy/BT → CMD → Unreal step. 로컬 검증과 같은 module path와 관측 모드를 사용합니다.</p>
+
+  <div class="flow-row" style="margin: 6px 0 14px;">
+    <div class="flow-step"><span class="n">1</span><b>PlaneInfo</b>UDP 수신</div>
+    <div class="flow-step"><span class="n">2</span><b>Observation</b>벡터 생성</div>
+    <div class="flow-step"><span class="n">3</span><b>Policy / BT</b>액션 계산</div>
+    <div class="flow-step"><span class="n">4</span><b>CMD</b>UDP 송신</div>
+    <div class="flow-step"><span class="n">5</span><b>Unreal step</b>시뮬레이션 진행</div>
+  </div>
+
+  <div class="body col-2">
+    <div>
+      <h3 style="font-size:14px; color:var(--accent-2);">my_submission.py 수정 지점</h3>
+      <table>
+        <thead><tr><th>설정</th><th>의미</th><th>확인</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">TEAM_NAME</td><td>팀 표시 이름</td><td>등록명과 일치</td></tr>
+          <tr><td class="mono">SERVER_IP<br/>SERVER_PORT</td><td>Unreal 서버 주소</td><td>운영 공지 기준</td></tr>
+          <tr><td class="mono">MODE</td><td>rl / bt / hybrid</td><td>실험 의도와 일치</td></tr>
+          <tr><td class="mono">BUNDLE_DIR</td><td>제출 policy 경로</td><td>metadata·weights 확인</td></tr>
+          <tr><td class="mono">OBSERVATION_MODE<br/>OBSERVATION_MODULE</td><td>policy 입력 계약</td><td>학습 설정과 일치</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+<pre class="shell"><span class="py">python</span> <span class="val">run_unreal_inference.py</span> ^
+  <span class="flag">--mode</span> <span class="val">rl</span> ^
+  <span class="flag">--bundle-dir</span> <span class="val">artifacts\models\team01\v1</span> ^
+  <span class="flag">--team-name</span> <span class="val">team01</span> ^
+  <span class="flag">--server-ip</span> <span class="val">&lt;공지된 IP&gt;</span> ^
+  <span class="flag">--server-port</span> <span class="val">9999</span></pre>
+      <div class="callout tip">
+        <strong>제출 직전 체크:</strong> 로컬에서 같은 bundle로 <code>run_local_dogfight.py --target-backend bt</code>를 한 번 더 돌려 종료 사유가 정상인지 확인하는 것이 가장 안전한 사전 점검입니다.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 30: 관측 일관성 체인 (본문 승격) ========== -->
+<section class="slide" data-title="관측 일관성" data-chapter="08. 관측 일관성">
+  <div class="chapter-tag">08 · 가장 흔한 버그 · 본문 승격</div>
+  <h1>관측 일관성 <span class="bad" style="color:#fca5a5">체인</span> — 5개 위치를 통일하세요</h1>
+  <p class="lead">학생 95%가 한 번씩 겪는 차원 mismatch는 거의 모두 아래 5개 위치 중 하나가 어긋났기 때문입니다.</p>
+
+  <div class="flow-row" style="margin: 6px 0 14px;">
+    <div class="flow-step"><span class="n">1</span><b>YAML</b>experiments/*.yaml</div>
+    <div class="flow-step"><span class="n">2</span><b>Train CLI</b>train_rllib.py</div>
+    <div class="flow-step"><span class="n">3</span><b>Metadata</b>metadata.json</div>
+    <div class="flow-step"><span class="n">4</span><b>Local</b>run_local_dogfight.py</div>
+    <div class="flow-step"><span class="n">5</span><b>Submission</b>my_submission.py</div>
+  </div>
+
+  <table>
+    <thead><tr><th>위치</th><th>확인할 값</th><th>불일치 위험</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">YAML</td>
+        <td><code>env.observation_mode</code> / <code>env.observation_module</code></td>
+        <td>학습 조건 기록 오류 → 재현 불가</td>
+      </tr>
+      <tr>
+        <td class="mono">train_rllib.py</td>
+        <td><code>--observation-mode</code> / <code>--observation-module</code></td>
+        <td>학습 입력 차원 불일치 → 즉시 실패</td>
+      </tr>
+      <tr>
+        <td class="mono">metadata.json</td>
+        <td><code>obs_mode</code> / <code>observation_module</code></td>
+        <td>bundle 해석 오류 → 추론 불일치</td>
+      </tr>
+      <tr>
+        <td class="mono">run_local_dogfight.py</td>
+        <td><code>--observation-mode</code> / <code>--observation-module</code></td>
+        <td>로컬 성능 왜곡 → 잘못된 의사결정</td>
+      </tr>
+      <tr>
+        <td class="mono">my_submission.py / CLI</td>
+        <td><code>OBSERVATION_MODE</code> / <code>OBSERVATION_MODULE</code><br/><code>BT_RULE_XML</code> / <code>ACTION_REPEAT</code></td>
+        <td>제출 추론 입력 또는 BT 자산 불일치 → 시합 패</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="callout warn">
+    <strong>점검 한 줄:</strong> <code>metadata.json</code>이 정답지입니다. 모든 다른 위치는 이것과 같은 값을 가져야 합니다. 의심스러우면 <code>metadata.json</code>을 직접 열어 확인하세요.
+  </div>
+</section>
+
+<!-- ========== SLIDE 31: 최종 체크리스트 ========== -->
+<section class="slide" data-title="최종 체크리스트" data-chapter="09. 최종 점검">
+  <div class="chapter-tag">09 · 최종 점검</div>
+  <h1>제출 전 <span class="gold">최종 체크리스트</span></h1>
+  <p class="lead">시합·평가 직전에 한 번 더 훑는 항목들. 한 번이라도 막힌 적이 있는 항목은 두 번 확인.</p>
+  <div class="body col-2">
+    <ul class="checklist">
+      <li><b>실행 위치</b> — <code>Release/</code>에서 실행 중인가?</li>
+      <li><b>가상환경</b> — <code>conda activate aip</code> 활성?</li>
+      <li><b>DLL</b> — <code>JSBSimAIPLib.dll</code> · <code>AIP_BASE*.dll</code> Release 루트?</li>
+      <li><b>관측 일치</b> — 학습/local/submission 세 곳 같은 module path?</li>
+      <li><b>bundle 두 파일</b> — <code>metadata.json</code> + <code>policy_weights.pkl.gz</code>?</li>
+      <li><b>저장 정책</b> — final bundle/checkpoint와 주기 snapshot 경로 확인?</li>
+    </ul>
+    <ul class="checklist">
+      <li><b>로컬 검증</b> — <code>--save-log</code>로 마지막 교전 1회 확인?</li>
+      <li><b>종료 사유 정상</b> — <code>summary.json</code>이 의미 있는 outcome?</li>
+      <li><b>YAML 보존</b> — 사용한 YAML이 <code>experiments/</code>에 남아 있나?</li>
+      <li><b>my_submission.py</b> — TEAM_NAME, SERVER_IP/PORT, BUNDLE_DIR 채움?</li>
+      <li><b>LSTM 경로</b> — LSTM 모델이면 RLlib 패치 적용 확인?</li>
+    </ul>
+  </div>
+  <div class="callout tip">
+    <strong>운영 원칙 한 줄:</strong> 모르는 상태로 제출하지 않습니다. 자신 없는 부분은 로컬에서 한 번 더 돌려 확인한 뒤 제출합니다.
+  </div>
+</section>
+
+<!-- ========== SLIDE 32: APPENDIX DIVIDER ========== -->
+<section class="slide" data-title="Appendix" data-chapter="Appendix">
+  <div class="section-divider">
+    <div class="num">A</div>
+    <div class="stitle"><span class="accent">Appendix</span></div>
+    <div class="ssub">
+      오류 FAQ · 로그 종류와 사용법 · SAC LSTM 패치 — 본문 흐름을 끊지 않도록 부록으로 분리한 참고 자료.
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 33: A. 오류 FAQ ========== -->
+<section class="slide" data-title="오류 FAQ" data-chapter="Appendix A">
+  <div class="chapter-tag">Appendix A</div>
+  <h1>오류 <span class="accent">FAQ</span></h1>
+  <p class="lead">증상 → 먼저 확인 → 조치 순서로 정리한 표.</p>
+  <table>
+    <thead><tr><th>증상</th><th>먼저 확인</th><th>조치</th></tr></thead>
+    <tbody>
+      <tr><td>DLL 오류</td><td>Release 루트와 파일명</td><td>위치/이름 확인, 재다운로드</td></tr>
+      <tr><td>import 실패</td><td>Python · venv · requirements</td><td><code>conda activate aip</code> → <code>pip install -r requirements.txt</code></td></tr>
+      <tr><td>모델 로드 실패</td><td>BUNDLE_DIR과 파일 2개</td><td><code>metadata.json</code> + <code>policy_weights.pkl.gz</code> 동일 폴더 확인</td></tr>
+      <tr><td>관측 오류 (shape mismatch)</td><td>mode/module/shape</td><td>학습 설정과 제출 설정 비교 — 슬라이드 30의 5위치 체인</td></tr>
+      <tr><td>서버 무응답</td><td>IP/port/방화벽</td><td>운영 공지와 네트워크 환경 확인</td></tr>
+      <tr><td>Ray 초기화 멈춤</td><td>이전 Ray 노드 잔존</td><td><code>python -m ray stop --force</code></td></tr>
+      <tr><td>NaN reward</td><td>my_reward.py 계산에서 0 division/log(0)</td><td>안전 가드 추가, smoke iter=1로 재현</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ========== SLIDE 34: B. 로그 사용법 ========== -->
+<section class="slide" data-title="로그 사용법" data-chapter="Appendix B">
+  <div class="chapter-tag">Appendix B</div>
+  <h1>로그는 <span class="accent">다음 가설의 근거</span>입니다</h1>
+  <p class="lead">로그를 그냥 쌓지 말고 무엇을 보러 가는지 명확히 합니다.</p>
+  <table>
+    <thead><tr><th>로그</th><th>볼 것</th><th>사용</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">training_log.csv</td><td>reward, crash, win, WEZ, distance</td><td>학습 추세 분석</td></tr>
+      <tr><td class="mono">metrics.jsonl</td><td>dashboard scalar 데이터</td><td>여러 run 시각 비교</td></tr>
+      <tr><td class="mono">config.json</td><td>YAML/CLI/module 설정</td><td>조건 비교의 정답지</td></tr>
+      <tr><td class="mono">Tacview CSV</td><td>위치 · 자세 · health 시계열</td><td>로컬 교전 복기</td></tr>
+      <tr><td class="mono">summary.json</td><td>end_condition · outcome</td><td>종료 사유 카운트 분석</td></tr>
+    </tbody>
+  </table>
+
+  <div class="body col-2" style="margin-top: 12px;">
+    <div class="card">
+      <h3>Dashboard 실행</h3>
+<pre class="shell" style="font-size:11.5px;"><span class="py">python</span> tools\dashboard.py ^
+  <span class="flag">--training-logdir</span> artifacts\dashboard ^
+  <span class="flag">--logdir</span> logs ^
+  <span class="flag">--port</span> 7860</pre>
+      <p style="font-size: 12.5px; color: var(--muted);">브라우저: <code>http://127.0.0.1:7860</code></p>
+    </div>
+    <div class="card">
+      <h3>Replay 탭 바로 열기</h3>
+<pre class="shell" style="font-size:11.5px;"><span class="py">python</span> tools\dashboard.py ^
+  <span class="flag">--default-tab</span> replay ^
+  <span class="flag">--logdir</span> logs ^
+  <span class="flag">--port</span> 7860</pre>
+      <p style="font-size: 12.5px; color: var(--muted);"><code>http://127.0.0.1:7860/?tab=replay</code></p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 35: C. SAC LSTM 패치 ========== -->
+<section class="slide" data-title="SAC LSTM 패치" data-chapter="Appendix C">
+  <div class="chapter-tag">Appendix C · Advanced</div>
+  <h1>SAC LSTM <span class="purple" style="color:var(--purple)">패치 적용</span></h1>
+  <p class="lead">LSTM 학습 경로를 쓰려면 Ray 2.54.0 RLlib 설치본을 패치해야 합니다. <code>RLLibLstm/</code>에 원본·패치본·manifest가 보관되어 있습니다.</p>
+  <div class="body col-2">
+    <div>
+      <h3 style="font-size:14px; color:var(--purple); margin: 0 0 6px;">STEP 1 · dry-run 패치</h3>
+<pre class="shell"><span class="py">python</span> RLLibLstm\tools\apply_rllib_sac_lstm_patch.py ^
+  C:\Users\USER\anaconda3\envs\aip <span class="flag">--dry-run</span></pre>
+      <h3 style="font-size:14px; color:var(--purple); margin: 12px 0 6px;">STEP 2 · 실제 패치 적용</h3>
+<pre class="shell"><span class="py">python</span> RLLibLstm\tools\apply_rllib_sac_lstm_patch.py ^
+  C:\Users\USER\anaconda3\envs\aip</pre>
+      <h3 style="font-size:14px; color:var(--purple); margin: 12px 0 6px;">STEP 3 · LSTM YAML 학습</h3>
+<pre class="shell"><span class="py">python</span> scripts\run_experiment.py ^
+  experiments\student_sac_lstm.yaml</pre>
+    </div>
+    <div>
+      <div class="card purple">
+        <h3>LSTM scope 3종</h3>
+        <ul>
+          <li><b>actor_only</b> — actor LSTM + MLP Q (가장 가벼움)</li>
+          <li><b>actor_critic</b> — recurrent Q / twin / target Q (Ray 1.9.2 RNNSAC 모사)</li>
+          <li><b>sequence_v1</b> — YAML layer sequence로 actor/Q 구조 자유 설계</li>
+        </ul>
+      </div>
+      <div class="callout warn">
+        <strong>주의:</strong> 패치는 사용자 conda env의 <code>site-packages</code>를 수정합니다. 다른 PC에서 작업하려면 <code>RLLibLstm/manifest.json</code>과 가이드를 함께 전달하세요.
+      </div>
+      <div class="callout">
+        <strong>SAC LSTM smoke:</strong> 학습 직전 <code>ray stop --force</code> → 10 iter smoke → bundle 생성 확인 → 본실행 순서.
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<!-- ============ NAV ============ -->
+<div class="nav">
+  <div class="nav-title">2026 AI Pilot Challenge · <b id="slide-chapter">DogFightEnv Release</b> · <span id="slide-title">표지</span></div>
+  <div class="nav-buttons">
+    <button id="prev" aria-label="이전">←</button>
+    <div class="counter"><b id="cur">1</b> / <span id="total">35</span></div>
+    <button id="next" aria-label="다음">→</button>
+  </div>
+</div>
+
+<script>
+  (function() {
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const cur = document.getElementById('cur');
+    const total = document.getElementById('total');
+    const titleEl = document.getElementById('slide-title');
+    const chapterEl = document.getElementById('slide-chapter');
+    let idx = 0;
+    total.textContent = slides.length;
+
+    function show(i) {
+      idx = Math.max(0, Math.min(slides.length - 1, i));
+      slides.forEach((s, k) => s.classList.toggle('active', k === idx));
+      cur.textContent = idx + 1;
+      titleEl.textContent = slides[idx].dataset.title || '';
+      chapterEl.textContent = slides[idx].dataset.chapter || 'DogFightEnv Release';
+    }
+
+    document.getElementById('prev').addEventListener('click', () => show(idx - 1));
+    document.getElementById('next').addEventListener('click', () => show(idx + 1));
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault(); show(idx + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault(); show(idx - 1);
+      } else if (e.key === 'Home') {
+        show(0);
+      } else if (e.key === 'End') {
+        show(slides.length - 1);
+      }
+    });
+
+    show(0);
+  })();
+</script>
+
+</body>
+</html>

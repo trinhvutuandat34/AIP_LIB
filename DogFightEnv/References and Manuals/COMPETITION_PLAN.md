@@ -1,0 +1,742 @@
+# AIP TGC 2026 — Competition Plan
+
+> Companion to [COMPETITION_RULES.md](COMPETITION_RULES.md) (official rules),
+> [PROJECT_ANALYSIS.md](PROJECT_ANALYSIS.md) (how the system works), and
+> [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) (where things are + current state). This file is
+> the living strategy/execution plan — check items off and update assumptions here as work
+> progresses; don't let it drift stale the way `PROJECT_STRUCTURE.md` briefly did.
+
+## 1. Status snapshot
+
+As of 2026-07-07 (see `PROJECT_STRUCTURE.md` "Current state" for the verified detail): the `aip`
+conda env exists, connectivity to a live Unreal server has already been smoke-tested
+(`logs/unreal_packets/`, `logs/native_bt/`, `startup_command.txt`, all dated 2026-05-14 or after),
+but **no real trained policy exists yet** — `artifacts/models/real_eagle/*` are placeholder/smoke-test
+bundles (every `reward_mean` is `n/a`), and `student/my_reward.py` is still the bare template.
+Infrastructure is ready; the competitive model itself is a from-scratch build.
+
+Today is 2026-07-07. Per `COMPETITION_RULES.md` §3, prelims are end of August 2026 — **roughly
+7–8 weeks of runway.**
+
+**Update 2026-07-11:** the native BT is no longer the 8-node minimal tree of early July — the full
+**BT tactics expansion (Batches A–D, §5.1.6) has landed**: ~20 `Task_*` maneuver nodes + a
+5-gate priority structure + an energy-ratio service, all built and frozen into
+`AIP_BASE.dll`/`AIP_BASE_target.dll`. Three environment/reward corrections also landed this week:
+the initial-spawn geometry now matches the **confirmed real competition presets** (15000 ft /
+200 m/s / ~10000 ft HABFM separation — §4 row 6), and a config-merge bug that had silently zeroed
+the `position` reward term for all of real_eagle v1's stage 0–8 training was found and fixed (§6).
+
+**Resume-vs-restart decision RESOLVED (2026-07-11): restart, not resume** — see §9 for full detail.
+v1 (the original stage-8 run) actually recovered from its Ray/RLlib crash and finished stage 8
+cleanly two days late, but was still abandoned in favor of a clean restart (`v2`) once the tree,
+spawn geometry, and reward fixes above had all landed — training against the stage-8 checkpoint's
+stale assumptions wasn't worth carrying forward. `v2` was deliberately stopped at stage 2 (manual
+interrupt, not a crash); `v3` is the current run, **live as of this writing** — past stage 8 already,
+into stage 9/17 (`two_circle_headon_a060`, 195 iterations in, 2330 total iterations elapsed across
+the run). Re-check `artifacts/curriculum/real_eagle/v3/curriculum_state.json` before assuming this
+snapshot is still current.
+
+**Update 2026-07-12 — full-codebase audit; `v3` superseded by `v4`.** An audit of v3's live
+metrics (then at stage 13/17) found the run structurally degenerate, and v1 retro-checked
+identically:
+
+- **Every two-circle stage in both v1 (stages 4–8) and v3 (stages 6–13) ran at 93–100%
+  guard-fail losses, 0 wins, ~0 WEZ steps**, advancing only via `max_iterations`. The ATA-limit
+  guard was physically unpassable at the merge, and (worse) its unavoidable discounted terminal
+  penalty rewarded *postponing* the fail — i.e. it trained merge **avoidance**; v3's late stages
+  measurably learned to stall (episode length 23→177 iterations-mean with zero win-rate change).
+- **Crashes paid `draw_reward`** (ground impact leaves health at 1.0, so the terminal routing
+  fell through to the draw branch). v3's `obfm_defensive` sets `draw_reward=+20` for
+  survive-to-timeout — so the agent was paid +20 to fly into the ground, and duly learned a
+  **100% crash rate** (stages 2–5 all ended 90–100% crash).
+- **SAC learner metrics (`actor_loss`/`critic_loss`/`alpha`…) logged `n/a` for the entire
+  history of v1–v3** — the extractor grabbed `__all_modules__` (counters only) instead of
+  `default_policy` from `result["learners"]`. No optimizer-health signal was ever visible.
+- Net: across ~7,400 iterations (v1+v3) the agent **never won a single episode** and the damage
+  reward never fired meaningfully. Learning infrastructure itself works — policies responded to
+  the (wrong) incentives exactly as the gradients dictate.
+
+Fixes landed 2026-07-12 (all verified end-to-end through the real stage-config merge path):
+crash→`crash_penalty`/`target_crash_reward` terminal routing (both reward impls + both config
+dicts); guard redesigned to a **range-based disengagement check** (>8 km = loss — fleeing is
+the one thing it now bans; see `envs/termination.py`); `student/my_curriculum.py` rebuilt
+(5-alpha two-circle ladder with 8 km shaping reach + smooth `advantage` term at 0.1,
+`full_dogfight` extended to 1500 iterations); `student/my_observation_v2.py` (15 features,
++target speed, live-parity safe — new module so live v3 workers can't import a changed obs
+size); SAC metrics extraction fixed; all reward components now in the training CSV; periodic
+engagement replays (Tacview) enabled in v4. **`v4` = `experiments/real_eagle_v4.yaml`**;
+`scripts/launch_v4_when_free.ps1` (running, detached) auto-starts it as soon as v3's process
+tree exits — stop v3 early with `taskkill /PID <run_experiment pid> /T /F` to start v4 sooner.
+**Do not `--resume` v3 after this date** (stages module rewritten; state-file indices would
+mis-map).
+
+**Update 2026-07-14 — hybrid inference pipeline fixed after 0-win practice matches.** The BT+RL
+hybrid lost every practice match vs pure RL and pure BT. Audit found the RL throttle was never
+remapped from the policy's [-1,1] training convention to the sim/wire's [0,1] at inference
+(engine-idle for half the output range, on every entry path — local validation couldn't catch
+it), the hybrid residual could only ever *raise* throttle above the BT baseline, and
+`--hybrid-mode switch` silently ran pure RL (no selector existed anywhere). All fixed
+2026-07-14, plus a startup guard that refuses to run when a bundle's recorded observation
+config mismatches the runtime's (`verify_bundle_observation`). **The fixes live in the
+editable `student/inference_providers.py` (subclass + composition of the platform), NOT in
+`src/dogfight/**`** — that package was reaffirmed as a hard no-edit boundary the same day, so
+the first-pass fixes that had been placed there were reverted and re-homed (see
+`PROJECT_STRUCTURE.md` current-state log / `PROJECT_ANALYSIS.md` §5.1). `RemappedRLProvider`
+(the remap-before-clip subclass) and `StudentHybridProvider` (throttle-aware residual + real
+switch) are wired in from the three inference entry scripts; `student/my_submission.py` now
+targets §3's hybrid-residual architecture with the newest post-audit bundle (v4 stage_3) +
+`student.my_observation_v2`. **Any pre-2026-07-14 practice-match result involving the RL or
+hybrid backend is invalid as a strength signal** — the policy was flying with a corrupted
+throttle channel. Re-run practice matches before drawing conclusions; and note v4 training is
+stalled at stage 4/17 with no live process (the stage_3 bundle has only learned pursuit, not
+combat — resuming v4 remains the highest-leverage action).
+
+**Update 2026-07-15/16 — accidental full-tree revert, then recovered (mostly).** The fix for a
+`src/dogfight` boundary violation (a session had edited it directly) was executed as a full
+pristine-template overwrite instead of a scoped revert, silently undoing roughly a week of
+validated work that happened to share a file path with the original distribution template:
+the 2026-07-12 crash-routing fix and range-based guard (§1 above), the 2026-07-08/11 WEZ-phase
+widening (§4 row 2), `student/my_reward.py`/`my_curriculum.py` (back to bare templates), and the
+entire BT tactics expansion's XML wiring (`Rule_forTraining.xml` back to a 2-branch stub, even
+though every `Task_*.cpp` source survived) plus `AIP_BASE.dll`/`AIP_BASE_target.dll` (reverted to
+a stale pre-expansion binary). Trained checkpoints, `experiments/real_eagle_v*.yaml`, and the
+`Task_*.cpp` sources themselves were untouched (unique paths, no template counterpart to overwrite
+them). Five root docs (this one included) moved to `DogFightEnv/References and Manuals/` in the
+process — kept there permanently rather than restored to root (§1 continues to live at that new
+location going forward).
+
+Recovered 2026-07-15/16: `student/my_reward.py`/`my_curriculum.py`/`reward_lib.py` via
+decompiling a stale Python bytecode cache that survived the revert (byte-exact for most content,
+reconstructed from `real_eagle_v4.yaml`'s own description for the crash-fix and 5-alpha ladder
+specifically, which postdate that cache); `Rule_forTraining.xml` via the surviving design plan
+(`~/.claude/plans/...serene-duckling.md`, outside the project dir), rebuilt, and **deployed to
+`AIP_BASE.dll`/`AIP_BASE_target.dll`** after fixing two unrelated pre-existing `AIP_DCS` build
+breaks found along the way and verifying via two live BT-vs-BT runs.
+
+**Deliberately NOT recovered — the WEZ-phase damage model (§4 row 2) and the range-based guard
+(§1's 2026-07-12 fix).** Both are hardcoded platform methods with no plug-in hook, unlike
+`reward_module`/`observation_module`/`stages_module`; restoring them means either crossing the
+`src/dogfight` hard boundary or adding a hook to the shared trainer scripts, and the team declined
+both options when asked directly. **As of 2026-07-16, local training/eval runs against the flat
+pre-fix WEZ damage model and a disabled (not re-enabled-and-broken) two-circle guard.** This is a
+training-fidelity gap, not a competition-legality one. Full detail:
+`PROJECT_STRUCTURE.md`'s dated "Current state" entry, `COMPETITION_RULES.md` §6.3, and memory
+(`project_bulk_revert_regression_2026_07_15`, `project_v4_recovery_2026_07_15`,
+`project_bt_xml_reconstruction_2026_07_15`).
+
+## 2. Team profile & vision (confirmed 2026-07-07)
+
+| Question | Answer | Implication |
+|---|---|---|
+| Approach | **Hybrid (residual)** | RL learns a correction on top of the native BT DLL — see §5.1 for a newly-found caveat on how solid that BT floor actually is |
+| Time budget | **Near full-time** | Room to be thorough (more curriculum iteration, more validation rounds) — but full-time hours don't remove the compute bottleneck below |
+| Target outcome | **Contend for the podium** | Robustness/polish work (network stability, edge cases, the tie-break scenario) isn't optional extra credit — it's load-bearing for a podium result |
+| RL/ML background | **Some ML, limited compute** | Default to SAC **MLP only** — skip the `RLLibLstm/` patch path unless MLP hits a measured ceiling; favor sequential, compute-light iteration over parallelism (§7) |
+
+**Net read**: this is a time-rich, compute-poor, high-ambition project. The highest-leverage moves
+are the ones that turn team-hours into quality without burning GPU/CPU cycles — reward/curriculum
+design, thorough validation, and (if §5.1's check comes back badly) restoring real tactical logic
+to the native BT, which is comparatively compute-cheap since BT rollouts need no gradient steps.
+
+## 3. Target architecture: Hybrid (residual) as the submission, BT-only kept warm as insurance
+
+Train an RL policy whose output is a **correction on top of the native BT DLL**
+(`HybridActionProvider(mode="residual", ...)`), not a replacement for it:
+
+- The BT baseline (`AIP_BASE.dll`) is assumed to fly without violating hard-deck/safety on its
+  own — **this assumption now needs verifying, see §5.1** — so residual RL only has to learn the
+  *delta* that beats it, a much smaller learning problem than end-to-end control from scratch.
+- It can't regress below "BT alone" quality if training under-converges, *provided the BT floor
+  is real* (§5.1).
+- This is explicitly the documented intent of `HybridActionProvider`'s residual mode (the BT is
+  the safety net, RL only nudges it) — not a new idea being introduced here.
+- Keep pure `MODE="bt"` (tuning `Rule_forTraining.xml` → a team-specific `Rule_real_eagle.xml`)
+  **actively maintained in parallel the whole time** — but see §5.1: this is currently a much
+  bigger lift than "tune some XML thresholds."
+
+- [x] Approach confirmed: Hybrid residual (§2).
+- [ ] Revisit if §5.1's verification shows there's no usable BT floor to be residual *on top of*.
+
+## 4. Environment-vs-rules corrections needed
+
+The training environment's defaults don't match the live competition in a few specific,
+checkable ways (see `COMPETITION_RULES.md` §6.3 for the cross-check). None of these are
+guesswork — each is a concrete diff between `DEFAULT_ENV_CONFIG` and the rules doc.
+
+| # | Rule (source) | Current env default | Correction | Status |
+|---|---|---|---|---|
+| 1 | 200s matches (§5) | `max_engage_time=300.0`, `episode_step_limit=18000` | Override to 200s / 12000 steps (60Hz) so learned pacing/energy management matches the real clock | - [x] Done 2026-07-08: `full_dogfight` stage's `episode_step_limit` in `src/dogfight/ai/curriculum.py` is now `12000`. Not a YAML/env_config knob for the curriculum path — `run_experiment.py` never forwards `env.max_engage_time`/`episode_step_limit` for `script: train_curriculum` (checked directly), episode length is purely per-`CurriculumStage`. |
+| 2 | Three-phase widening WEZ cone, best-phase-wins (§6.2) | Single static Phase-1-only cone (`angle_deg=2.0`, ~152–914 ft) — confirmed by grep, no phase logic anywhere in `src/dogfight/` | Phase 1 is a strict subset so this isn't wrong, but add phase-aware WEZ/reward logic so late-match behavior (t>100s, t>150s) isn't miscalibrated toward disengaging from shots that would actually still count | - [x] Done 2026-07-08, **[ ] REVERTED 2026-07-15, left un-restored (deliberate decision 2026-07-16)**: `DEFAULT_ENV_CONFIG["wez"]["phases"]` (`src/dogfight/config.py`) + phase-matching logic in `single_agent_env.py::update_damage()`/`_match_wez_phase()` were implemented and verified (8-case scripted test incl. the best-phase-wins rule), but an accidental full-tree revert reverted both files back to the flat Phase-1-only state described in the "Current env default" column, and the team chose not to restore it — no plug-in hook exists to reach `update_damage()` without crossing the `src/dogfight` hard boundary. **Current state matches this row's original "Current env default" cell again.** The pursuit-*shaping* term is still phase-aware (`student/reward_lib.py`, survived/re-homed), just not the actual damage/health computation. See `COMPETITION_RULES.md` §6.3. |
+| 3 | 6-frame (1/6 s ≈ 166.7 ms) compute-time penalty (§4) | `step_ratio=6` / `--action-repeat 6` already encodes this convention | Measure the trained policy's **actual** inference latency on competition-grade hardware — don't just trust the abstraction | - [ ] Instrumentation landed 2026-07-10 (`time.perf_counter()` p50/p95/max around `ProviderCommandPolicy._compute_provider_action()` in `unreal/policies.py`); still needs a trained policy + competition-grade hardware to produce real numbers (Weeks 4-5). |
+| 4 | Head-on tie-break at 10,000+ ft (§7) | Curriculum stages 4–13 (`two_circle_headon_a000..a180`) already target this geometry | Don't let this curriculum block get shortchanged for iteration speed — it's rehearsal for a named, specified tie-break format, not generic diversity | - [ ] BT-side handler now exists: `Task_NoseToNoseTurn` + Gate-2 head-on merge decorators (§5.1.6, Batch C) fire on the 3000–10000 m near-head-on geometry. Still owed a dedicated eval scenario (§8) and the curriculum block must still train against the upgraded tree. |
+| 5 | Network-instability = DQ after 2 incidents (§8) | Untested under induced stress | Dedicated robustness workstream (§8 below), independent of model quality | - [ ] |
+| 6 | **Initial spawn geometry** — main match (Prelim + Finals rounds 1–3) starts at **2000–3000 ft**, altitude/speed 15000 ft / 200 m/s (viewer presets); **10000 ft+ head-on is the round-4 tie-break ONLY** (confirmed 2026-07-11 from the official kickoff-deck scenario slides; exact distance/alt/speed "released later" per the deck) | `DEFAULT_ENV_CONFIG` used an unverified 7000 m / 250–300 m/s / ~5000 m baseline | Realign `config.py`'s `ownship`/`target` static arrays + `initial_scenario` + `target_autopilot` to the main-match geometry | - [x] Done 2026-07-10, **corrected 2026-07-11**: static spawn now 4572 m / 200 m/s / **762 m (2500 ft) separation** — an interim 3048 m/10000 ft value (from mis-reading the HABFM screenshot as the main-match spawn) was fixed once the official slides clarified HABFM = the round-4 tie-break preset, not rounds 1–3. `two_circle_headon` altitude 4572 m, speed `[175,225]`; its `alpha_deg`/`turn_diameter_ft`/`separation_jitter_ft` progression mechanics left untouched. **OBFM_RED/OBFM_BLUE exact geometry still unconfirmed** (presumably 2000–3000 ft with one side advantaged); capture from the viewer if needed. |
+
+## 5. Critical risks to verify *before* investing heavily in training
+
+Both of these are cheap, local, and fast to check — and both would materially change the plan
+above if they come back badly. Do them first.
+
+### 5.1 CONFIRMED (2026-07-07): the native BT opponent has no real tactics — it just flies straight
+
+**Verified by running the compiled DLLs directly**: `run_local_dogfight.py --ownship-backend bt
+--ownship-bt-dll AIP_BASE.dll --target-backend bt --target-bt-dll AIP_BASE_target.dll
+--max-engage-time 90 --save-log`. Result, from the saved Tacview CSVs
+(`artifacts/logs/2026_7_7_22_11_1_*.csv`):
+
+- The two aircraft merge head-on at ~t=8s (as expected from the ~5km separation / ~600 m/s
+  closure), then **both continue on essentially their original headings for the remaining 77s**
+  instead of turning back to re-engage. Sampled yaw every 5s: ownship drifts `0.0° → 13.9°`,
+  target drifts `180.0° → 173.4°` — a slow, smooth, monotonic drift, not a deliberate turn.
+- **Zero damage dealt by either side** over the full 90s
+  (`artifacts/logs/2026_7_7_22_11_1_summary.json`: `ownship_health: 1.0`, `target_health: 1.0`,
+  `end_condition: "max time out"`).
+
+This matches exactly what the `Task_Empty`/`Task_pure` stub source would produce — both shipped
+rule files (`Rule.xml`, `Rule_forTraining.xml`) route every branch to one of these, and
+`Task_pure.cpp`'s body is a byte-identical copy of `Task_Empty.cpp` (both just set a virtual aim
+point 10,000 units straight ahead of the current heading, every tick, forever). **Both compiled
+DLLs (`AIP_BASE.dll` and `AIP_BASE_target.dll`) behave this way — this is not just a
+source-tree gap, the binaries actually loaded at runtime confirm it.**
+
+**Consequence for the confirmed strategy (§2, §3): there is currently no BT floor.** Residual RL
+on top of this BT would be carrying ~100% of the tactical load — "Hybrid" in name only, since
+`BT_action` contributes nothing but "keep flying forward." Pure `MODE="bt"` is not a viable
+competitive fallback either, as-is: it would lose to any opponent with even minimal pursuit logic.
+
+- [x] Verified: compiled BT DLLs have no tracking/pursuit/attack behavior (evidence above).
+- [x] **Decision (2026-07-07): restore real BT tactics in C++ first**, before investing heavily
+      in RL training. Team has some (not expert) C++ experience — see the scoped plan below,
+      chosen specifically to keep first-step risk low.
+
+#### 5.1.1 Good news: the fix is much smaller than "implement a flight controller"
+
+Traced the control pipeline in `AIP_DCS/BehaviorTree/CPPBehaviorTree.cpp`
+(`RunCPPBT()`/`UCPPBehaviorTree::Step`, around lines 110–216) to find out how much a Task node
+actually has to compute. Answer: **not much.**
+
+- Every BT tick, `RunCPPBT()` calls `tree.tickRoot()`, then reads `BB->VP_Cartesian` (a 3D "aim
+  point") and passes it to `Controller.GetStick(MyLocation, MyRotation, VP)` — an existing,
+  already-working low-level guidance controller (`Geometry/Controller_CY.cpp`) that converts
+  "here I am, here's where I want to point" into actual roll/pitch/rudder stick commands. **Task
+  nodes never need to compute stick/control values themselves** — they only need to set a
+  meaningful aim point.
+- `Task_Empty`/`Task_pure`'s entire bug is one line:
+  `VP_Cartesian = MyLocation_Cartesian + MyForwardVector * 10000` — aim 10,000 units ahead of
+  current heading, ignoring the target entirely. `SelectTarget` (already working) has already
+  populated `BB->TargetLocaion_Cartesian` with the real target position every tick.
+- **A minimal real pursuit fix is close to a one-line change**: set
+  `VP_Cartesian = TargetLocaion_Cartesian` (pure pursuit — aim straight at the target's current
+  position) instead of the fixed forward point. That alone should produce visibly different,
+  verifiable behavior in the same local test used above.
+- Separately, **throttle is hard-coded and disconnected from the BT entirely**:
+  `RunCPPBT()` sets `Throttle = 1.0f` directly with a comment reading (translated) "throttle
+  placeholder — plug in the AI's value here." `CPPBlackBoard` does have a `float Throttle`
+  field, but nothing currently sets it from a Task node, and `RunCPPBT()` doesn't read it either
+  — it's two small, separate wiring gaps (one in a new/edited Task node, one in
+  `CPPBehaviorTree.cpp` itself), not required for the first pursuit-tracking milestone.
+- Also confirmed while reading the Decorators: **`DECO_BFMCheck` is dead code today** — it
+  compares `BB->BFM` against `OBFM`/`DBFM`/`HABFM`/etc., but nothing in the current source ever
+  assigns `BB->BFM` away from its default `NONE` (no BFM-situation classifier exists yet). Any
+  Rule XML branch gated on `CheckBFM` will never fire until one is written.
+
+#### 5.1.2 Step 1 — DONE (2026-07-07): minimal pursuit, verified working
+
+Implemented and verified. What actually happened, vs. the original plan:
+
+- **`Task_pure` was repaired in place instead of adding a new node.** `Task_pure.h`/`.cpp`
+  turned out to be dead, uncompiled files (see below) that were clearly *meant* to be a real
+  pursuit node (a `registerNodeType<Action::Task_pure>("Task_Pure")` call already existed in
+  `CPPBehaviorTree.cpp`) but never finished. Fixed `Task_pure.h`/`.cpp` to declare a real
+  `Action::Task_pure` class (was wrongly declaring `Action::Task_Empty` again — a leftover
+  copy-paste), implemented `tick()` as `VP_Cartesian = TargetLocaion_Cartesian` (pure pursuit),
+  added both files to `AIP_DCS.vcxproj`/`.vcxproj.filters`, and pointed
+  `DogFightEnv/Release/Rule_forTraining.xml`'s two branches at `Task_Pure` instead of
+  `Task_Empty`.
+- **Found two more bugs while getting this to actually build and run:**
+  1. The project **did not compile at all** before this fix — `Task_pure.h` redeclaring
+     `class Action::Task_Empty` collided with the real `Task_Empty.h` wherever both get
+     included together (`TaskNodes.h` includes both). This was a pre-existing break, not
+     something introduced here; the shipped `AIP_BASE.dll`/`AIP_BASE_target.dll` must predate it.
+  2. **Two complete, separate copies of this whole project exist on this machine** —
+     `D:\AIP\AIP_LIB\` (what all of this documentation targets) and
+     `C:\Users\User\Desktop\AIP\AIP_LIB\` (apparently untouched). The compiled DLL's Rule XML
+     loader had a **hardcoded absolute path** to the Desktop copy
+     (`C:\Users\User\Desktop\AIP\AIP_LIB\Rule_forTraining.xml` in
+     `CPPBehaviorTree.cpp::init()`), meaning `bt_rule_manager.py`'s `activate_rule_xml()`
+     mechanism — and therefore every documented way of swapping in a team-specific Rule XML —
+     was silently having **zero effect** on the compiled DLL. Fixed by resolving the path
+     relative to the DLL's own on-disk location instead (`GetModuleFileName`-based), which also
+     turned out to matter for a second reason: a bare relative path (`"Rule_forTraining.xml"`)
+     failed too, because something in the JSBSim init path changes the process's current
+     working directory before `CreateBehaviorTree()` runs. The module-relative fix is immune to
+     both problems. **The Desktop copy hasn't been touched or deleted — flagging its existence
+     for you to decide what to do with it.**
+- **Verified via the same 90s BT-vs-BT test as §5.1**: yaw now swings through 100–270° within
+  single 5-second samples on both sides (e.g. ownship: `15.9°→126.8°→267.8°→53.8°`), a complete
+  change from the pre-fix `0°→14°` passive drift. **Zero damage was still dealt in this run** —
+  expected, not a failure: two aircraft running identical pure-pursuit logic against each other
+  is known BFM to produce an inefficient tail-chase/circling geometry that doesn't converge to a
+  gun solution. That's exactly what Step 2 targets next.
+- [x] Step 1 done and verified (evidence above; new logs at
+      `artifacts/logs/2026_7_7_22_42_28_*.csv`). Old DLLs backed up to `AIP_BASE.dll.bak` /
+      `AIP_BASE_target.dll.bak` in `DogFightEnv/Release/` before overwriting.
+
+#### 5.1.3 Step 2 — DONE (2026-07-07): added lead pursuit, and found the *real* root cause
+
+Added `Task_LeadPursuit` (new node: aims at the target's *predicted* position — current
+location plus its velocity times a capped lead time — instead of its current position) and
+wired it into `Rule_forTraining.xml`'s `DistanceCheck Greater 2000` branch, keeping the precise
+`Task_Pure` (pure pursuit) on the `Less 2000` branch. Registered in `CPPBehaviorTree.cpp`,
+added to the vcxproj/filters, same pattern as Step 1.
+
+**First rebuild+retest was suspicious**: identical reward to Step 1 (`-30.4540`, both to 4
+decimal places) for the first ~28s, meaning the new `Greater 2000` branch wasn't visibly taking
+effect. Diffing the two runs' trajectory CSVs confirmed they were byte-identical until row 1682
+— real behavior, not a fluke, but pointing at a deeper bug rather than "the lead pursuit code is
+wrong."
+
+**Root cause, traced through `ChangeData()` in `LibMain.cpp` and `Step()` in
+`CPPBehaviorTree.cpp`: `BB->Distance` (and every position-derived quantity — `BB->
+MyLocation_Cartesian`, `BB->TargetLocaion_Cartesian`, and by extension the AA/LOS calculations
+that subtract these) was silently mixing latitude/longitude in **degrees** with altitude in
+**meters** in one Euclidean distance formula.** `ChangeData()` packs raw `(lat_deg, lon_deg,
+alt_m)` into the `Location` fields with no geodetic conversion. `Step()` *does* properly convert
+this to true local Cartesian meters via `LLAtoCartesian()` — but for the **enemy**, that
+conversion call was commented out in favor of a raw passthrough, and for **self**, the
+properly-converted value was computed into a local variable and then never used — the actual
+blackboard assignment used the original, unconverted parameter instead (a `MyInfo`/`Myinfo`
+case-only variable name collision). Net effect: `BB->Distance` was a near-meaningless number
+dominated by whichever raw component happened to be numerically larger — in practice, mostly the
+altitude delta, not true 3D range — so `DistanceCheck Greater 2000` essentially never fired
+except when altitude divergence happened to exceed 2000 (raw units), explaining the ~28s partial
+match. This bug predates both Step 1 and Step 2 and silently affected `DECO_DistanceCheck`,
+`AspectAngleUpdate`, and `CheckSight` (LOS) for as long as the DLL has existed — not something
+introduced by this work.
+
+Fixed both sites in `CPPBehaviorTree.cpp`: restored the commented-out `LLAtoCartesian()` call
+for the enemy (using the same `OriLAT`/`OriLOn` reference origin as self, so both sides share one
+consistent local frame), and pointed the self-side blackboard assignment at the already-computed
+converted value instead of the raw parameter.
+
+**Result, same 90s BT-vs-BT test**: `end_condition: target destroyed` at step 2129/5400 (~35s in)
+— a real kill, `ownship_health: 0.51`, `target_health: ≤0`, `total_reward: 176.37` (positive,
+dominated by the terminal win bonus). This is the first time in this whole investigation the
+native BT has dealt any damage at all.
+
+- [x] Step 2 done: `Task_LeadPursuit` added, and the underlying position/distance corruption bug
+      (bigger than originally scoped, but a blocking prerequisite) found and fixed. Verified via
+      a confirmed kill in the local BT-vs-BT test.
+- [x] **Confirmed 2026-07-07, 3 rounds**: two repeats of the same 90s scenario plus one at the
+      real competition match length (200s, per `COMPETITION_RULES.md` §5) all produced
+      **bit-identical results** — `num_steps=2129`, `total_reward=176.3705`, same health values
+      to the exact decimal. Confirms the sim is deterministic here (no hidden randomness in the
+      BT logic or reset for this scenario) and the kill is reliably reproducible, not a fluke —
+      and that it happens well within the real 200s match length, not just the 90s test window.
+      **Caveat**: `run_local_dogfight.py` exposes no seed/scenario-variation flag, so identical
+      reruns can't add statistical confidence across *different* geometries — only reproducibility
+      of this one. Genuine robustness testing (does this BT still win from other starting
+      angles/ranges?) needs varied initial conditions, which the curriculum's own α-sweep stages
+      (`two_circle_headon_a000..a180`, see `PROJECT_ANALYSIS.md` §4) will exercise naturally once
+      training starts — not necessary to hand-build a separate scenario-variation harness first.
+#### 5.1.4 Step 3 — DONE (2026-07-08): throttle, evasion, and an emergent Hard Deck fix
+
+- [x] **Throttle wired up.** `RunCPPBT()` was hardcoding `Throttle = 1.0f` unconditionally,
+      completely disconnected from the BT despite `CPPBlackBoard` already having a `float
+      Throttle` field (default `0`). Changed it to read `BB->Throttle`; `Task_Pure` now sets
+      `0.7` (close range — reduce overshoot risk on tight turns) and `Task_LeadPursuit` sets
+      `1.0` (far range — close distance fast).
+- [x] **`Task_Evade` added.** Checks `BB->EnemyInSight_Target` itself (returns `FAILURE` if not
+      threatened, so the Fallback proceeds to offense); if the enemy has us in front of them, it
+      offsets `VP_Cartesian` to extend straight away at full throttle. Wired in above the
+      pursuit branches, below Hard Deck avoidance.
+- [x] **Unplanned but necessary: `Task_ClimbToSafeAltitude` added.** The first 200s verification
+      run (up from the 90s used in Steps 1–2) ended in `end_condition: target altitude below
+      min` — the target crashed, not from combat. Checked the altitude trace: a **slow, steady,
+      monotonic dive** from ~10,000 m at t=20s to ~300 m at t=160s — not a glitch, a real
+      pre-existing gap. This BT (in any version, including the original stub) has **never had
+      any altitude-safety logic at all**; it only started mattering once the tree could
+      actually turn and dive (Steps 1–2). Since Hard Deck violation is an instant-loss condition
+      (`COMPETITION_RULES.md` §5) — strictly worse than any tactical inefficiency — this was
+      escalated ahead of general polish rather than left for later. Added as a new node
+      (self-checks altitude, `FAILURE`s above 914 m / ~3000 ft so lower-priority branches run;
+      below that, aims straight up at full throttle), wired in as the **first** Fallback branch
+      (above even evasion — survival before everything else, matching every reference BT
+      pattern surveyed earlier in this project). Re-ran the same 200s test: `end_condition: max
+      time out`, both aircraft survived at full health, minimum altitude reached was 936 m —
+      safely above both the 914 m trigger and the real ~305 m Hard Deck line.
+- [ ] Not done (deferred, per original scope): BFM classifier, richer Selector/Fallback tree —
+      still polish, not a prerequisite. **Superseded for the maneuvers themselves, see below.**
+- [ ] Decide what to do about the Desktop copy (`C:\Users\User\Desktop\AIP\AIP_LIB\`) — leave it,
+      sync it, or archive/delete it. Not touched by any of the above.
+- [x] Hybrid-residual architecture (§2/§3) is back on solid ground now that there's a real BT
+      floor that can actually win engagements *and* survive a full-length match without
+      self-inflicted crashes.
+
+#### 5.1.5 BT strategy Q&A (confirmed 2026-07-08)
+
+A fresh BT-vs-BT test against the current (Step 3) build ends in a stalemate — both aircraft
+survive at full health, no kill — a real change from Step 2's confirmed, reproducible kill
+(before evasion existed). That prompted a deliberate strategy check before committing RL training
+compute against this opponent:
+
+| Question | Answer | Implication |
+|---|---|---|
+| More BT investment before locking it in? | **Restore the missing maneuvers** (`JinkingTurn`, `HighYoYoUp`, `LunchMSL`, `WeaponSelect` — currently only stale `.obj` leftovers, no source) | Not the BFM classifier, not a richer Selector/Fallback tree — those stay deferred as polish. This is the one next BT work item, scoped before curriculum training starts. |
+| Freeze the BT before or during RL training? | **Freeze once the maneuvers land** | Lock the DLL as a fixed training opponent/residual base — no moving target once real training starts. Any further BT change after that is a deliberate new version, evaluated for impact, not silent drift. |
+| Does the stalemate change confidence in Hybrid residual? | **No — still the plan** | A defensive, non-losing BT is exactly what a safety net should look like; RL's job is to add offense on top, not inherit it. Stalemate floor is a safe floor, not a weak one. |
+| Is BT-only (`MODE="bt"`) still a maintained fallback? | **Yes, per the original §3 plan** | Re-validate BT-only (local BT-vs-X test) whenever the BT or Rule XML changes, so it stays submission-ready as insurance independent of RL training outcomes. |
+
+- [x] **Step 4 — DONE (2026-07-08): `Task_JinkingTurn` and `Task_HighYoYoUp` restored, BT
+      frozen.** Two research agents first mapped the actual gap and reshaped scope:
+  - The orphaned `.obj` files (`JinkingTurn.obj`, `HighYoYoUp.obj`, `LunchMSL.obj`,
+    `WeaponSelect.obj`, `JinkingTurnSelector.obj`, plus ~40 more node names) turned out to be from
+    a **completely separate, older, abandoned implementation** (different project root
+    `D:\AIP_DCS\`, bare naming like `Pure`/`Lead`/`Turn` — not today's `Task_`-prefixed family). No
+    logic survives anywhere, only names — "restoration" meant fresh design in the current
+    `Task_*` idiom, informed by BFM doctrine, not recovering lost code.
+  - **`LunchMSL`/`WeaponSelect` confirmed functionally dead for this competition** — no missile
+    mechanic exists anywhere in the scoring/damage/termination/flight-model code
+    (`COMPETITION_RULES.md` §4 is guns-only), and even the one piece of DLL↔caller plumbing that
+    could carry a launch decision out (`LibMain.cpp::Step()`'s `MSL_Lunch_Possible`/
+    `Flare_Lunch_Possible` out-parameters) is declared but never written. **Dropped, not
+    implemented.**
+  - A separate scope question — `MergeTurn` + 5 merge-check decorators, which look purpose-built
+    for the head-on tie-break (`COMPETITION_RULES.md` §7) — was raised and explicitly **deferred**
+    as a comparably-sized follow-up, not bundled into this round.
+  - Implemented `Task_JinkingTurn` (self-gated on `EnemyInSight_Target` + `Distance < 2000` —
+    lateral oscillation via `MyRightVector * sin(RunningTime * freq)` layered on `Task_Evade`'s
+    retreat vector, slotted above it in Fallback priority since jinking is for when breaking away
+    can't outrun the shot) and `Task_HighYoYoUp` (self-gated on `Distance < 2000` +
+    `MySpeed_MS - TargetSpeed_MS` above a crude overtake-risk threshold — the existing
+    `Task_LeadPursuit` lead-point formula, pulled up in world altitude via `.Z +=`, mirroring
+    `Task_ClimbToSafeAltitude`'s pattern rather than a body-relative up-vector). Both give real
+    consumers to `CPPBlackBoard` fields that were computed every tick but previously write-only
+    (`MyRightVector`, `RunningTime`, and — via the existing lead-point formula — `MyUpVector` was
+    considered but world-Z proved the more robust choice).
+  - Clean `AIP_DCS.sln` (Debug|x64) rebuild succeeded with no new errors (only pre-existing-style
+    warnings). Deployed to `DogFightEnv/Release/AIP_BASE.dll`/`AIP_BASE_target.dll`, backing up
+    the Step 3 DLLs first (`.step3.bak`, alongside the existing `.bak` from before Step 3).
+  - **Verified via the same 200s BT-vs-BT local test**: same outcome category as the Step 3
+    baseline (`max time out`, both full health, no Hard-Deck violation — no regression), but
+    `total_reward` shifted from the exact `-119.9879` seen in every prior run this session to
+    `-119.9900`, confirming the new logic is actually being exercised. Trajectory analysis found a
+    2.6km altitude excursion during the close-range window (7500m→10177m) — well beyond anything
+    the existing pursuit/evade logic could produce on its own — strongly corroborating
+    `Task_HighYoYoUp` firing. `Task_JinkingTurn`'s narrower trigger (must be defensively
+    threatened, not just close) didn't clearly fire in this particular symmetric matchup, but its
+    logic directly mirrors the already-proven `Task_Evade` pattern with one added condition.
+  - **BT frozen per the strategy decision above** — superseded same day, see Step 5.
+
+- [x] **Step 5 — DONE (2026-07-08): `Task_OneCircleFight` and `Task_LagPursuit` added, BT
+      re-frozen.** Prompted by mining the `ai-combat-sdk-main` reference catalog (a separate
+      project, see [[project-aip-tgc-2026-scope]]) for tactical patterns missing from AIP_DCS,
+      then re-implementing them fresh as `Task_*` C++ nodes — not porting ai-combat-sdk-main's own
+      code or rules, which don't apply here.
+  - `Task_OneCircleFight`: self-gated on `Distance < 2000 && Los_Degree > 45°` — a merged,
+    off-boresight turning fight, not a clean pursuit setup. Aims at the target's current position
+    (not a lead point — over-leading causes overshoot in a tight turn) with throttle cut to 0.5
+    (tighter than `Task_Pure`'s 0.7): minimizing speed is the actual mechanism that shrinks turn
+    radius and wins a one-circle fight.
+  - `Task_LagPursuit`: the complementary case, self-gated on `Distance < 2000 && Los_Degree < 20°`
+    — already tracking well, so aim *behind* the target's predicted point (exact mirror of
+    `Task_LeadPursuit`'s formula, subtracting instead of adding the motion offset) to avoid
+    closing too fast and overshooting.
+  - **Correctness note found while implementing**: `MyAngleOff_Degree` (written by
+    `AngleOffUpdate.cpp`) is HCA (heading crossing angle between the two nose vectors), not ATA —
+    confirmed by reading its source rather than trusting the field name. True ATA (angle between
+    ownship's own nose and the LOS to the target) is `Los_Degree`, computed in `CheckSight.cpp`
+    via `acos(ForwardVector · LOS_unit_vector)` — already non-negative by construction, no `abs()`
+    needed. Both new nodes gate on `Los_Degree`, not `MyAngleOff_Degree`.
+  - Deployed after a clean rebuild, backing up the Step 4 DLLs first (`.round1.bak`).
+  - **Verification found the single fixed BT-vs-BT test scenario has real blind spots**: the
+    initial 200s run produced a reward bit-identical to Step 4's, at first appearing to mean the
+    new nodes never fired. A direct ATA computation from the trajectory showed `Task_OneCircleFight`'s
+    trigger condition was actually satisfied in ~91% of close-range samples — so a targeted
+    diagnostic (temporarily removing `Task_JinkingTurn`/`Task_Evade`, which sit above the new nodes
+    and share the broad, easily-satisfied `EnemyInSight_Target` gate) confirmed the real cause: outranked,
+    not unreachable. With them removed, the outcome changed completely — a confirmed kill
+    (`total_reward: 263.94`, real health loss both sides) instead of the usual stalemate — proving
+    `Task_OneCircleFight`/`Task_LagPursuit` are reachable and functionally significant. This also
+    retroactively confirms Step 4's `Task_JinkingTurn` was very likely firing substantially in this
+    same scenario too (its yaw-oscillation signature just wasn't detected by that round's simpler
+    check) — correcting Step 4's "didn't clearly fire" note above. Restored the real Fallback order
+    and re-verified it matches the expected baseline exactly before treating this as done.
+  - Explicitly deferred again this round: the BFM classifier (bigger, more architecturally
+    invasive — would restructure how the tree branches, not just add a leaf) and `MergeTurn` +
+    merge-check decorators (from the same catalog, a comparably-sized follow-up).
+  - **BT re-frozen**: `AIP_BASE.dll`/`AIP_BASE_target.dll` are the fixed curriculum-training
+    opponent again. Fallback order end-to-end: `ClimbToSafeAltitude → JinkingTurn → Evade →
+    HighYoYoUp → OneCircleFight → LagPursuit → [dist>2000: LeadPursuit] → [dist<2000: Pure]`.
+
+#### 5.1.6 BT tactics expansion — DONE (Batches A–D, 2026-07-08 → 2026-07-11)
+
+The maneuvers Steps 4–5 explicitly deferred (BFM-adjacent tactics, `MergeTurn` + merge decorators,
+Scissors family) were designed and implemented as a full round, converting a BFM tactics reference
+(`AERIAL_COMBAT_BT_GUIDE_DETAILED.md`) into ~20 concrete `Task_*` nodes. Scope was confirmed with
+the user up front (all ~20 maneuvers, not a subset). Approved plan lives at
+`~/.claude/plans/i-have-aerial-combat-bt-guide-detailed-m-serene-duckling.md`; batch-by-batch
+file-level state is in `PROJECT_STRUCTURE.md`'s current-state log and `CLAUDE.md`'s node list.
+
+- [x] **The flat 8-branch tree is now a 5-gate nested `Fallback`** (`Rule_forTraining.xml`):
+      Gate 0 survival (`ClimbToSafeAltitude`, untouched top priority) → Gate 1 immediate threat
+      (`Notch → JinkingTurn → TheBreak`) → Gate 2 merge & neutral-fight detection
+      (head-on merge → `NoseToNoseTurn`; off-center → `LeadTurn`; sustained close-in neutral →
+      Scissors family) → Gate 3 energy-ratio guard (offense only) → Gate 4 offensive selector →
+      Tail pursuit fallback. Priority order of the pre-existing safety/defensive branches was
+      preserved.
+- [x] **Batch A** — `EnergyStateUpdate` service (`Es`/`EnergyRatio` for both aircraft each tick) +
+      6 shared decorators (`DECO_AspectAngleCheck`/`AltitudeCheck`/`SpeedCheck`/`EnergyRatioCheck`/
+      `ClosureRateCheck`, plus revived `LOSCheck`/`AngleOffCheck`); `Task_Notch`,
+      `Task_FlatScissors`, `Task_AnglesTactics`, `Task_EnergyTactics`.
+- [x] **Batch B** — `Task_Evade` reimplemented in place as "The Break" (phased break-turn),
+      `Task_HighYoYoUp` refined, `Task_LowYoYo`, `Task_VerticalScissors`, `Task_RollingScissors`,
+      `Task_NoseToTailTurn`. A `Task_VerticalScissors` runaway-dive bug (re-claiming the same
+      geometry back-to-back into a net descent) was found by bisection testing and fixed with a
+      release cooldown.
+- [x] **Batch C** — Gate 2 merge handling: `Task_NoseToNoseTurn` (also the Finals head-on
+      tie-break handler, §4 row 4) + `Task_LeadTurn` + the merge-check decorator Sequences. This is
+      the `MergeTurn` follow-up Step 5 earmarked — built as decorator-driven guard Sequences, not a
+      standalone node, matching the tree's existing idiom.
+- [x] **Batch D (2026-07-10/11)** — `Task_BarrelRollAttack`, `Task_LagDisplacementRoll`,
+      `Task_SingleSideOffset`. Reviewed by an adversarial multi-agent pass (4 lenses + independent
+      verification) before landing; it caught one real bug — `Task_SingleSideOffset` lacked the
+      unconditional time-cap release its Gate-4 siblings have, so it could monopolize its Fallback
+      slot against an opponent that never let range close under 2000 m — fixed with a 15 s cap,
+      rebuilt clean.
+- [x] **Hard `SyncActionNode` constraint respected throughout**: every node returns `SUCCESS`/
+      `FAILURE`, never `RUNNING` (verified against `action_node.cpp` — `SyncActionNode` throws on
+      `RUNNING`). Multi-second phased maneuvers track elapsed time via a blackboard-timestamp
+      pattern (`ClaimManeuverPhase`/`ReleaseManeuverPhase` in `Functions.h`) instead.
+- [x] **BFM classifier (`DECO_BFMCheck`) stays dead**, per the standing decision — new maneuvers
+      get concrete per-node Decorator guards, not a situational classifier. (Note: the
+      HABFM/OBFM/DBFM names *do* reappear at the match-spawn layer — §4 row 6 — but that's the
+      viewer positioning aircraft at t=0, unrelated to reviving the in-BT classifier.)
+- [x] **Aspect-angle sign trap documented**: the native BT's `MyAspectAngle_Degree` (180° = six
+      o'clock) and the Python side's `GeoMathUtil._get_aspect_angle` (0° = six o'clock) use
+      *opposite* conventions — the two halves of the codebase disagree. Recorded in `CLAUDE.md` so
+      future work verifies against the source it's actually reading, not the field name.
+- [x] **Resolved 2026-07-11**: `AIP_BASE.dll`/`AIP_BASE_target.dll` were re-dropped from the
+      Batch-D build (Batch-A-C DLLs kept as `.batchC.bak`), and **curriculum has since been
+      restarted (`v2`→`v3`) against the upgraded tree** — see §9. A 20-episode `eval_matchup.py`
+      BT-vs-BT sweep (alpha 0–180°, post-Batch-D tree, §8) confirmed the symmetric-standoff pattern
+      quantitatively: 20/20 timeout, 0 WEZ-contact episodes, but real close-in engagement (range
+      down to 270–511 m, ATA down to 0.1–1.0°) — the tree fights hard, it just can't convert a
+      mirror-identical merge into a kill. Assessed as expected behavior for symmetric self-play
+      against a defensively-competent BT, not a bug — the RL side isn't mirror-identical to the BT
+      so it can create the asymmetry a gun solution needs, and real opponents won't be mirror
+      copies either.
+
+### 5.2 Unreal-side state completeness — CONFIRMED (2026-07-08), no live server needed
+
+Resolved by static analysis of `protocol.py` + `policies.py` + `client.py` — a captured packet
+log from `logs/unreal_packets/` gave the ground-truth wire bytes to check the struct definition
+against, so no live/practice server connection was needed (deliberately avoided one, given no
+confirmation either server is currently up, and connecting is the kind of network action worth
+being conservative about).
+
+**Confirmed: `StateIndex.HEALTH` (45), `ALT` (44), `KCAS` (12), and `FUEL` (23) are permanently
+`0.0` throughout every live Unreal match — this isn't a maybe, it's structural:**
+
+1. `PLANE_INFO_STRUCT = struct.Struct("<iQb3f3f3f")` in `protocol.py` — 49 bytes, matching every
+   captured `MT_PlaneInfo` packet's `size_bytes` exactly. The `PlaneInfo` dataclass has exactly
+   three fields: `position`, `rotation`, `velocity`. **There is no health or fuel field
+   anywhere in the wire message.**
+2. `MT_Damage = 3` exists as a message-type ID in the protocol enum, but has **no struct
+   definition and no handler anywhere** — grepped `client.py`'s four `_handle_*` methods
+   (`_handle_set_plane_id`, `_handle_init`, `_handle_game_control`, `_handle_plane_info`); no
+   `_handle_damage` exists. If the server ever sends `MT_Damage`, this client silently ignores it.
+3. `plane_info_to_state()` (`policies.py`) allocates a 51-zero array and writes indices 0–8
+   (position ×3, rotation ×3, velocity ×3) — full stop, no further computation, no fallback.
+4. `_build_tactical16()` (`observation.py` lines 170–186) reads `state[StateIndex.KCAS]`,
+   `state[StateIndex.ALT]`, `state[StateIndex.HEALTH]` (×2, ownship+target) **directly from
+   those dedicated indices** — not derived from the always-populated position/velocity fields.
+   So it's not just HEALTH/FUEL that break; **ownship speed and ownship altitude break too**,
+   even though position.z and velocity are physically present in every packet — they're just
+   never copied into the `ALT`/`KCAS` slots specifically.
+
+**Net effect: 4 of `tactical16`'s 16 observation features (indices 3, 4, 5, 13 — ownship speed,
+ownship altitude, ownship health, target health) are live and meaningful during JSBSim training,
+and permanently zero during every live competition match.** A policy trained to rely on these
+signals will see a real, severe distribution shift the moment it goes live — invisible in
+`run_local_dogfight.py`, which always runs through JSBSim and never touches this code path.
+
+**Reframing worth noting**: this may not be a "bug to patch" so much as a genuine limitation of
+what the wire protocol provides. `COMPETITION_RULES.md` §4's own description of "Perfect State
+Information" says your AI receives the opponent's "position/attitude/speed" — it does **not**
+mention health. The wire format matches that description exactly (position/rotation/velocity
+only). Health telemetry may simply never be part of what the real server sends, by design.
+
+- [x] Confirmed via static protocol/code analysis — no live connection attempted.
+- [x] **Decided and implemented 2026-07-08**: `student/my_observation.py` is now a real
+      tactical16-equivalent (14-D, was an 8-D toy example) — derives ownship speed from
+      `norm(state[6:9])` (velocity; frame differs training-vs-live but magnitude doesn't) and
+      altitude from `-state[D]`, both correct in training and live; drops ownship/target health
+      entirely (no live source, no fake constant) rather than leaving them meaningful-in-training/
+      always-zero-live. `compute_reward()` still reads real `HEALTH` for terminal win/loss logic —
+      that's sim-engine state, not the wire-limited policy-input observation, so it's unaffected.
+
+## 6. Reward design plan
+
+`student/my_reward.py` is currently just `step_penalty + terminal` (win/loss/draw). Start from
+the reference reward anatomy already used for the (placeholder) `student_sac_baseline` run,
+recorded in `artifacts/records/real_eagle/student_sac_baseline/training_record.md`:
+
+```
+step_penalty: -0.01        damage_scale: 20.0           pursuit_scale: 0.3
+pursuit_half_angle_deg: 30  pursuit_range_m: 3000        low_altitude_penalty: 0.1
+win_reward: 100            loss_reward: -100            draw_reward: -30
+```
+
+- [x] Done 2026-07-08: ported (survival + step + pursuit + damage + safety + terminal +
+      guard_fail) into `student/my_reward.py`.
+- [x] Recalibration against §4 landed at the source instead of in reward.py: phase-aware WEZ
+      coefficients live in `update_damage()`, so `compute_reward()`'s `damage` term automatically
+      sees the already-discounted differential — no reward-side change needed. 200s pacing is a
+      `full_dogfight`-stage property (§4 item 1), independent of reward code.
+- [x] Added ATA+AA together: a new `position` component (AA-based, mirrors `pursuit`'s ATA-based
+      gradient) so pursuit+position only both peak when nose-on *and* behind them — not on a
+      fleeting head-on pass. **Found and fixed a real bug while verifying this**: GeoMathUtil's 3D
+      aspect-angle mode (`proj=False`) has a matrix singularity exactly at 180° (head-on) that
+      silently returns 0° instead of 180° — confirmed empirically (own_yaw/tgt_yaw sweep), would
+      have made `position` (and the built-in `tactical16`/`relative14` AA feature, which had the
+      same bug) blind to exactly the geometry it exists to catch. Fixed by using `proj=True` (2D,
+      no singularity, matches `single_agent_env.py`'s own `final_aa_deg` convention) in
+      `student/my_reward.py`, `student/my_observation.py`, and — since no trained policy exists
+      yet to be affected by the behavior change — the built-in `src/dogfight/envs/observation.py`
+      too (`_build_relative14`/`_build_tactical16`). Verified via scripted checks, not just
+      inline reasoning.
+- [x] **Found & fixed 2026-07-10: the `position` term was silently inert for all of stage 0–8
+      training.** `position_scale`/`position_half_angle_deg` were defined only in
+      `MY_REWARD_CONFIG`, never mirrored into `DEFAULT_ENV_CONFIG["reward"]` — and
+      `train_curriculum.py`'s `env_creator()` does `cfg.setdefault("reward", reward_config)`, a
+      no-op whenever `"reward"` is already present (always true, since `build_stage_env_config()`
+      starts from a `DEFAULT_ENV_CONFIG` copy). So the keys never reached `compute_reward()`, and
+      `my_reward.py`'s own `.get("position_scale", 0.0)` fallback zeroed the term. The
+      aspect-angle-singularity fix above was, in effect, fixing a term that wasn't contributing to
+      the trained policy. Fixed by adding the keys to `DEFAULT_ENV_CONFIG["reward"]`; verified
+      end-to-end by reproducing `env_creator`'s merge against real curriculum stages. **This is a
+      material input to the §9 resume-vs-restart decision** — stages 0–8 trained without positional
+      shaping actually active.
+- [x] **New `student/reward_lib.py` (2026-07-10, trimmed 2026-07-11)** — SI-unit-corrected port of
+      an external BFM/ACM reward reference (`D:\AIP\reward_function_skeleton.py`), aspect-angle
+      sign fixed to this project's convention. Only `positional_advantage()` is wired into
+      `my_reward.py`, as an `advantage_scale`-weighted term **defaulting to 0.0** (overlaps with
+      the existing `pursuit`+`position` terms — a deliberate A/B knob, not stacked on by default).
+      A `/ponytail-review` then trimmed the file 213→57 lines: the energy(`Ps`)/geometry/closure
+      terms were deleted rather than kept as dead code (each needs state this project doesn't
+      expose yet — closure rate, load factor, live turn-direction-at-merge — and re-porting a
+      formula from the skeleton in SI is a few lines when that state exists).
+- [x] **WEZ-phase-aware pursuit shaping landed 2026-07-11** (§4 row 2 / §6 follow-up). The pursuit
+      shaping term's `pursuit_range_m`/`pursuit_half_angle_deg` were fixed for the whole match; now
+      they widen late-match tracking the WEZ cone's own time-gated widening, via new
+      `config.wez_pursuit_multipliers(phases, elapsed_s)` — 1.0 while only Phase 1 is active (**early
+      match unchanged, no regression to the one shaping term that was actually active during stage
+      0–8**), widening to 3500 m / 60° at Phase 2 (t>100 s) and 4000 m / 90° at Phase 3 (t>150 s),
+      derived straight from the existing `_WEZ_PHASES` 2/4/6° + 3000/3500/4000 ft numbers (no new
+      constants). Originally wired into both `student/my_reward.py` and `src/dogfight/envs/reward.py`
+      (kept in sync); `elapsed_s` from `StateIndex.SIM_TIME` (verified resets per-episode). Verified
+      end-to-end (same off-envelope geometry → 0 pursuit at t=50 s, positive at t=170 s).
+      **Watch item**: the 90° Phase-3 half-angle is aggressive (rewards fairly loose late-match
+      tracking) — faithful to the phase ratio and shaping-only, but a candidate to clamp if
+      training shows it hurts tracking precision.
+      **Update 2026-07-15/16**: the 2026-07-15 revert took out `src/dogfight/config.py`'s
+      `wez_pursuit_multipliers()` and the underlying `_WEZ_PHASES`/damage-model phase-awareness
+      entirely (see §1's dated entry and §4 row 2) — deliberately left un-restored. The shaping
+      term above survives **only** via `student/reward_lib.py`'s re-homed
+      `WEZ_PHASES`/`wez_pursuit_multipliers()` copy, wired into `student/my_reward.py`. It no
+      longer stays "in sync" with a platform copy, because there isn't one anymore.
+
+## 7. Training plan (compute-conscious — see §2)
+
+- [x] **STARTED 2026-07-08**: `train_curriculum.py`'s built-in 15-stage curriculum
+      (`flight_survival` → `full_dogfight`), not single-stage `train_rllib.py` — cold RL against a
+      competent reactive BT opponent has ~zero win probability without staged scaffolding. Running
+      via `experiments/real_eagle_v1.yaml` (SAC MLP [256,256], custom 14-D obs
+      `student.my_observation`, ported `student.my_reward`). **Blocker found & fixed at launch**:
+      `single_agent_env.py::add_random_init_position()` called `np_random.integers(0, bound)` on
+      every axis, which raises `ValueError: high <= 0` for any 0-valued range — and stage 0
+      (`flight_survival`) deliberately sets `radius: 0.0` (fixed start, jittered attitude). So the
+      built-in curriculum's randomization path had **never been runnable**; guarded each axis
+      (`bound <= 0` → no jitter) so a 0 range just means "don't randomize that axis." Verified
+      in-process (`env.reset()` × 5 seeds, clean 14-D obs) before relaunch.
+- [x] Measure real wall-clock per training iteration early (SAC MLP, default rollout workers) to
+      calibrate what's actually achievable on this team's hardware before committing to a
+      curriculum-stage schedule. **Measured 2026-07-08 (stage 0, 2 env runners): ~12.7 s/iter**
+      after a one-time ~46s startup (Ray ~14s + `Trainable.setup` 31.6s) — in line with the
+      earlier ~12s/iter calib; the custom obs/reward add no meaningful overhead. Later stages
+      (esp. `full_dogfight` at 200s/12000-step episodes) will be slower per iter.
+- [ ] Default to **SAC MLP only**; treat `RLLibLstm/` as explicitly out of scope unless MLP
+      demonstrably plateaus below what the podium ambition requires. It's flagged as advanced/
+      optional with its own silent-mismatch failure mode (`metadata.json`'s
+      `use_lstm_sac`/`lstm_scope`/`max_seq_len` must match between training and load time) —
+      not worth the compute or the risk unless MLP is the proven bottleneck.
+- [ ] Prefer sequential experimentation over parallel if compute (not calendar time) is the
+      binding constraint — lean on the available full-time *days*, not on parallelizing past
+      what the hardware supports.
+- [ ] Judge every stage by the dashboard's four named diagnostics together — `reward_mean`,
+      `crash_rate`, `ep_min_distance`, `ep_wez_steps` — not win rate alone.
+- [ ] Once `full_dogfight` is solid against the raw BT opponent, shift evaluation to the
+      **Hybrid residual wrapper specifically** (§3) — that's the actual submission artifact.
+
+## 8. Validation & robustness checklist
+
+- [x] `run_local_dogfight.py --save-log` continuously during training — same inference code
+      path as competition (per `PROJECT_ANALYSIS.md` §5.1), cheapest place to catch bugs. **Paid
+      off immediately 2026-07-09**: first post-training eval run hit a `size mismatch` loading the
+      custom-obs bundle — `RLLibInferenceEnv` didn't know how to size a custom `observation_module`
+      and silently rebuilt a 12-D space instead of 14-D. Fixed (§9 Weeks 2-3 row has detail). Keep
+      running this after every stage/tag going forward, not just once at the end.
+- [x] **`scripts/eval_matchup.py` built 2026-07-10, BT-vs-BT baseline run for real 2026-07-11** —
+      the §8 hybrid-mismatch benchmark harness: loops N episodes of any backend pairing
+      (`bt|rl|hybrid`) across the curriculum's two-circle-headon alpha schedule, writes per-episode
+      outcome to CSV, prints win/loss/draw/timeout + WEZ-contact aggregation. Reuses
+      `run_local_dogfight.py`'s provider construction; varies geometry per-episode via
+      `reset(options=...)` on one reused env (no DLL reload). First real run (20 episodes, BT vs.
+      BT, alpha 0–180°, post-Batch-D tree): `artifacts/eval/bt_vs_bt_fixed.csv` — 20/20 timeout,
+      0 WEZ-contact episodes, but real close-in engagement (range down to 270–511 m). Confirms the
+      BT-alone baseline row of §3's benchmark matrix. **Standalone-RL and hybrid-residual rows still
+      pending** a post-`v3` checkpoint, per §3's "evaluate the mismatch first" decision.
+- [ ] Dedicated test of the head-on tie-break scenario (10,000+ ft, face-to-face merge) as its
+      own case, not just aggregate curriculum score. BT-side handler now exists (`Task_NoseToNoseTurn`,
+      §5.1.6 Batch C); `eval_matchup.py`'s alpha-0 episodes are close but a dedicated
+      face-to-face-at-altitude case is still owed.
+- [ ] Resolve §5.2 (Unreal state completeness) before trusting any live-match result.
+- [ ] Deliberate network-stability dry runs against a live/practice server — confirm
+      `UnrealAIPilotUDPClient`'s reconnect/heartbeat behavior under induced packet loss. 2
+      instability incidents on competition day is elimination; this needs rehearsal, not
+      first-contact discovery during prelims.
+- [ ] Keep the BT-only fallback validated and submission-ready at all times (§3) — once §5.1's
+      restoration steps land, re-run the same local verification to confirm it's still tracking
+      correctly whenever the Rule XML or Task nodes change.
+- [ ] Confirm which server IP is live/practice vs. production before relying on either —
+      `startup_command.txt` uses `10.185.16.247` (private/LAN), `student/my_submission.py` has
+      `221.151.77.208` hardcoded. Don't assume either is still current without checking the
+      latest organizer announcement.
+
+## 9. Milestones (against the ~7–8 week runway to end-of-August prelims)
+
+Given podium ambition + limited compute, verification came first (§5) and already paid off —
+§5.1 found (and scoped a fix for) a real gap before any training time was spent on it.
+
+| When | Focus | Status |
+|---|---|---|
+| Day 1–2 | ~~Verify BT competence (§5.1) and Unreal state completeness (§5.2) before anything else~~ | **Both done.** §5.1: BT confirmed non-functional, then fixed. §5.2: confirmed via static analysis (no live server needed) that 4/16 `tactical16` features are permanently zero live. |
+| Days 2–5 | ~~BT restoration Steps 1–3 (§5.1.2–§5.1.4: pursuit, lead pursuit, throttle, evasion, Hard Deck avoidance)~~ | **All done.** Confirmed kill in local testing, survives the full 200s match length without crashing. Along the way: the project didn't compile at all beforehand; the compiled DLL's Rule XML path was hardcoded to a separate, untouched project copy on this machine (`C:\Users\User\Desktop\AIP\`); a foundational bug mixed lat/lon degrees with altitude meters in every position-derived calculation; and a 200s test run exposed a total absence of altitude-safety logic (fixed same day, ahead of schedule, since Hard Deck violation is instant-loss). |
+| Week 1–2 | ~~Reward/observation design (§6); episode-length + phase corrections (§4)~~ | **Reward, WEZ-phase, and observation corrections done 2026-07-08** — see §4/§5.2/§6 above. New runnable config: `experiments/real_eagle_v1.yaml` (built-in 15-stage curriculum, no `stages_module` override — see §7). Desktop copy (§5.1.4) still undecided — low priority, not blocking anything technical. |
+| Weeks 2–3 | Curriculum run to `full_dogfight` against the now-real, now-lethal, now-survivable BT opponent | **`v1` run: crashed 2026-07-09 at stage 8/15** (`two_circle_headon_a080`, 2288 total iterations across stages 0-8, all via `--resume`/user-driven run — see below). Root cause: a Ray/RLlib 2.54.0 **internal** assertion (`single_agent_episode.py::concat_episode`, `self.t == other.t_started`) inside SAC's inherited DQN off-policy training loop — traceback is 100% Ray-internal frames, not project code; likely an env-runner-restart/episode-fragment race, not deterministic (stages 4-7 ran the same scenario type cleanly first). Emergency bundle+checkpoint saved automatically, nothing lost. **Training signal through stage 8 was weak**: crash rate collapsed 92%→6% by stage 3 (real learning, and SAC's `alpha` auto-tuned down 0.09→0.006 across stages 0-3 exactly as expected, then correctly re-expanded on each new stage 4+ scenario) — but **no stage ever met its own `advance_conditions`**; every one of the 8 completed stages hit `max_iterations_reached` only, and **win_rate was 0.0% in every single stage**. A live local eval (latest bundle vs. fixed BT, full 200s match) confirmed this qualitatively: ownship closes to 328 m (inside Phase-1 WEZ range) at t≈60s but deals zero damage, then the two aircraft diverge to ~50 km apart / 12 km altitude separation and never re-engage — `end_condition: max time out`, both at full health. Policy can find the merge, hasn't learned to convert it or re-engage after. **Separately found & fixed while running that eval** (§8): `RLLibInferenceEnv` (the shared class both local eval AND the live submission path reconstruct bundles through) didn't know how to size a custom `observation_module` — silently rebuilt any custom-obs bundle with `classic12`'s 12-D space instead of the real 14-D, corrupting weight loading (`size mismatch ... torch.Size([256, 14])` vs `[256, 12]`). Would have broken submission, not just this eval. Fixed in [`src/dogfight/ai/inference_env.py`](DogFightEnv/Release/src/dogfight/ai/inference_env.py) — now consults `load_observation_hook()` when `observation_module` is set, mirroring the training-side `env_creator`. `v1` was later resumed and actually **finished stage 8 cleanly** (200/200 iterations, completed 2026-07-11T09:26) — the crash wasn't fatal to that run, just delayed it.<br><br>**Resume-vs-restart decision RESOLVED 2026-07-11: restart.** Once the BT tactics expansion (Batches A-D), the spawn-geometry fix, and the `position`-reward fix had all landed on top of `v1`'s stale stage-0-8 assumptions, a clean restart was judged more reliable than resuming from a checkpoint trained against an opponent/reward/geometry that no longer exists. `v2` (started 15:06) was a clean restart from stage 0 against the fully-fixed BT — deliberately stopped at stage 2 (manual interrupt, not a crash). `v3` (started 15:27) is the **current, live run**: stages 0-8 all completed, now in stage 9/17 (`two_circle_headon_a060` — 2 extra OBFM stages were spliced into the original 15-stage curriculum), 195 iterations into that stage, 2330 total iterations elapsed as of 2026-07-11T22:53. Check `artifacts/curriculum/real_eagle/v3/curriculum_state.json` for the current live status before assuming this snapshot still holds.<br><br>**2026-07-12: `v3` superseded by `v4` after the full-codebase audit** (§1's 2026-07-12 update has the detail): every v1/v3 two-circle stage was 93–100% guard-fail-degenerate (unpassable ATA guard that trained merge avoidance), crashes paid `draw_reward` (+20 in `obfm_defensive` → learned 100% suicide rate), and SAC learner metrics had logged `n/a` all run. `v4` (`experiments/real_eagle_v4.yaml`) carries the fixed guard/reward/curriculum/observation and auto-launches via `scripts/launch_v4_when_free.ps1` once v3's process tree exits. v3's per-stage bundles remain on disk but inherit the degenerate incentives — treat them as diagnostic artifacts, not warm-start candidates. |
+| Weeks 4–5 | Hybrid residual training/tuning (§3, §7) now that there's a real BT floor; first live-server connectivity + stability dry runs — informed by §5.2's finding on what state is actually available live | - [ ] |
+| Weeks 6–7 | Head-on tie-break polish, network robustness hardening (§8), dashboard-driven fixes | - [ ] |
+| Week 8 (buffer) | Freeze, full validation matrix, submission dry-run identical to how it'll run live | - [ ] |
+
+## 10. Open / unresolved (re-check against organizer updates, don't hard-code assumptions)
+
+- Exact cutoff mechanism and prelim starting parameters — both explicitly "to be decided/
+  released later" in the source kickoff deck per `COMPETITION_RULES.md` §9.
+- The competition Discord link in `COMPETITION_RULES.md` §9 is likely expired — find the current
+  one before relying on it for schedule/environment-change notices.
+- Which of `BattleServer_V0.2/` vs `Windows/` is the current/intended packaged build
+  (`PROJECT_STRUCTURE.md` §2) — unconfirmed.
+- Whether `221.151.77.208` (hardcoded in `my_submission.py`) is still the correct production
+  server address.
+- Whether the compiled BT DLLs predate the source-tree gaps found in §5.1, or share them.

@@ -1,0 +1,1 @@
+{"event": "session_start", "timestamp": 1778740743.522972, "timestamp_iso": "2026-05-14T15:39:03.522", "server": "192.168.10.115:9999", "udp_mode": "connected", "local_endpoint": "192.168.10.100:55869", "team_name": "FDSA", "ai_type": "ReinforcementLearning"}

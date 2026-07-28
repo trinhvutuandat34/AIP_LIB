@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Vector4.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Vector3.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Quaternion.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Matrix4.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Matrix3.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Math.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\EulerAngle.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\CoordinateConverter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\AxisAngle.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Angle.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Controller_CY.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Vector4.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Vector3.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Quaternion.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Matrix4.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Matrix3.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Math.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\EulerAngle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\CoordinateConverter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\AxisAngle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Angle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\Controller_CY.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="D:\AIP\AIP_LIB\AIP_DCS\Geometry\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{F4CAFA31-8184-36EC-8DDC-B62BA601BB41}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{07DFAAAD-DC1C-3629-95AF-757C0716F9C3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

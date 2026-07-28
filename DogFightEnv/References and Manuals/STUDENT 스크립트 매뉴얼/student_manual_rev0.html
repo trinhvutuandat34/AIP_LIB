@@ -1,0 +1,1072 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Release/student/ 매뉴얼 — 5 파일 작성·실행 가이드</title>
+<style>
+:root {
+  --bg: #F4F6FA;
+  --paper: #FFFFFF;
+  --ink: #1B2733;
+  --muted: #54606C;
+  --faint: #DCE2EA;
+  --navy: #21295C;
+  --deep: #065A82;
+  --teal: #1C7293;
+  --cyan: #2BB3D2;
+  --green: #1F8A5F;
+  --amber: #D08A2C;
+  --coral: #F96167;
+  --code-bg: #0E1726;
+  --code-fg: #E6EDF3;
+  --code-key: #FFC76A;
+  --code-str: #A8E6A1;
+  --code-com: #7B8AA1;
+  --code-fn: #6EC1E4;
+  --shadow: 0 1px 2px rgba(13, 38, 75, 0.06), 0 8px 24px rgba(13, 38, 75, 0.08);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+body {
+  font-family: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo",
+               "Noto Sans KR", "Nanum Gothic", "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--deep); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, kbd { font-family: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace; }
+
+/* Layout */
+.shell { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: 100vh; }
+.sidebar {
+  position: sticky; top: 0; align-self: start;
+  height: 100vh; overflow-y: auto;
+  background: var(--navy); color: #C7D6E2; padding: 24px 20px;
+}
+.main { padding: 36px 56px 120px; max-width: 1100px; }
+.brand {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+  color: #fff;
+}
+.brand .badge {
+  width: 36px; height: 36px; border-radius: 18px; background: var(--cyan);
+  display: grid; place-items: center; color: var(--navy); font-weight: 700;
+  font-family: "Cascadia Mono", monospace;
+}
+.brand .title { font-weight: 700; font-size: 16px; line-height: 1.25; }
+.brand .subtitle { font-size: 12px; color: #9DB6C9; }
+.search {
+  width: 100%; padding: 10px 12px; background: #1A2148;
+  border: 1px solid #2B355F; border-radius: 10px; color: #E6EDF3;
+  font: inherit; font-size: 14px; margin-bottom: 14px;
+}
+.search::placeholder { color: #7E91A8; }
+.nav-group { font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+  color: #7E91A8; margin: 14px 6px 6px; }
+.nav-link {
+  display: block; padding: 8px 12px; color: #C7D6E2; border-radius: 8px;
+  font-size: 14px; line-height: 1.3;
+}
+.nav-link:hover { background: rgba(255,255,255,0.05); text-decoration: none; }
+.nav-link.active { background: var(--deep); color: #fff; }
+.nav-link.is-sub { padding-left: 26px; font-size: 13px; color: #9DB6C9; }
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, var(--navy) 0%, #1A2148 65%, var(--deep) 100%);
+  color: #fff; padding: 36px 36px; border-radius: 18px; box-shadow: var(--shadow);
+  margin-bottom: 28px;
+}
+.hero h1 { margin: 0 0 6px; font-size: 30px; line-height: 1.2; }
+.hero p { margin: 0 0 14px; color: #C7D6E2; max-width: 760px; }
+.hero .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16);
+  color: #E8F0F7; padding: 4px 10px; border-radius: 999px; font-size: 13px;
+  font-family: "Cascadia Mono", monospace;
+}
+.chip.coral { background: rgba(249,97,103,0.18); border-color: rgba(249,97,103,0.4); color: #FFE2E4; }
+
+/* Diagram */
+.diagram-card {
+  background: var(--paper); border-radius: 18px; box-shadow: var(--shadow);
+  padding: 22px 24px; margin-bottom: 28px;
+}
+.diagram-card h2 { margin: 0 0 12px; font-size: 18px; color: var(--deep); }
+.diagram-card svg { display: block; width: 100%; height: auto; }
+
+/* File section */
+section.file {
+  background: var(--paper); border-radius: 18px; box-shadow: var(--shadow);
+  padding: 28px 32px; margin-bottom: 28px; scroll-margin-top: 18px;
+}
+section.file > header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px;
+  border-bottom: 1px solid var(--faint); padding-bottom: 14px; margin-bottom: 18px;
+}
+section.file h2 {
+  margin: 0; font-size: 26px; color: var(--ink); font-family: "Cascadia Mono", monospace;
+}
+section.file h2 .accent { color: var(--deep); }
+section.file .role {
+  color: var(--muted); font-size: 14px; padding: 4px 10px;
+  background: var(--bg); border-radius: 999px;
+}
+section.file h3 {
+  font-size: 16px; color: var(--teal); margin: 22px 0 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+section.file h3 .num {
+  display: inline-grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--teal); color: #fff;
+  font-size: 12px; font-weight: 700; font-family: "Cascadia Mono", monospace;
+}
+section.file h4 {
+  font-size: 14px; color: var(--muted); margin: 14px 0 6px;
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+
+/* Tables */
+table.contract {
+  width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 14px;
+}
+table.contract th, table.contract td {
+  text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--faint);
+  vertical-align: top;
+}
+table.contract th { background: var(--navy); color: #fff; font-weight: 600; }
+table.contract td code { background: var(--bg); padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+table.contract tr:nth-child(even) td { background: #F8FAFC; }
+
+/* Code block */
+.code-block {
+  position: relative; background: var(--code-bg); color: var(--code-fg);
+  border-radius: 12px; padding: 18px 22px; margin: 6px 0 12px;
+  font-size: 14px; line-height: 1.65; overflow-x: auto;
+}
+.code-block pre { margin: 0; white-space: pre; }
+.code-block .copy {
+  position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.08);
+  color: #E6EDF3; border: 1px solid rgba(255,255,255,0.18); border-radius: 8px;
+  padding: 4px 10px; font-size: 12px; font-family: inherit; cursor: pointer;
+  transition: all 0.15s;
+}
+.code-block .copy:hover { background: rgba(255,255,255,0.16); }
+.code-block .copy.done { background: var(--green); border-color: var(--green); color: #fff; }
+.tok-k { color: #F296A0; }    /* keyword */
+.tok-s { color: #A8E6A1; }    /* string */
+.tok-c { color: #7B8AA1; font-style: italic; } /* comment */
+.tok-f { color: #6EC1E4; }    /* function name */
+.tok-n { color: #FFC76A; }    /* number / const */
+.tok-d { color: #C7D6E2; }    /* decorator */
+
+/* Callouts */
+.callout {
+  border-radius: 12px; padding: 14px 16px 14px 18px; margin: 14px 0;
+  display: grid; grid-template-columns: 6px 1fr; gap: 14px; align-items: start;
+}
+.callout > .bar { width: 6px; border-radius: 3px; align-self: stretch; min-height: 100%; }
+.callout > .body { font-size: 14px; }
+.callout > .body strong { display: block; margin-bottom: 4px; }
+.callout.warn { background: #FFF1F2; color: var(--ink); }
+.callout.warn .bar { background: var(--coral); }
+.callout.warn .body strong { color: var(--coral); }
+.callout.tip { background: #ECF6F9; }
+.callout.tip .bar { background: var(--teal); }
+.callout.tip .body strong { color: var(--teal); }
+.callout.note { background: #F3FAF4; }
+.callout.note .bar { background: var(--green); }
+.callout.note .body strong { color: var(--green); }
+
+/* Checklist */
+.checklist {
+  background: var(--bg); border: 1px solid var(--faint); border-radius: 12px;
+  padding: 16px 20px; margin: 16px 0;
+}
+.checklist h4 { margin-top: 0; color: var(--navy); }
+.checklist ul { list-style: none; padding: 0; margin: 0; }
+.checklist li { padding: 6px 0; font-size: 14px; }
+.checklist li::before { content: "☐  "; color: var(--teal); font-weight: 700; }
+
+/* Faq */
+details.faq {
+  border: 1px solid var(--faint); border-radius: 12px;
+  margin: 8px 0; padding: 0 14px; background: var(--paper);
+}
+details.faq[open] { background: #FBFCFE; }
+details.faq summary {
+  list-style: none; cursor: pointer; padding: 12px 0;
+  font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px;
+}
+details.faq summary::-webkit-details-marker { display: none; }
+details.faq summary::before {
+  content: "Q"; display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%; background: var(--teal); color: #fff;
+  font-family: "Cascadia Mono", monospace; font-size: 12px;
+}
+details.faq[open] summary::before { background: var(--deep); }
+details.faq .answer { padding: 4px 0 14px 30px; font-size: 14px; color: var(--ink); }
+details.faq .answer p { margin: 6px 0; }
+
+/* Search dim */
+.dimmed { opacity: 0.25; }
+
+/* Mobile */
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar {
+    position: static; height: auto; max-height: none;
+  }
+  .main { padding: 24px 18px 80px; }
+  section.file { padding: 22px 20px; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="badge">S</div>
+      <div>
+        <div class="title">Release/student/</div>
+        <div class="subtitle">5 파일 작성·실행 매뉴얼</div>
+      </div>
+    </div>
+    <input class="search" id="search" placeholder="키워드 검색 (예: reward, OBSERVATION, hybrid)" />
+    <div class="nav-group">개요</div>
+    <a class="nav-link" href="#overview">5 파일 한눈에 보기</a>
+    <a class="nav-link" href="#setup">사전 준비</a>
+    <div class="nav-group">파일별 가이드</div>
+    <a class="nav-link" href="#my_reward">1. my_reward.py</a>
+    <a class="nav-link" href="#my_observation">2. my_observation.py</a>
+    <a class="nav-link" href="#my_curriculum">3. my_curriculum.py</a>
+    <a class="nav-link" href="#my_train">4. my_train.py</a>
+    <a class="nav-link" href="#my_submission">5. my_submission.py</a>
+    <div class="nav-group">참고</div>
+    <a class="nav-link" href="#workflow">전체 워크플로</a>
+    <a class="nav-link" href="#faq">자주 묻는 질문</a>
+  </aside>
+
+  <main class="main">
+    <div class="hero">
+      <h1>Release/student/ 5 파일 작성·실행 매뉴얼</h1>
+      <p>학생이 직접 수정하는 다섯 개의 파일에 대한 작성 계약과 예시, 실행 명령을 정리한다.
+        본체 학습 루프와 실험 인프라(<code>train_rllib.py</code>,
+        <code>scripts/run_experiment.py</code>)는 그대로 두고, 학생은 이 다섯 파일에서
+        <strong>보상 · 관측 · 커리큘럼 · 실행 설정 · 제출 설정</strong>만 바꾼다.</p>
+      <div class="chips">
+        <span class="chip">cwd: DogFightEnv/Release</span>
+        <span class="chip">python 3.11.x</span>
+        <span class="chip">RLlib new API stack</span>
+        <span class="chip coral">관측 차원 변경 → bundle 호환 끊김</span>
+      </div>
+    </div>
+
+    <div class="diagram-card" id="overview">
+      <h2>5 파일이 환경 / 학습 / 제출과 어떻게 연결되는가</h2>
+      <svg viewBox="0 0 1100 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Release/student 5 파일 흐름도">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5"
+                  markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#54606C"/>
+          </marker>
+        </defs>
+        <!-- left student box -->
+        <rect x="20" y="40" width="320" height="380" rx="18" fill="#FFFFFF" stroke="#DCE2EA"/>
+        <text x="40" y="74" font-size="14" font-weight="700" fill="#065A82" font-family="Cascadia Mono">student/</text>
+        <text x="40" y="92" font-size="11" fill="#54606C">학생이 수정하는 영역</text>
+        <!-- file cards -->
+        <g font-family="Cascadia Mono" font-size="13">
+          <rect x="40" y="108" width="280" height="48" rx="10" fill="#F3FAF4" stroke="#1F8A5F"/>
+          <text x="56" y="130" fill="#1F8A5F" font-weight="700">my_reward.py</text>
+          <text x="56" y="148" fill="#54606C" font-size="11" font-family="Malgun Gothic">보상식 — compute_reward()</text>
+
+          <rect x="40" y="166" width="280" height="48" rx="10" fill="#ECF6F9" stroke="#1C7293"/>
+          <text x="56" y="188" fill="#1C7293" font-weight="700">my_observation.py</text>
+          <text x="56" y="206" fill="#54606C" font-size="11" font-family="Malgun Gothic">관측 벡터 — build_observation()</text>
+
+          <rect x="40" y="224" width="280" height="48" rx="10" fill="#FBF6EF" stroke="#D08A2C"/>
+          <text x="56" y="246" fill="#D08A2C" font-weight="700">my_curriculum.py</text>
+          <text x="56" y="264" fill="#54606C" font-size="11" font-family="Malgun Gothic">커리큘럼 단계 — get_stages()</text>
+
+          <rect x="40" y="282" width="280" height="48" rx="10" fill="#EEF2FB" stroke="#065A82"/>
+          <text x="56" y="304" fill="#065A82" font-weight="700">my_train.py</text>
+          <text x="56" y="322" fill="#54606C" font-size="11" font-family="Malgun Gothic">학습 실행 설정 — TRAINING/ENV/RL_CONFIG</text>
+
+          <rect x="40" y="340" width="280" height="48" rx="10" fill="#FFF1F2" stroke="#F96167"/>
+          <text x="56" y="362" fill="#F96167" font-weight="700">my_submission.py</text>
+          <text x="56" y="380" fill="#54606C" font-size="11" font-family="Malgun Gothic">Unreal 서버 제출 클라이언트</text>
+        </g>
+
+        <!-- middle pipeline -->
+        <line x1="340" y1="132" x2="430" y2="132" stroke="#54606C" stroke-width="2" marker-end="url(#arrow)"/>
+        <line x1="340" y1="190" x2="430" y2="190" stroke="#54606C" stroke-width="2" marker-end="url(#arrow)"/>
+        <line x1="340" y1="248" x2="430" y2="248" stroke="#54606C" stroke-width="2" marker-end="url(#arrow)"/>
+        <line x1="340" y1="306" x2="430" y2="306" stroke="#54606C" stroke-width="2" marker-end="url(#arrow)"/>
+
+        <rect x="430" y="100" width="280" height="220" rx="14" fill="#21295C"/>
+        <text x="450" y="128" font-size="14" font-weight="700" fill="#2BB3D2" font-family="Cascadia Mono">본체 (Release/)</text>
+        <text x="450" y="148" font-size="13" fill="#FFFFFF" font-family="Cascadia Mono">train_rllib.py</text>
+        <text x="450" y="170" font-size="13" fill="#FFFFFF" font-family="Cascadia Mono">train_curriculum.py</text>
+        <text x="450" y="192" font-size="13" fill="#FFFFFF" font-family="Cascadia Mono">scripts/run_experiment.py</text>
+        <text x="450" y="214" font-size="13" fill="#FFFFFF" font-family="Cascadia Mono">src/dogfight/</text>
+        <text x="450" y="248" font-size="11" fill="#9DB6C9" font-family="Malgun Gothic">학습 루프 / Ray / RLlib</text>
+        <text x="450" y="266" font-size="11" fill="#9DB6C9" font-family="Malgun Gothic">checkpoint / bundle 저장</text>
+        <text x="450" y="284" font-size="11" fill="#9DB6C9" font-family="Malgun Gothic">dashboard / metrics.jsonl</text>
+
+        <!-- artifacts -->
+        <line x1="710" y1="160" x2="800" y2="160" stroke="#54606C" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="800" y="120" width="270" height="100" rx="12" fill="#FFFFFF" stroke="#DCE2EA"/>
+        <text x="820" y="146" font-size="13" font-weight="700" fill="#065A82" font-family="Cascadia Mono">artifacts/models/&lt;team&gt;/&lt;tag&gt;/</text>
+        <text x="820" y="170" font-size="12" fill="#1B2733" font-family="Cascadia Mono">├ metadata.json</text>
+        <text x="820" y="190" font-size="12" fill="#1B2733" font-family="Cascadia Mono">└ policy_weights.pkl.gz</text>
+        <text x="820" y="210" font-size="11" fill="#54606C" font-family="Malgun Gothic">= 제출용 bundle</text>
+
+        <!-- submission path -->
+        <line x1="340" y1="364" x2="800" y2="364" stroke="#F96167" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="800" y="332" width="270" height="80" rx="12" fill="#FFF1F2" stroke="#F96167"/>
+        <text x="820" y="358" font-size="13" font-weight="700" fill="#F96167" font-family="Cascadia Mono">Unreal 서버</text>
+        <text x="820" y="380" font-size="12" fill="#1B2733" font-family="Malgun Gothic">UDP 9999 · 팀명 / BUNDLE_DIR</text>
+        <text x="820" y="398" font-size="11" fill="#54606C" font-family="Malgun Gothic">관측 입력 계약은 학습과 동일해야 함</text>
+        <!-- bundle to submission -->
+        <line x1="935" y1="220" x2="935" y2="332" stroke="#065A82" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+        <text x="940" y="290" font-size="11" fill="#065A82" font-family="Malgun Gothic">BUNDLE_DIR</text>
+      </svg>
+    </div>
+
+    <section class="file" id="setup">
+      <header>
+        <h2><span class="accent">0.</span> 사전 준비</h2>
+        <span class="role">cwd · python · 자산 확인</span>
+      </header>
+      <p>5 파일을 수정·실행하기 전, 반드시 <strong>Release 폴더에서</strong> 실행해야 한다.
+        DLL, Rule XML, aircraft, engine, scripts 자산이 Release 루트에 있어야 학습/추론이 동작한다.</p>
+      <div class="code-block"><button class="copy">Copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe -m pip install -r requirements.txt
+python -c "import JSBSimWrapper; print('OK')"</pre></div>
+      <div class="callout warn"><span class="bar"></span><div class="body">
+        <strong>실행 위치 고정</strong>
+        Release 루트에서 실행하지 않으면 <code>JSBSimAIPLib.dll</code>, <code>AIP_BASE*.dll</code>,
+        <code>Rule_forTraining.xml</code> 등 런타임 자산을 찾지 못한다. <code>cd DogFightEnv\Release</code> 이후
+        <code>python train_rllib.py</code> 또는 <code>python student\my_train.py</code> 형태로 호출한다.
+      </div></div>
+    </section>
+
+    <!-- =============================== my_reward.py =============================== -->
+    <section class="file" id="my_reward">
+      <header>
+        <h2><span class="accent">1.</span> my_reward.py</h2>
+        <span class="role">보상 — compute_reward() 반환 계약</span>
+      </header>
+      <p>에이전트가 무엇을 배울지 결정하는 핵심 파일이다. <code>MY_REWARD_CONFIG</code>(dict)와
+        <code>compute_reward(...)</code> 함수만 제공하면 본체가 매 step마다 호출해 reward를 계산한다.
+        반환값은 <code>(float total, dict components)</code> 두 값 튜플이며, <code>components</code>의 각 key는
+        대시보드에서 <code>ep_reward_&lt;name&gt;</code> 으로 자동 기록된다.</p>
+
+      <h3><span class="num">1</span>계약 (Contract)</h3>
+      <table class="contract">
+        <thead><tr><th>요소</th><th>타입</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td><code>MY_REWARD_CONFIG</code></td><td>dict</td><td>보상 가중치/스케일을 dict로 보존. 본체에서 <code>reward_config</code>로 전달됨.</td></tr>
+          <tr><td><code>compute_reward(...)</code></td><td>callable</td><td>아래 인자를 받아 <code>(float, dict)</code> 반환.</td></tr>
+        </tbody>
+      </table>
+      <h4>compute_reward 인자</h4>
+      <table class="contract">
+        <thead><tr><th>인자</th><th>타입</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td><code>ownship_state</code></td><td>np.ndarray</td><td><code>StateIndex.*</code>로 인덱싱. ROLL, PITCH, YAW, KCAS, ALT, HEALTH 등.</td></tr>
+          <tr><td><code>target_state</code></td><td>np.ndarray</td><td>상대기 상태(같은 인덱싱).</td></tr>
+          <tr><td><code>ownship_damage</code></td><td>float</td><td>아군 누적 피해.</td></tr>
+          <tr><td><code>target_damage</code></td><td>float</td><td>적기 누적 피해.</td></tr>
+          <tr><td><code>geo_info</code></td><td>object</td><td><code>_get_distance</code>, <code>_get_antenna_train_angle</code>, <code>_get_aspect_angle</code> 등 기하 메서드 제공.</td></tr>
+          <tr><td><code>wez_config</code></td><td>dict</td><td>WEZ 설정 (range, half_angle 등).</td></tr>
+          <tr><td><code>reward_config</code></td><td>dict</td><td><code>MY_REWARD_CONFIG</code>의 런타임 사본.</td></tr>
+          <tr><td><code>terminated</code> / <code>truncated</code></td><td>bool</td><td>에피소드 종료 플래그.</td></tr>
+          <tr><td><code>end_condition</code></td><td>str</td><td>종료 사유(crash / altitude / time / fdm 등).</td></tr>
+        </tbody>
+      </table>
+
+      <h3><span class="num">2</span>최소 동작 예시 (그대로 실행 가능)</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre><span class="tok-c"># student/my_reward.py</span>
+<span class="tok-k">from</span> __future__ <span class="tok-k">import</span> annotations
+<span class="tok-k">from</span> dogfight.sim.state_schema <span class="tok-k">import</span> StateIndex
+
+MY_REWARD_CONFIG = {
+    <span class="tok-s">"step_penalty"</span>: -<span class="tok-n">0.01</span>,
+    <span class="tok-s">"win_reward"</span>: <span class="tok-n">100.0</span>,
+    <span class="tok-s">"loss_reward"</span>: -<span class="tok-n">100.0</span>,
+    <span class="tok-s">"draw_reward"</span>: -<span class="tok-n">10.0</span>,
+}
+
+<span class="tok-k">def</span> <span class="tok-f">compute_reward</span>(ownship_state, target_state, ownship_damage, target_damage,
+                   geo_info, wez_config, reward_config,
+                   terminated, truncated, end_condition):
+    components = {<span class="tok-s">"step"</span>: <span class="tok-f">float</span>(reward_config[<span class="tok-s">"step_penalty"</span>])}
+
+    terminal = <span class="tok-n">0.0</span>
+    <span class="tok-k">if</span> terminated <span class="tok-k">or</span> truncated:
+        own_hp = <span class="tok-f">float</span>(ownship_state[StateIndex.HEALTH])
+        tgt_hp = <span class="tok-f">float</span>(target_state[StateIndex.HEALTH])
+        <span class="tok-k">if</span> tgt_hp &lt;= <span class="tok-n">0.0</span> &lt; own_hp:
+            terminal = <span class="tok-f">float</span>(reward_config[<span class="tok-s">"win_reward"</span>])
+        <span class="tok-k">elif</span> own_hp &lt;= <span class="tok-n">0.0</span> &lt; tgt_hp:
+            terminal = <span class="tok-f">float</span>(reward_config[<span class="tok-s">"loss_reward"</span>])
+        <span class="tok-k">else</span>:
+            terminal = <span class="tok-f">float</span>(reward_config[<span class="tok-s">"draw_reward"</span>])
+    components[<span class="tok-s">"terminal"</span>] = terminal
+
+    <span class="tok-k">return</span> <span class="tok-f">float</span>(<span class="tok-f">sum</span>(components.values())), components</pre></div>
+
+      <h3><span class="num">3</span>확장 예시 — 접근 보상 + WEZ 점유 shaping</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre>MY_REWARD_CONFIG = {
+    <span class="tok-s">"step_penalty"</span>: -<span class="tok-n">0.005</span>,
+    <span class="tok-s">"win_reward"</span>: <span class="tok-n">150.0</span>,
+    <span class="tok-s">"loss_reward"</span>: -<span class="tok-n">150.0</span>,
+    <span class="tok-s">"draw_reward"</span>: -<span class="tok-n">5.0</span>,
+    <span class="tok-s">"approach_scale"</span>: <span class="tok-n">0.002</span>,
+    <span class="tok-s">"wez_bonus"</span>: <span class="tok-n">0.05</span>,
+}
+
+<span class="tok-k">def</span> <span class="tok-f">compute_reward</span>(ownship_state, target_state, ownship_damage, target_damage,
+                   geo_info, wez_config, reward_config,
+                   terminated, truncated, end_condition):
+    components = {<span class="tok-s">"step"</span>: <span class="tok-f">float</span>(reward_config[<span class="tok-s">"step_penalty"</span>])}
+
+    <span class="tok-c"># 1. 접근 shaping: 가까워질수록 작은 보상</span>
+    distance = geo_info._get_distance(ownship_state, target_state)
+    components[<span class="tok-s">"approach"</span>] = -reward_config[<span class="tok-s">"approach_scale"</span>] * <span class="tok-f">float</span>(distance) / <span class="tok-n">1000.0</span>
+
+    <span class="tok-c"># 2. WEZ 점유 보너스: 정면 진입 시 가산점</span>
+    ata = <span class="tok-f">abs</span>(geo_info._get_antenna_train_angle(ownship_state, target_state, <span class="tok-k">False</span>))
+    half_angle = <span class="tok-f">float</span>(wez_config.get(<span class="tok-s">"half_angle"</span>, <span class="tok-n">30.0</span>))
+    wez_range = <span class="tok-f">float</span>(wez_config.get(<span class="tok-s">"range"</span>, <span class="tok-n">3000.0</span>))
+    in_wez = (ata &lt;= half_angle) <span class="tok-k">and</span> (distance &lt;= wez_range)
+    components[<span class="tok-s">"wez"</span>] = reward_config[<span class="tok-s">"wez_bonus"</span>] <span class="tok-k">if</span> in_wez <span class="tok-k">else</span> <span class="tok-n">0.0</span>
+
+    <span class="tok-c"># 3. terminal: 기존 win/loss/draw 유지</span>
+    terminal = <span class="tok-n">0.0</span>
+    <span class="tok-k">if</span> terminated <span class="tok-k">or</span> truncated:
+        own_hp = <span class="tok-f">float</span>(ownship_state[StateIndex.HEALTH])
+        tgt_hp = <span class="tok-f">float</span>(target_state[StateIndex.HEALTH])
+        <span class="tok-k">if</span> tgt_hp &lt;= <span class="tok-n">0.0</span> &lt; own_hp:
+            terminal = reward_config[<span class="tok-s">"win_reward"</span>]
+        <span class="tok-k">elif</span> own_hp &lt;= <span class="tok-n">0.0</span> &lt; tgt_hp:
+            terminal = reward_config[<span class="tok-s">"loss_reward"</span>]
+        <span class="tok-k">else</span>:
+            terminal = reward_config[<span class="tok-s">"draw_reward"</span>]
+    components[<span class="tok-s">"terminal"</span>] = <span class="tok-f">float</span>(terminal)
+
+    <span class="tok-k">return</span> <span class="tok-f">float</span>(<span class="tok-f">sum</span>(components.values())), components</pre></div>
+
+      <h3><span class="num">4</span>실행 명령</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre>python train_rllib.py --algorithm sac --reward-module student.my_reward \
+  --output-name team01 --output-tag reward_v1 --iterations 50</pre></div>
+      <p>YAML로 관리하려면 <code>experiments/student_sac_mlp.yaml</code>을 팀 파일명으로 복사한 뒤
+        <code>env.reward_module: student.my_reward</code> 주석을 해제하고
+        <code>python scripts\run_experiment.py experiments\team01_sac_mlp.yaml --dry-run</code>으로 먼저 명령을 확인한다.</p>
+
+      <div class="callout tip"><span class="bar"></span><div class="body">
+        <strong>components 이름은 분석 도구다</strong>
+        대시보드와 <code>training_log.csv</code>에 <code>ep_reward_step</code>,
+        <code>ep_reward_wez</code>처럼 자동 기록된다. 이름을 의미 있게 짓고 같은 키를 실험 간 유지하면 비교가 쉽다.
+      </div></div>
+      <div class="callout warn"><span class="bar"></span><div class="body">
+        <strong>스케일 차이가 크면 학습이 흔들린다</strong>
+        terminal +100과 step shaping 0.5를 섞으면 step shaping이 사라진다. 같은 자리수 안에서 가중치를 잡는다.
+      </div></div>
+
+      <div class="checklist">
+        <h4>제출 전 점검</h4>
+        <ul>
+          <li><code>MY_REWARD_CONFIG</code>가 dict인지</li>
+          <li><code>compute_reward</code>가 <code>(float, dict)</code>를 반환하는지</li>
+          <li><code>components</code>의 합과 <code>total</code>이 일치하는지</li>
+          <li>terminal에서 win/loss/draw가 모두 다뤄지는지</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- =============================== my_observation.py =============================== -->
+    <section class="file" id="my_observation">
+      <header>
+        <h2><span class="accent">2.</span> my_observation.py</h2>
+        <span class="role">관측 — 정책 입력 벡터 계약</span>
+      </header>
+      <p>정책 네트워크가 보는 입력 벡터를 직접 정의한다. <code>OBSERVATION_SIZE</code>(int)와
+        <code>build_observation(...)</code>만 있으면 동작한다. 본체는 module path를
+        <code>--observation-module</code>로 지정받아 학습/로컬/Unreal 추론에서 같은 함수를 호출한다.</p>
+
+      <h3><span class="num">1</span>계약</h3>
+      <table class="contract">
+        <thead><tr><th>요소</th><th>구분</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td><code>OBSERVATION_SIZE</code></td><td>필수</td><td>벡터 길이(int). 정책 입력 차원과 일치.</td></tr>
+          <tr><td><code>build_observation(ownship_state, target_state, geo_info, wez_config=None)</code></td><td>필수</td><td><code>np.float32</code> 1-D 벡터 반환. shape는 <code>(OBSERVATION_SIZE,)</code>.</td></tr>
+          <tr><td><code>OBSERVATION_MODE</code></td><td>선택</td><td>로그/메타데이터용 라벨(예: <code>"student8"</code>).</td></tr>
+          <tr><td><code>OBSERVATION_LOW</code> / <code>OBSERVATION_HIGH</code></td><td>선택</td><td>Gym <code>observation_space</code>의 범위. 기본 <code>-1.0 ~ 1.0</code> 권장.</td></tr>
+          <tr><td><code>describe_observation()</code></td><td>선택</td><td>피처 목록을 반환해 metadata.json에 기록.</td></tr>
+        </tbody>
+      </table>
+
+      <h3><span class="num">2</span>최소 동작 예시 — 8차원 정규화 관측</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre><span class="tok-c"># student/my_observation.py</span>
+<span class="tok-k">from</span> __future__ <span class="tok-k">import</span> annotations
+<span class="tok-k">import</span> numpy <span class="tok-k">as</span> np
+<span class="tok-k">from</span> dogfight.envs.observation <span class="tok-k">import</span> normalize
+<span class="tok-k">from</span> dogfight.sim.state_schema <span class="tok-k">import</span> StateIndex
+
+OBSERVATION_MODE = <span class="tok-s">"student8"</span>
+OBSERVATION_SIZE = <span class="tok-n">8</span>
+OBSERVATION_LOW  = -<span class="tok-n">1.0</span>
+OBSERVATION_HIGH =  <span class="tok-n">1.0</span>
+
+<span class="tok-k">def</span> <span class="tok-f">build_observation</span>(ownship_state, target_state, geo_info, wez_config=<span class="tok-k">None</span>):
+    distance = geo_info._get_distance(ownship_state, target_state)
+    ata = geo_info._get_antenna_train_angle(ownship_state, target_state, <span class="tok-k">False</span>)
+    aa  = geo_info._get_aspect_angle(ownship_state, target_state, <span class="tok-k">False</span>)
+
+    obs = np.zeros(OBSERVATION_SIZE, dtype=np.float32)
+    obs[<span class="tok-n">0</span>] = normalize(<span class="tok-f">float</span>(ownship_state[StateIndex.ROLL]),  -<span class="tok-n">180.0</span>, <span class="tok-n">180.0</span>)
+    obs[<span class="tok-n">1</span>] = normalize(<span class="tok-f">float</span>(ownship_state[StateIndex.PITCH]),  -<span class="tok-n">90.0</span>,  <span class="tok-n">90.0</span>)
+    obs[<span class="tok-n">2</span>] = normalize(<span class="tok-f">float</span>(ownship_state[StateIndex.YAW]),     <span class="tok-n">0.0</span>, <span class="tok-n">360.0</span>)
+    obs[<span class="tok-n">3</span>] = normalize(<span class="tok-f">float</span>(ownship_state[StateIndex.KCAS]),    <span class="tok-n">0.0</span>, <span class="tok-n">600.0</span>)
+    obs[<span class="tok-n">4</span>] = normalize(<span class="tok-f">float</span>(ownship_state[StateIndex.ALT]),     <span class="tok-n">0.0</span>, <span class="tok-n">15000.0</span>)
+    obs[<span class="tok-n">5</span>] = normalize(<span class="tok-f">float</span>(distance), <span class="tok-n">0.0</span>, <span class="tok-n">20000.0</span>)
+    obs[<span class="tok-n">6</span>] = normalize(<span class="tok-f">float</span>(ata),  -<span class="tok-n">180.0</span>, <span class="tok-n">180.0</span>)
+    obs[<span class="tok-n">7</span>] = normalize(<span class="tok-f">float</span>(aa),   -<span class="tok-n">180.0</span>, <span class="tok-n">180.0</span>)
+    <span class="tok-k">return</span> obs
+
+<span class="tok-k">def</span> <span class="tok-f">describe_observation</span>():
+    <span class="tok-k">return</span> {
+        <span class="tok-s">"mode"</span>: OBSERVATION_MODE, <span class="tok-s">"size"</span>: OBSERVATION_SIZE,
+        <span class="tok-s">"features"</span>: [
+            <span class="tok-s">"ownship_roll_norm"</span>, <span class="tok-s">"ownship_pitch_norm"</span>, <span class="tok-s">"ownship_yaw_norm"</span>,
+            <span class="tok-s">"ownship_kcas_norm"</span>, <span class="tok-s">"ownship_alt_norm"</span>,
+            <span class="tok-s">"distance_norm"</span>, <span class="tok-s">"ata_norm"</span>, <span class="tok-s">"aa_norm"</span>,
+        ],
+    }</pre></div>
+
+      <h3><span class="num">3</span>확장 예시 — 상대 속도/고도차를 추가한 10차원</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre>OBSERVATION_MODE = <span class="tok-s">"student10_rel"</span>
+OBSERVATION_SIZE = <span class="tok-n">10</span>
+
+<span class="tok-k">def</span> <span class="tok-f">build_observation</span>(ownship_state, target_state, geo_info, wez_config=<span class="tok-k">None</span>):
+    distance = geo_info._get_distance(ownship_state, target_state)
+    ata = geo_info._get_antenna_train_angle(ownship_state, target_state, <span class="tok-k">False</span>)
+    aa  = geo_info._get_aspect_angle(ownship_state, target_state, <span class="tok-k">False</span>)
+    own_alt = <span class="tok-f">float</span>(ownship_state[StateIndex.ALT])
+    tgt_alt = <span class="tok-f">float</span>(target_state[StateIndex.ALT])
+    own_kcas = <span class="tok-f">float</span>(ownship_state[StateIndex.KCAS])
+    tgt_kcas = <span class="tok-f">float</span>(target_state[StateIndex.KCAS])
+
+    obs = np.zeros(OBSERVATION_SIZE, dtype=np.float32)
+    obs[<span class="tok-n">0</span>] = normalize(<span class="tok-f">float</span>(ownship_state[StateIndex.ROLL]),  -<span class="tok-n">180.0</span>, <span class="tok-n">180.0</span>)
+    obs[<span class="tok-n">1</span>] = normalize(<span class="tok-f">float</span>(ownship_state[StateIndex.PITCH]),  -<span class="tok-n">90.0</span>,  <span class="tok-n">90.0</span>)
+    obs[<span class="tok-n">2</span>] = normalize(own_kcas, <span class="tok-n">0.0</span>, <span class="tok-n">600.0</span>)
+    obs[<span class="tok-n">3</span>] = normalize(own_alt,  <span class="tok-n">0.0</span>, <span class="tok-n">15000.0</span>)
+    obs[<span class="tok-n">4</span>] = normalize(<span class="tok-f">float</span>(distance), <span class="tok-n">0.0</span>, <span class="tok-n">20000.0</span>)
+    obs[<span class="tok-n">5</span>] = normalize(<span class="tok-f">float</span>(ata), -<span class="tok-n">180.0</span>, <span class="tok-n">180.0</span>)
+    obs[<span class="tok-n">6</span>] = normalize(<span class="tok-f">float</span>(aa),  -<span class="tok-n">180.0</span>, <span class="tok-n">180.0</span>)
+    <span class="tok-c"># 상대 항목</span>
+    obs[<span class="tok-n">7</span>] = normalize(own_alt - tgt_alt, -<span class="tok-n">10000.0</span>, <span class="tok-n">10000.0</span>)
+    obs[<span class="tok-n">8</span>] = normalize(own_kcas - tgt_kcas, -<span class="tok-n">400.0</span>, <span class="tok-n">400.0</span>)
+    obs[<span class="tok-n">9</span>] = normalize(<span class="tok-f">float</span>(target_state[StateIndex.HEALTH]) -
+                       <span class="tok-f">float</span>(ownship_state[StateIndex.HEALTH]), -<span class="tok-n">1.0</span>, <span class="tok-n">1.0</span>)
+    <span class="tok-k">return</span> obs</pre></div>
+
+      <h3><span class="num">4</span>실행 명령</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre>python train_rllib.py --algorithm sac --observation-mode custom \
+  --observation-module student.my_observation \
+  --output-name team01 --output-tag observation_v1 --iterations 50</pre></div>
+
+      <div class="callout warn"><span class="bar"></span><div class="body">
+        <strong>차원이 바뀌면 기존 bundle과 호환되지 않는다</strong>
+        <code>OBSERVATION_SIZE</code>나 module 자체를 바꾸면 이전 checkpoint/bundle을
+        <code>--restore-checkpoint</code> 또는 <code>--init-bundle</code>로 이어 쓸 수 없다.
+        새 tag로 새 실험을 시작한다.
+      </div></div>
+      <div class="callout tip"><span class="bar"></span><div class="body">
+        <strong>학습 / 로컬 / Unreal 같은 module path</strong>
+        다음 4곳에 같은 module path를 기록한다: YAML <code>env.observation_module</code>,
+        train CLI <code>--observation-module</code>, 로컬 검증 <code>--observation-module</code>,
+        <code>my_submission.py</code>의 <code>OBSERVATION_MODULE</code>.
+      </div></div>
+
+      <div class="checklist">
+        <h4>제출 전 점검</h4>
+        <ul>
+          <li>반환 vector shape == <code>OBSERVATION_SIZE</code></li>
+          <li><code>dtype</code>이 <code>np.float32</code></li>
+          <li>학습 때 쓴 module path가 <code>my_submission.py</code>에도 동일하게 들어 있는지</li>
+          <li><code>artifacts/models/&lt;team&gt;/&lt;tag&gt;/metadata.json</code>의 <code>observation_module</code>이 일치하는지</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- =============================== my_curriculum.py =============================== -->
+    <section class="file" id="my_curriculum">
+      <header>
+        <h2><span class="accent">3.</span> my_curriculum.py</h2>
+        <span class="role">커리큘럼 — 학습 단계 목록</span>
+      </header>
+      <p>커리큘럼 학습 시 단계 목록을 정의한다. <code>get_stages()</code>가 <code>CurriculumStage</code>의
+        리스트를 반환하면 본체 <code>train_curriculum.py</code>가 순서대로 학습하고 stage 간
+        진급/롤백을 관리한다.</p>
+
+      <h3><span class="num">1</span>계약</h3>
+      <table class="contract">
+        <thead><tr><th>요소</th><th>타입</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td><code>get_stages()</code></td><td>callable</td><td><code>list[CurriculumStage]</code> 반환. 본체가 stage 0부터 순서대로 학습.</td></tr>
+          <tr><td><code>CurriculumStage</code></td><td>dataclass</td><td><code>from dogfight.ai.curriculum import CurriculumStage</code>. 주요 인자는 아래 표 참고.</td></tr>
+        </tbody>
+      </table>
+      <h4>CurriculumStage 주요 필드</h4>
+      <table class="contract">
+        <thead><tr><th>필드</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td><code>index</code> / <code>name</code> / <code>description</code></td><td>식별과 로그 라벨.</td></tr>
+          <tr><td><code>target_mode</code></td><td><code>"fixed"</code> / <code>"loiter"</code> / <code>"autopilot"</code> / <code>"behavior_tree"</code>. 적기 종류.</td></tr>
+          <tr><td><code>episode_step_limit</code></td><td>에피소드 최대 step 수.</td></tr>
+          <tr><td><code>max_iterations</code></td><td>이 단계 최대 학습 iteration. 진급 조건이 비어 있으면 이 수만큼 학습 후 자동 진급.</td></tr>
+          <tr><td><code>checkpoint_interval</code></td><td>몇 iteration마다 checkpoint 저장할지.</td></tr>
+          <tr><td><code>reward_overrides</code></td><td>이 단계에서만 덮어쓸 reward_config 키.</td></tr>
+          <tr><td><code>randomization</code></td><td>초기 배치 랜덤화 dict. radius, r_roll, r_pitch, r_heading 등.</td></tr>
+          <tr><td><code>advance_conditions</code></td><td><code>{"win_rate_min": 0.7, "crash_rate_max": 0.3}</code>처럼 rolling 진급 조건.</td></tr>
+          <tr><td><code>advance_window</code></td><td>rolling window iteration 수.</td></tr>
+        </tbody>
+      </table>
+
+      <h3><span class="num">2</span>최소 동작 예시 — 2단계 워밍업 → BT</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre><span class="tok-c"># student/my_curriculum.py</span>
+<span class="tok-k">from</span> __future__ <span class="tok-k">import</span> annotations
+<span class="tok-k">from</span> dogfight.ai.curriculum <span class="tok-k">import</span> CurriculumStage
+
+<span class="tok-k">def</span> <span class="tok-f">get_stages</span>() -&gt; <span class="tok-f">list</span>[CurriculumStage]:
+    <span class="tok-k">return</span> [
+        CurriculumStage(
+            index=<span class="tok-n">0</span>, name=<span class="tok-s">"student_fixed_target"</span>,
+            description=<span class="tok-s">"Minimal fixed-target warmup stage."</span>,
+            target_mode=<span class="tok-s">"fixed"</span>, episode_step_limit=<span class="tok-n">3600</span>,
+            max_iterations=<span class="tok-n">10</span>, checkpoint_interval=<span class="tok-n">5</span>,
+            reward_overrides={},
+            randomization={<span class="tok-s">"enabled"</span>: <span class="tok-k">True</span>,
+                           <span class="tok-s">"radius"</span>: <span class="tok-n">500.0</span>,
+                           <span class="tok-s">"r_roll"</span>: <span class="tok-n">5.0</span>, <span class="tok-s">"r_pitch"</span>: <span class="tok-n">5.0</span>,
+                           <span class="tok-s">"r_heading"</span>: <span class="tok-n">30.0</span>},
+            advance_conditions={}, advance_window=<span class="tok-n">5</span>,
+        ),
+        CurriculumStage(
+            index=<span class="tok-n">1</span>, name=<span class="tok-s">"student_bt_dogfight"</span>,
+            description=<span class="tok-s">"Minimal behavior-tree opponent stage."</span>,
+            target_mode=<span class="tok-s">"behavior_tree"</span>, episode_step_limit=<span class="tok-n">18000</span>,
+            max_iterations=<span class="tok-n">20</span>, checkpoint_interval=<span class="tok-n">5</span>,
+            reward_overrides={},
+            randomization={<span class="tok-s">"enabled"</span>: <span class="tok-k">True</span>,
+                           <span class="tok-s">"radius"</span>: <span class="tok-n">1500.0</span>,
+                           <span class="tok-s">"r_roll"</span>: <span class="tok-n">10.0</span>, <span class="tok-s">"r_pitch"</span>: <span class="tok-n">8.0</span>,
+                           <span class="tok-s">"r_heading"</span>: <span class="tok-n">120.0</span>},
+            advance_conditions={}, advance_window=<span class="tok-n">5</span>,
+        ),
+    ]</pre></div>
+
+      <h3><span class="num">3</span>확장 예시 — 진급 조건과 보상 override</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre><span class="tok-k">def</span> <span class="tok-f">get_stages</span>() -&gt; <span class="tok-f">list</span>[CurriculumStage]:
+    <span class="tok-k">return</span> [
+        CurriculumStage(
+            index=<span class="tok-n">0</span>, name=<span class="tok-s">"warmup_fixed"</span>,
+            description=<span class="tok-s">"고정 표적으로 기본 비행 안정화"</span>,
+            target_mode=<span class="tok-s">"fixed"</span>, episode_step_limit=<span class="tok-n">3600</span>,
+            max_iterations=<span class="tok-n">20</span>, checkpoint_interval=<span class="tok-n">5</span>,
+            reward_overrides={<span class="tok-s">"step_penalty"</span>: -<span class="tok-n">0.002</span>},
+            randomization={<span class="tok-s">"enabled"</span>: <span class="tok-k">True</span>, <span class="tok-s">"radius"</span>: <span class="tok-n">800.0</span>,
+                           <span class="tok-s">"r_roll"</span>: <span class="tok-n">5.0</span>, <span class="tok-s">"r_pitch"</span>: <span class="tok-n">5.0</span>,
+                           <span class="tok-s">"r_heading"</span>: <span class="tok-n">45.0</span>},
+            advance_conditions={<span class="tok-s">"crash_rate_max"</span>: <span class="tok-n">0.10</span>},
+            advance_window=<span class="tok-n">5</span>,
+        ),
+        CurriculumStage(
+            index=<span class="tok-n">1</span>, name=<span class="tok-s">"pursuit_easy_bt"</span>,
+            description=<span class="tok-s">"느린 BT 적기 추격"</span>,
+            target_mode=<span class="tok-s">"behavior_tree"</span>, episode_step_limit=<span class="tok-n">9000</span>,
+            max_iterations=<span class="tok-n">40</span>, checkpoint_interval=<span class="tok-n">5</span>,
+            reward_overrides={<span class="tok-s">"approach_scale"</span>: <span class="tok-n">0.004</span>},
+            randomization={<span class="tok-s">"enabled"</span>: <span class="tok-k">True</span>, <span class="tok-s">"radius"</span>: <span class="tok-n">1500.0</span>,
+                           <span class="tok-s">"r_roll"</span>: <span class="tok-n">10.0</span>, <span class="tok-s">"r_pitch"</span>: <span class="tok-n">8.0</span>,
+                           <span class="tok-s">"r_heading"</span>: <span class="tok-n">90.0</span>},
+            advance_conditions={<span class="tok-s">"win_rate_min"</span>: <span class="tok-n">0.60</span>,
+                                <span class="tok-s">"crash_rate_max"</span>: <span class="tok-n">0.30</span>},
+            advance_window=<span class="tok-n">10</span>,
+        ),
+        CurriculumStage(
+            index=<span class="tok-n">2</span>, name=<span class="tok-s">"full_dogfight"</span>,
+            description=<span class="tok-s">"전체 dogfight 시나리오"</span>,
+            target_mode=<span class="tok-s">"behavior_tree"</span>, episode_step_limit=<span class="tok-n">18000</span>,
+            max_iterations=<span class="tok-n">200</span>, checkpoint_interval=<span class="tok-n">10</span>,
+            reward_overrides={},
+            randomization={<span class="tok-s">"enabled"</span>: <span class="tok-k">True</span>, <span class="tok-s">"radius"</span>: <span class="tok-n">2500.0</span>,
+                           <span class="tok-s">"r_roll"</span>: <span class="tok-n">15.0</span>, <span class="tok-s">"r_pitch"</span>: <span class="tok-n">10.0</span>,
+                           <span class="tok-s">"r_heading"</span>: <span class="tok-n">180.0</span>},
+            advance_conditions={<span class="tok-s">"win_rate_min"</span>: <span class="tok-n">0.70</span>},
+            advance_window=<span class="tok-n">10</span>,
+        ),
+    ]</pre></div>
+
+      <h3><span class="num">4</span>실행 명령</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre>python train_curriculum.py --algorithm sac \
+  --reward-module student.my_reward \
+  --stages-module student.my_curriculum \
+  --output-name team01 --output-tag curriculum_v1</pre></div>
+      <p>중단된 커리큘럼을 이어 학습하려면 <code>--resume</code>을 추가한다. 그러면
+        <code>artifacts/dashboard/&lt;run&gt;/curriculum_state.json</code>의 stage/iteration이 복구된다.</p>
+
+      <div class="callout note"><span class="bar"></span><div class="body">
+        <strong>본편 기본 curriculum은 참고용</strong>
+        <code>src/dogfight/ai/curriculum.py</code>에 0~14단계 + 투서클 헤드온 시퀀스가 들어 있다.
+        그대로 답안처럼 쓰는 대신, 본인 가설에 맞는 단계와 진급 조건을 직접 설계한다.
+      </div></div>
+    </section>
+
+    <!-- =============================== my_train.py =============================== -->
+    <section class="file" id="my_train">
+      <header>
+        <h2><span class="accent">4.</span> my_train.py</h2>
+        <span class="role">학습 실행 — wrapper · train_rllib.py 호출</span>
+      </header>
+      <p>학습 루프를 새로 짜지 않는다. <code>TRAINING_CONFIG / ENV_CONFIG / RL_CONFIG</code>를 수정한 뒤
+        <code>train_rllib.py</code>를 subprocess로 호출하는 <strong>얇은 wrapper</strong>다. dashboard, record,
+        bundle 저장 등 인프라는 모두 본체가 담당한다.</p>
+
+      <h3><span class="num">1</span>3개 설정 dict</h3>
+      <table class="contract">
+        <thead><tr><th>dict</th><th>주요 키</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td><code>TRAINING_CONFIG</code></td><td><code>team_name</code>, <code>output_tag</code>, <code>algorithm</code>, <code>iterations</code>, <code>reward_module</code>, <code>observation_module</code></td><td>실험 단위 / 학생 hook 모듈.</td></tr>
+          <tr><td><code>ENV_CONFIG</code></td><td><code>observation_mode</code>, <code>target_mode</code>, <code>target_behavior_dll</code>, <code>max_engage_time</code>, <code>episode_step_limit</code></td><td>환경 조건. <code>observation_module</code>이 비어 있으면 <code>observation_mode</code>가 사용된다.</td></tr>
+          <tr><td><code>RL_CONFIG</code></td><td><code>framework</code>, <code>num_env_runners</code>, <code>lr</code>, <code>gamma</code>, <code>train_batch_size</code>, <code>minibatch_size</code> 등</td><td>RLlib 하이퍼파라미터.</td></tr>
+        </tbody>
+      </table>
+      <p>YAML 실행에서는 <code>runtime.save_lightweight_bundle</code>,
+        <code>runtime.lightweight_bundle_frequency</code>,
+        <code>runtime.save_native_checkpoint</code>,
+        <code>runtime.native_checkpoint_frequency</code>로 추론용 bundle과 학습 재개용 native checkpoint 저장을 따로 제어한다.
+        <code>0</code> 주기는 최종본만 저장한다는 뜻이며, 오래된 <code>checkpoint_frequency</code>는 호환용 alias다.</p>
+
+      <h3><span class="num">2</span>최소 동작 예시 — 학생 보상만 사용</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre><span class="tok-c"># student/my_train.py (요약)</span>
+TRAINING_CONFIG = {
+    <span class="tok-s">"team_name"</span>: <span class="tok-s">"team01"</span>,
+    <span class="tok-s">"output_tag"</span>: <span class="tok-s">"v1"</span>,
+    <span class="tok-s">"algorithm"</span>: <span class="tok-s">"sac"</span>,
+    <span class="tok-s">"iterations"</span>: <span class="tok-n">50</span>,
+    <span class="tok-s">"reward_module"</span>: <span class="tok-s">"student.my_reward"</span>,
+    <span class="tok-s">"observation_module"</span>: <span class="tok-s">""</span>,
+}
+
+ENV_CONFIG = {
+    <span class="tok-s">"observation_mode"</span>: <span class="tok-s">"tactical16"</span>,
+    <span class="tok-s">"target_mode"</span>: <span class="tok-s">"behavior_tree"</span>,
+    <span class="tok-s">"target_behavior_dll"</span>: <span class="tok-s">"AIP_BASE_target.dll"</span>,
+    <span class="tok-s">"max_engage_time"</span>: <span class="tok-n">300.0</span>,
+    <span class="tok-s">"episode_step_limit"</span>: <span class="tok-n">18000</span>,
+}
+
+RL_CONFIG = {
+    <span class="tok-s">"framework"</span>: <span class="tok-s">"torch"</span>,
+    <span class="tok-s">"num_env_runners"</span>: <span class="tok-n">1</span>,
+    <span class="tok-s">"num_envs_per_env_runner"</span>: <span class="tok-n">1</span>,
+    <span class="tok-s">"rollout_fragment_length"</span>: <span class="tok-s">"auto"</span>,
+    <span class="tok-s">"batch_mode"</span>: <span class="tok-s">"truncate_episodes"</span>,
+    <span class="tok-s">"lr"</span>: <span class="tok-n">3e-4</span>, <span class="tok-s">"gamma"</span>: <span class="tok-n">0.99</span>,
+    <span class="tok-s">"train_batch_size"</span>: <span class="tok-n">4096</span>,
+    <span class="tok-s">"minibatch_size"</span>: <span class="tok-n">256</span>,
+}</pre></div>
+
+      <h3><span class="num">3</span>확장 예시 — 학생 보상 + 학생 관측 + PPO</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre>TRAINING_CONFIG = {
+    <span class="tok-s">"team_name"</span>: <span class="tok-s">"team01"</span>,
+    <span class="tok-s">"output_tag"</span>: <span class="tok-s">"obs_ppo_v1"</span>,
+    <span class="tok-s">"algorithm"</span>: <span class="tok-s">"ppo"</span>,
+    <span class="tok-s">"iterations"</span>: <span class="tok-n">200</span>,
+    <span class="tok-s">"reward_module"</span>: <span class="tok-s">"student.my_reward"</span>,
+    <span class="tok-s">"observation_module"</span>: <span class="tok-s">"student.my_observation"</span>,   <span class="tok-c"># custom obs ON</span>
+}
+ENV_CONFIG[<span class="tok-s">"target_mode"</span>] = <span class="tok-s">"behavior_tree"</span>
+ENV_CONFIG[<span class="tok-s">"episode_step_limit"</span>] = <span class="tok-n">18000</span>
+RL_CONFIG[<span class="tok-s">"train_batch_size"</span>] = <span class="tok-n">8192</span>
+RL_CONFIG[<span class="tok-s">"minibatch_size"</span>] = <span class="tok-n">512</span></pre></div>
+
+      <h3><span class="num">4</span>실행 명령</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre><span class="tok-c"># 1) dry-run 으로 호출되는 train_rllib.py 명령을 먼저 확인</span>
+python student\my_train.py --dry-run
+
+<span class="tok-c"># 2) smoke 실행: 한 iteration만</span>
+python student\my_train.py --iterations 1
+
+<span class="tok-c"># 3) 본 학습</span>
+python student\my_train.py --team-name team01 --output-tag v2 --iterations 200</pre></div>
+
+      <div class="callout tip"><span class="bar"></span><div class="body">
+        <strong>dry-run 먼저</strong>
+        <code>my_train.py</code>는 <code>print()</code>로 실제 호출 명령을 보여준 뒤
+        <code>subprocess.run</code>으로 <code>train_rllib.py</code>를 실행한다. <code>--dry-run</code>은
+        명령만 출력하고 종료하므로 옵션 조합이 의도대로 들어갔는지 빠르게 점검할 수 있다.
+      </div></div>
+      <div class="callout warn"><span class="bar"></span><div class="body">
+        <strong>학습 루프를 직접 짜지 않는다</strong>
+        wrapper 안에서 RLlib을 부르거나, env 생성을 새로 하지 않는다. 그렇게 하면 dashboard, record,
+        bundle 저장이 끊어진다. 항상 <code>train_rllib.py</code>를 통해 호출한다.
+      </div></div>
+    </section>
+
+    <!-- =============================== my_submission.py =============================== -->
+    <section class="file" id="my_submission">
+      <header>
+        <h2><span class="accent">5.</span> my_submission.py</h2>
+        <span class="role">제출 — Unreal 서버 클라이언트</span>
+      </header>
+      <p>학습한 모델을 경진대회 Unreal 서버에 연결하는 UDP 클라이언트다. 학습 시 사용한
+        bundle 경로(<code>BUNDLE_DIR</code>)와 관측 mode/module을 그대로 입력하는 것이 가장
+        중요하다. <code>MODE</code>는 <code>rl</code>, <code>bt</code>, <code>hybrid</code> 세 가지.</p>
+
+      <h3><span class="num">1</span>설정 항목</h3>
+      <table class="contract">
+        <thead><tr><th>설정</th><th>의미</th><th>확인 포인트</th></tr></thead>
+        <tbody>
+          <tr><td><code>TEAM_NAME</code></td><td>표시 이름</td><td>운영 공지의 등록명과 정확히 일치</td></tr>
+          <tr><td><code>SERVER_IP</code> / <code>SERVER_PORT</code></td><td>Unreal 서버 주소</td><td>운영 공지 기준</td></tr>
+          <tr><td><code>MODE</code></td><td><code>rl</code> / <code>bt</code> / <code>hybrid</code></td><td>실험 의도와 일치</td></tr>
+          <tr><td><code>BUNDLE_DIR</code></td><td>제출용 policy 경로</td><td><code>metadata.json</code> + <code>policy_weights.pkl.gz</code> 두 파일이 모두 존재해야 함</td></tr>
+          <tr><td><code>OBSERVATION_MODE</code> / <code>OBSERVATION_MODULE</code></td><td>policy 입력 계약</td><td>학습 metadata와 동일해야 함</td></tr>
+          <tr><td><code>BT_DLL</code> / <code>BT_RULE_XML</code></td><td>BT 백엔드 사용 시 행동 트리</td><td>Release 루트에 파일 존재</td></tr>
+          <tr><td><code>HYBRID_MODE</code>, <code>RESIDUAL_SCALE</code>, <code>ALPHA</code></td><td>hybrid 세부 옵션</td><td><code>residual</code> / <code>blend</code> / <code>switch</code></td></tr>
+          <tr><td><code>ACTION_REPEAT</code></td><td>policy 호출 주기</td><td>학습 시 step_ratio와 동일하게(기본 6)</td></tr>
+        </tbody>
+      </table>
+
+      <h3><span class="num">2</span>최소 동작 예시 — RL 단일 모드 제출</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre><span class="tok-c"># student/my_submission.py 핵심 수정 부분</span>
+TEAM_NAME = <span class="tok-s">"team01"</span>
+SERVER_IP = <span class="tok-s">"221.151.77.208"</span>
+SERVER_PORT = <span class="tok-n">9999</span>
+
+MODE = <span class="tok-s">"rl"</span>
+
+BUNDLE_DIR = <span class="tok-s">"artifacts/models/team01/v1"</span>
+OBSERVATION_MODE = <span class="tok-s">"tactical16"</span>
+OBSERVATION_MODULE = <span class="tok-s">""</span>   <span class="tok-c"># 기본 관측이면 빈 문자열</span></pre></div>
+
+      <h3><span class="num">3</span>확장 예시 — custom 관측 + RL/BT 하이브리드</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre>TEAM_NAME = <span class="tok-s">"team01"</span>
+SERVER_IP = <span class="tok-s">"221.151.77.208"</span>
+SERVER_PORT = <span class="tok-n">9999</span>
+
+MODE = <span class="tok-s">"hybrid"</span>
+
+BUNDLE_DIR = <span class="tok-s">"artifacts/models/team01/observation_v1"</span>
+OBSERVATION_MODE = <span class="tok-s">"custom"</span>
+OBSERVATION_MODULE = <span class="tok-s">"student.my_observation"</span>
+
+BT_DLL = <span class="tok-s">"AIP_BASE.dll"</span>
+BT_RULE_XML = <span class="tok-s">"Rule_team01.xml"</span>
+
+HYBRID_MODE = <span class="tok-s">"residual"</span>   <span class="tok-c"># BT가 베이스, RL은 보정</span>
+RESIDUAL_SCALE = <span class="tok-n">0.35</span>
+ALPHA = <span class="tok-n">0.5</span>
+
+ACTION_REPEAT = <span class="tok-n">6</span></pre></div>
+
+      <h3><span class="num">4</span>실행 명령</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre><span class="tok-c"># 방법 A: 파일 수정 후 직접 실행</span>
+python student\my_submission.py
+
+<span class="tok-c"># 방법 B: 커맨드라인으로 직접 — RL 모델 사용</span>
+python run_unreal_inference.py --mode rl ^
+    --bundle-dir artifacts/models/team01/v1 ^
+    --team-name team01 ^
+    --server-ip &lt;서버IP&gt; --server-port 9999
+
+<span class="tok-c"># 방법 C: RL + BT 하이브리드</span>
+python run_unreal_inference.py --mode hybrid ^
+    --bundle-dir artifacts/models/team01/v1 ^
+    --bt-dll AIP_BASE.dll --bt-rule-xml Rule_team01.xml ^
+    --hybrid-mode residual --residual-scale 0.35 ^
+    --team-name team01 --server-ip &lt;서버IP&gt;</pre></div>
+
+      <h3><span class="num">5</span>제출 전 로컬 검증</h3>
+      <div class="code-block"><button class="copy">Copy</button><pre>python run_local_dogfight.py ^
+    --ownship-backend rl ^
+    --ownship-bundle-dir artifacts/models/team01/v1 ^
+    --target-backend bt --save-log</pre></div>
+
+      <div class="callout warn"><span class="bar"></span><div class="body">
+        <strong>관측 계약 불일치는 silent failure가 된다</strong>
+        학습 시 <code>tactical16</code>으로 훈련했는데 제출 시 <code>OBSERVATION_MODULE</code>이 다른 module을
+        가리키면 policy 입력 차원이 어긋난다. <code>metadata.json</code>의 <code>obs_mode</code> /
+        <code>observation_module</code>과 <code>my_submission.py</code>의 두 값을 항상 함께 확인한다.
+      </div></div>
+      <div class="callout tip"><span class="bar"></span><div class="body">
+        <strong>BT 모드는 모델이 없어도 동작</strong>
+        <code>MODE = "bt"</code>면 <code>BUNDLE_DIR</code>을 보지 않는다. 학습이 늦어졌다면 우선 BT로 접속해
+        네트워크/팀명을 점검하고, 학습 후 <code>MODE = "rl"</code>로 전환한다.
+      </div></div>
+
+      <div class="checklist">
+        <h4>제출 직전 최종 체크리스트</h4>
+        <ul>
+          <li>실행 위치: <code>DogFightEnv\Release</code> 루트인지</li>
+          <li>DLL / Rule XML / aircraft / engine / scripts 자산 존재 여부</li>
+          <li><code>BUNDLE_DIR</code> 안에 <code>metadata.json</code>, <code>policy_weights.pkl.gz</code> 둘 다 있는지</li>
+          <li><code>OBSERVATION_MODE</code> / <code>OBSERVATION_MODULE</code>이 학습 metadata와 같은지</li>
+          <li><code>TEAM_NAME</code>이 운영 공지와 일치하는지</li>
+          <li><code>ACTION_REPEAT</code>가 학습 시 <code>step_ratio</code>와 같은지 (기본 6)</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- =============================== workflow =============================== -->
+    <section class="file" id="workflow">
+      <header>
+        <h2><span class="accent">★</span> 전체 워크플로</h2>
+        <span class="role">아이디어 → 실험 → 제출</span>
+      </header>
+      <ol>
+        <li><strong>가설 정의</strong> — 어떤 보상/관측/커리큘럼을 시험할지 한 줄로 적는다.</li>
+        <li><strong>학생 파일 수정</strong> — 변경 범위를 1개로 좁힌다 (예: <code>my_reward.py</code>만).</li>
+        <li><strong>dry-run</strong> — <code>python student\my_train.py --dry-run</code> 또는
+          <code>python scripts\run_experiment.py experiments\student_sac_mlp.yaml --dry-run</code>으로 호출 명령을 확인.</li>
+        <li><strong>smoke 1 iteration</strong> — <code>--iterations 1</code>로 실행 가능성/관측 shape/보상 반환/bundle 저장을 점검.</li>
+        <li><strong>본 학습</strong> — 안정화 후 <code>iterations</code>와 <code>train_batch_size</code>를 키운다.</li>
+        <li><strong>대시보드 비교</strong> — <code>artifacts/dashboard/&lt;run&gt;/metrics.jsonl</code>과 <code>config.json</code>을 같이 본다.</li>
+        <li><strong>로컬 검증</strong> — <code>run_local_dogfight.py</code>로 RL vs BT 한 경기를 돌려 실패 원인을 본다.</li>
+        <li><strong>Unreal 제출</strong> — <code>my_submission.py</code> 또는 <code>run_unreal_inference.py</code>로 서버에 접속.</li>
+      </ol>
+    </section>
+
+    <!-- =============================== faq =============================== -->
+    <section class="file" id="faq">
+      <header>
+        <h2><span class="accent">?</span> 자주 묻는 질문</h2>
+        <span class="role">FAQ</span>
+      </header>
+      <details class="faq">
+        <summary>관측 차원을 바꿨는데 기존 bundle을 이어 쓸 수 있나요?</summary>
+        <div class="answer">
+          <p>아니요. <code>OBSERVATION_SIZE</code>가 바뀌면 policy network 입력 차원이 바뀌어
+            <code>--restore-checkpoint</code> 또는 <code>--init-bundle</code>로 이어 학습할 수 없습니다.</p>
+          <p>같은 모듈 안에서 feature 순서만 살짝 바뀐 경우에도 weight는 호환되지 않습니다.
+            새 <code>output-tag</code>로 처음부터 학습하세요.</p>
+        </div>
+      </details>
+      <details class="faq">
+        <summary>my_train.py에서 자체적으로 RLlib을 호출해도 되나요?</summary>
+        <div class="answer">
+          <p>권장하지 않습니다. wrapper의 핵심은 dashboard, record, bundle/native checkpoint 저장 같은 공통 인프라를
+            본체 <code>train_rllib.py</code>에 위임하는 것입니다. 직접 호출하면 metadata가 비거나,
+            대시보드에서 보이지 않거나, bundle이 누락될 수 있습니다.</p>
+        </div>
+      </details>
+      <details class="faq">
+        <summary>학습이 멈춘 자리에서 이어 학습하려면?</summary>
+        <div class="answer">
+          <p>방식이 세 가지로 다릅니다.</p>
+          <p><code>--restore-checkpoint</code>: policy + optimizer + replay buffer를 모두 복원해
+            중단된 학습을 그대로 재개합니다.</p>
+          <p><code>--init-bundle</code>: policy weight만 시드로 사용하고 optimizer는 새로 시작합니다.
+            좋은 정책을 시드로 새 실험을 시작할 때 씁니다.</p>
+          <p>커리큘럼 학습은 <code>--resume</code>으로 stage/iteration을 이어갑니다 (curriculum_state.json 기준).</p>
+          <p>저장 여부와 주기는 YAML의 <code>save_lightweight_bundle</code>,
+            <code>lightweight_bundle_frequency</code>, <code>save_native_checkpoint</code>,
+            <code>native_checkpoint_frequency</code>에서 따로 조정합니다.</p>
+        </div>
+      </details>
+      <details class="faq">
+        <summary>BT만 제출하고 싶은데 my_submission.py를 바꾸지 않아도 되나요?</summary>
+        <div class="answer">
+          <p><code>MODE = "bt"</code>로 두고 <code>BT_DLL</code> / <code>BT_RULE_XML</code>만 팀 파일로 바꾸면 됩니다.
+            <code>BUNDLE_DIR</code>은 BT 모드에서는 사용되지 않습니다.</p>
+        </div>
+      </details>
+      <details class="faq">
+        <summary>대시보드에서 어떤 metric부터 봐야 하나요?</summary>
+        <div class="answer">
+          <p>승률(<code>ep_win_rate</code>)만 보지 말고 <code>ep_reward_mean</code>, <code>ep_crash_rate</code>,
+            <code>ep_min_distance</code>, <code>ep_wez_steps</code>를 함께 봅니다.
+            "왜 졌는가"는 종료 사유(<code>end_condition</code>)를 보면 더 명확합니다.</p>
+        </div>
+      </details>
+      <details class="faq">
+        <summary>YAML 템플릿과 my_train.py 중 무엇을 써야 하나요?</summary>
+        <div class="answer">
+          <p>둘 다 같은 본체를 호출합니다. <strong>YAML 템플릿</strong>은 실험 조건을 파일로 보존하기 좋고
+            (<code>experiments/student_*_template.yaml</code>), <strong>my_train.py</strong>는 자주 바꾸는 설정을
+            Python dict로 빠르게 조정할 때 편합니다. 보통 학기 중에는 YAML로 정식 실험을 기록하고,
+            새 아이디어를 빠르게 돌릴 때만 my_train.py를 씁니다.</p>
+        </div>
+      </details>
+    </section>
+
+    <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:40px;">
+      AIP 경진대회 매뉴얼 rev5 · Release/student/ 작성 가이드 · 2026-05-14 기준
+    </p>
+  </main>
+</div>
+
+<script>
+(function() {
+  // Copy buttons
+  document.querySelectorAll('.code-block .copy').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var pre = btn.parentElement.querySelector('pre');
+      var text = pre.innerText;
+      navigator.clipboard.writeText(text).then(function(){
+        btn.textContent = 'Copied!';
+        btn.classList.add('done');
+        setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1400);
+      }).catch(function(){
+        btn.textContent = '직접 복사하세요';
+        setTimeout(function(){ btn.textContent = 'Copy'; }, 1800);
+      });
+    });
+  });
+
+  // Active nav link based on scroll
+  var sections = Array.from(document.querySelectorAll('section.file, .diagram-card'));
+  var navLinks = Array.from(document.querySelectorAll('.nav-link'));
+  function setActive() {
+    var top = window.scrollY + 120;
+    var current = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].offsetTop <= top) current = sections[i];
+    }
+    var id = current ? current.id : '';
+    navLinks.forEach(function(a){
+      a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+    });
+  }
+  window.addEventListener('scroll', setActive, { passive: true });
+  setActive();
+
+  // Search filter
+  var search = document.getElementById('search');
+  search.addEventListener('input', function(){
+    var q = search.value.trim().toLowerCase();
+    sections.forEach(function(sec){
+      if (!q) { sec.classList.remove('dimmed'); return; }
+      var hay = sec.innerText.toLowerCase();
+      sec.classList.toggle('dimmed', hay.indexOf(q) === -1);
+    });
+    navLinks.forEach(function(a){
+      if (!q) { a.classList.remove('dimmed'); return; }
+      var target = document.querySelector(a.getAttribute('href'));
+      a.classList.toggle('dimmed', target ? target.classList.contains('dimmed') : false);
+    });
+  });
+})();
+</script>
+</body>
+</html>

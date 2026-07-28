@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Engagement Log & Dashboard Guide</title>
+<style>
+:root {
+  --bg: #F4F6FA;
+  --paper: #FFFFFF;
+  --ink: #1B2733;
+  --muted: #54606C;
+  --faint: #DCE2EA;
+  --navy: #21295C;
+  --deep: #065A82;
+  --teal: #1C7293;
+  --cyan: #2BB3D2;
+  --green: #1F8A5F;
+  --amber: #D08A2C;
+  --coral: #F96167;
+  --code-bg: #0E1726;
+  --code-fg: #E6EDF3;
+  --shadow: 0 1px 2px rgba(13, 38, 75, 0.06), 0 8px 24px rgba(13, 38, 75, 0.08);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+body {
+  font-family: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo",
+               "Noto Sans KR", "Nanum Gothic", "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--deep); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, kbd { font-family: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace; }
+.shell { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: 100vh; }
+.sidebar {
+  position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+  background: var(--navy); color: #C7D6E2; padding: 24px 20px;
+}
+.main { padding: 36px 56px 120px; max-width: 1120px; }
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; color: #fff; }
+.badge {
+  width: 36px; height: 36px; border-radius: 18px; background: var(--cyan);
+  display: grid; place-items: center; color: var(--navy); font-weight: 700;
+  font-family: "Cascadia Mono", monospace;
+}
+.brand .title { font-weight: 700; font-size: 16px; line-height: 1.25; }
+.brand .subtitle { font-size: 12px; color: #9DB6C9; }
+.nav-group {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+  color: #7E91A8; margin: 14px 6px 6px;
+}
+.nav-link {
+  display: block; padding: 8px 12px; color: #C7D6E2; border-radius: 8px;
+  font-size: 14px; line-height: 1.3;
+}
+.nav-link:hover { background: rgba(255,255,255,0.05); text-decoration: none; }
+.nav-link.active { background: var(--deep); color: #fff; }
+.hero {
+  background: linear-gradient(135deg, var(--navy) 0%, #1A2148 62%, var(--deep) 100%);
+  color: #fff; padding: 36px; border-radius: 18px; box-shadow: var(--shadow);
+  margin-bottom: 28px;
+}
+.hero h1 { margin: 0 0 6px; font-size: 30px; line-height: 1.2; }
+.hero p { margin: 0 0 14px; color: #C7D6E2; max-width: 800px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16);
+  color: #E8F0F7; padding: 4px 10px; border-radius: 999px; font-size: 13px;
+  font-family: "Cascadia Mono", monospace;
+}
+section.file {
+  background: var(--paper); border-radius: 18px; box-shadow: var(--shadow);
+  padding: 28px 32px; margin-bottom: 28px; scroll-margin-top: 18px;
+}
+section.file > header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px;
+  border-bottom: 1px solid var(--faint); padding-bottom: 14px; margin-bottom: 18px;
+}
+section.file h2 {
+  margin: 0; font-size: 26px; color: var(--ink); font-family: "Cascadia Mono", monospace;
+}
+section.file h2 .accent { color: var(--deep); }
+section.file .role {
+  color: var(--muted); font-size: 14px; padding: 4px 10px;
+  background: var(--bg); border-radius: 999px;
+}
+section.file h3 {
+  font-size: 16px; color: var(--teal); margin: 22px 0 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+section.file h3 .num {
+  display: inline-grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--teal); color: #fff;
+  font-size: 12px; font-weight: 700; font-family: "Cascadia Mono", monospace;
+}
+.code-block {
+  position: relative; background: var(--code-bg); color: var(--code-fg);
+  border-radius: 12px; padding: 18px 22px; margin: 6px 0 12px;
+  font-size: 14px; line-height: 1.65; overflow-x: auto;
+}
+.code-block pre { margin: 0; white-space: pre; }
+.code-block .copy {
+  position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.08);
+  color: #E6EDF3; border: 1px solid rgba(255,255,255,0.18); border-radius: 8px;
+  padding: 4px 10px; font-size: 12px; font-family: inherit; cursor: pointer;
+}
+.code-block .copy.done { background: var(--green); border-color: var(--green); color: #fff; }
+table.contract {
+  width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 14px;
+}
+table.contract th, table.contract td {
+  text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--faint);
+  vertical-align: top;
+}
+table.contract th { background: var(--navy); color: #fff; font-weight: 600; }
+table.contract tr:nth-child(even) td { background: #F8FAFC; }
+table.contract td code { background: var(--bg); padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+.callout {
+  border-radius: 12px; padding: 14px 16px 14px 18px; margin: 14px 0;
+  display: grid; grid-template-columns: 6px 1fr; gap: 14px; align-items: start;
+}
+.callout > .bar { width: 6px; border-radius: 3px; align-self: stretch; min-height: 100%; }
+.callout > .body { font-size: 14px; }
+.callout > .body strong { display: block; margin-bottom: 4px; }
+.callout.tip { background: #ECF6F9; }
+.callout.tip .bar { background: var(--teal); }
+.callout.tip .body strong { color: var(--teal); }
+.callout.warn { background: #FFF1F2; }
+.callout.warn .bar { background: var(--coral); }
+.callout.warn .body strong { color: var(--coral); }
+.callout.note { background: #F3FAF4; }
+.callout.note .bar { background: var(--green); }
+.callout.note .body strong { color: var(--green); }
+.checklist {
+  background: var(--bg); border: 1px solid var(--faint); border-radius: 12px;
+  padding: 16px 20px; margin: 16px 0;
+}
+.checklist h4 { margin: 0 0 8px; color: var(--navy); }
+.checklist ul { list-style: none; padding: 0; margin: 0; }
+.checklist li { padding: 6px 0; font-size: 14px; }
+.checklist li::before { content: "☐  "; color: var(--teal); font-weight: 700; }
+details.faq {
+  border: 1px solid var(--faint); border-radius: 12px;
+  margin: 8px 0; padding: 0 14px; background: var(--paper);
+}
+details.faq[open] { background: #FBFCFE; }
+details.faq summary {
+  list-style: none; cursor: pointer; padding: 12px 0;
+  font-weight: 600; color: var(--ink);
+}
+details.faq summary::-webkit-details-marker { display: none; }
+details.faq .answer { padding: 4px 0 14px; font-size: 14px; color: var(--ink); }
+.muted { color: var(--muted); }
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; }
+  .main { padding: 24px 18px 80px; }
+  .hero { padding: 26px 22px; border-radius: 14px; }
+  section.file { padding: 22px 18px; border-radius: 14px; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="badge">LOG</div>
+      <div>
+        <div class="title">Engagement Log</div>
+        <div class="subtitle">CSV Replay / Dashboard</div>
+      </div>
+    </div>
+    <div class="nav-group">Guide</div>
+    <a class="nav-link active" href="#overview">개요</a>
+    <a class="nav-link" href="#yaml">YAML 설정</a>
+    <a class="nav-link" href="#cases">YAML 케이스</a>
+    <a class="nav-link" href="#save-log">--save-log 케이스</a>
+    <a class="nav-link" href="#outputs">출력 경로</a>
+    <a class="nav-link" href="#dashboard">대시보드 연결</a>
+    <a class="nav-link" href="#checklist">점검 목록</a>
+  </aside>
+
+  <main class="main">
+    <div class="hero" id="overview">
+      <h1>Engagement Log와 Dashboard 연결 가이드</h1>
+      <p>
+        학습 중 교전 replay CSV를 남기는 <code>engagement_log</code> 설정,
+        로컬 교전 검증용 <code>--save-log</code>, 그리고 통합 대시보드의
+        <code>Training</code>/<code>Replay</code> 탭 연결 방법을 한 번에 정리합니다.
+      </p>
+      <div class="chips">
+        <span class="chip">experiments/*.yaml</span>
+        <span class="chip">run_local_dogfight.py --save-log</span>
+        <span class="chip">tools/dashboard.py</span>
+      </div>
+    </div>
+
+    <section class="file" id="yaml">
+      <header>
+        <h2><span class="accent">1.</span> YAML에서 engagement_log 켜기</h2>
+        <span class="role">학습 중 CSV replay 생성</span>
+      </header>
+
+      <p>
+        사용자가 말하는 engage log는 실험 YAML의 <code>engagement_log</code> 섹션입니다.
+        <code>scripts/run_experiment.py</code>가 이 섹션을 읽어
+        <code>train_rllib.py</code>의 <code>--engagement-log-*</code> 옵션으로 변환합니다.
+      </p>
+
+      <h3><span class="num">1</span>기본 설정 블록</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>dashboard:
+  enabled: true
+  logdir: artifacts/dashboard
+
+engagement_log:
+  enabled: true
+  interval: 10
+  steps: 600
+  episodes: 1
+  print: true</pre></div>
+
+      <table class="contract">
+        <thead>
+          <tr><th>키</th><th>의미</th><th>권장 사용</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>dashboard.enabled</code></td>
+            <td>학습 지표를 <code>metrics.jsonl</code>로 남길지 결정</td>
+            <td>대시보드 Training 탭을 볼 계획이면 <code>true</code></td>
+          </tr>
+          <tr>
+            <td><code>dashboard.logdir</code></td>
+            <td>대시보드 지표 루트</td>
+            <td>기본값은 <code>artifacts/dashboard</code></td>
+          </tr>
+          <tr>
+            <td><code>engagement_log.enabled</code></td>
+            <td>학습 중 별도 평가 교전을 실행해 Tacview CSV 쌍 저장</td>
+            <td>Replay 탭으로 정책 궤적을 보고 싶으면 <code>true</code></td>
+          </tr>
+          <tr>
+            <td><code>interval</code></td>
+            <td>N iteration마다 replay 저장</td>
+            <td>짧은 실험은 1~5, 긴 실험은 10~50</td>
+          </tr>
+          <tr>
+            <td><code>steps</code></td>
+            <td>replay episode당 최대 step 수</td>
+            <td>빠른 확인은 120~300, 궤적 확인은 600 이상</td>
+          </tr>
+          <tr>
+            <td><code>episodes</code></td>
+            <td>저장 시점마다 몇 개 episode를 남길지</td>
+            <td>일반적으로 1, 분산 확인은 2~3</td>
+          </tr>
+          <tr>
+            <td><code>print</code></td>
+            <td>콘솔에 replay 요약 출력</td>
+            <td>로그가 많으면 <code>false</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <div class="bar"></div>
+        <div class="body">
+          <strong>판단 근거</strong>
+          <code>engagement_log</code>는 RLlib 학습 EnvRunner와 별도로 짧은 평가 환경을 만들어
+          현재 actor의 교전 궤적을 저장합니다. replay buffer나 learner batch에는 직접 영향을 주지 않지만,
+          추가 시뮬레이션을 돌리므로 너무 촘촘하게 켜면 학습 시간이 늘어납니다.
+        </div>
+      </div>
+    </section>
+
+    <section class="file" id="cases">
+      <header>
+        <h2><span class="accent">2.</span> YAML 케이스별 예시</h2>
+        <span class="role">실험 목적별 설정</span>
+      </header>
+
+      <h3><span class="num">1</span>빠른 smoke: 매 iteration, 짧게 저장</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>engagement_log:
+  enabled: true
+  interval: 1
+  steps: 120
+  episodes: 1
+  print: true</pre></div>
+
+      <h3><span class="num">2</span>기본 학습 모니터링: 10 iteration마다 저장</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>engagement_log:
+  enabled: true
+  interval: 10
+  steps: 600
+  episodes: 1
+  print: true</pre></div>
+
+      <h3><span class="num">3</span>긴 학습: 저장 빈도를 낮추고 조용히 기록</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>engagement_log:
+  enabled: true
+  interval: 50
+  steps: 900
+  episodes: 1
+  print: false</pre></div>
+
+      <h3><span class="num">4</span>분산 확인: 저장 시점마다 여러 episode</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>engagement_log:
+  enabled: true
+  interval: 20
+  steps: 600
+  episodes: 3
+  print: true</pre></div>
+
+      <h3><span class="num">5</span>Replay 저장 끄기</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>engagement_log:
+  enabled: false</pre></div>
+
+      <h3><span class="num">6</span>YAML 실행 전 dry-run으로 옵션 변환 확인</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe scripts\run_experiment.py `
+  experiments\student_sac_mlp.yaml `
+  --dry-run</pre></div>
+
+      <div class="callout note">
+        <div class="bar"></div>
+        <div class="body">
+          <strong>dry-run에서 확인할 것</strong>
+          출력 argv에 <code>--engagement-log-interval</code>,
+          <code>--engagement-log-steps</code>, <code>--engagement-log-episodes</code>,
+          <code>--dashboard-logdir</code>가 원하는 값으로 들어갔는지 확인합니다.
+        </div>
+      </div>
+    </section>
+
+    <section class="file" id="save-log">
+      <header>
+        <h2><span class="accent">3.</span> --save-log 로컬 CSV 생성 케이스</h2>
+        <span class="role">학습 후 단일 교전 복기</span>
+      </header>
+
+      <p>
+        <code>--save-log</code>는 <code>run_local_dogfight.py</code>가 episode를 정상적으로
+        끝낸 뒤 <code>env.make_tacviewLog()</code>를 호출해 ownship CSV, target CSV,
+        summary JSON을 저장하는 옵션입니다. 기본 저장 위치는 환경 설정의
+        <code>artifacts_dir</code>이며 Release 기본값은 <code>artifacts/logs</code>입니다.
+      </p>
+
+      <h3><span class="num">1</span>학습한 RL ownship vs BT target</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe run_local_dogfight.py `
+  --ownship-backend rl `
+  --ownship-bundle-dir artifacts\models\team01\sac_mlp_v1 `
+  --target-backend bt `
+  --target-bt-dll AIP_BASE_target.dll `
+  --save-log</pre></div>
+
+      <h3><span class="num">2</span>BT vs BT: DLL/Rule XML 단독 확인</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe run_local_dogfight.py `
+  --ownship-backend bt `
+  --ownship-bt-dll AIP_BASE.dll `
+  --target-backend bt `
+  --target-bt-dll AIP_BASE_target.dll `
+  --bt-rule-xml Rule_forTraining.xml `
+  --save-log</pre></div>
+
+      <h3><span class="num">3</span>RL vs fixed: 정책 기본 조종 확인</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe run_local_dogfight.py `
+  --ownship-backend rl `
+  --ownship-bundle-dir artifacts\models\team01\sac_mlp_v1 `
+  --target-backend fixed `
+  --max-engage-time 120 `
+  --save-log</pre></div>
+
+      <h3><span class="num">4</span>Hybrid vs BT: residual/blend/switch 확인</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe run_local_dogfight.py `
+  --ownship-backend hybrid `
+  --ownship-bundle-dir artifacts\models\team01\sac_mlp_v1 `
+  --target-backend bt `
+  --hybrid-mode residual `
+  --residual-scale 0.35 `
+  --save-log</pre></div>
+
+      <h3><span class="num">5</span>custom observation bundle 검증</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe run_local_dogfight.py `
+  --ownship-backend rl `
+  --ownship-bundle-dir artifacts\models\team01\sac_mlp_v1 `
+  --target-backend bt `
+  --observation-mode custom `
+  --observation-module student.my_observation `
+  --save-log</pre></div>
+
+      <h3><span class="num">6</span>RL vs RL: 두 bundle 비교</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe run_local_dogfight.py `
+  --ownship-backend rl `
+  --ownship-bundle-dir artifacts\models\team01\sac_mlp_v1 `
+  --target-backend rl `
+  --target-bundle-dir artifacts\models\team01\ppo_mlp_v1 `
+  --save-log</pre></div>
+
+      <div class="callout warn">
+        <div class="bar"></div>
+        <div class="body">
+          <strong>주의</strong>
+          <code>--save-log</code>는 정상 episode loop가 끝난 뒤 로그를 씁니다.
+          DLL access violation, provider build 실패, 강제 종료처럼 <code>finally</code> 정리 전에
+          프로세스가 죽는 경우에는 마지막 CSV가 생성되지 않을 수 있습니다.
+        </div>
+      </div>
+    </section>
+
+    <section class="file" id="outputs">
+      <header>
+        <h2><span class="accent">4.</span> 로그 출력 경로</h2>
+        <span class="role">어디에 무엇이 생기는가</span>
+      </header>
+
+      <table class="contract">
+        <thead>
+          <tr><th>생성 방식</th><th>주요 파일</th><th>용도</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>학습 기본 CSV</td>
+            <td><code>artifacts/logs/&lt;output-name&gt;/&lt;output-tag&gt;/training_log.csv</code></td>
+            <td>iteration별 reward, custom metric, learner metric 확인</td>
+          </tr>
+          <tr>
+            <td>대시보드 지표</td>
+            <td><code>artifacts/dashboard/&lt;output-name&gt;_&lt;output-tag&gt;/metrics.jsonl</code></td>
+            <td>통합 대시보드 <code>Training</code> 탭에서 읽는 지표</td>
+          </tr>
+          <tr>
+            <td>학습 중 engagement replay</td>
+            <td><code>artifacts/logs/&lt;output-name&gt;/&lt;output-tag&gt;/engagement_replays/</code></td>
+            <td>iteration별 짧은 평가 교전 CSV replay</td>
+          </tr>
+          <tr>
+            <td>engagement replay index</td>
+            <td><code>replay_index.csv</code>, <code>replay_index.jsonl</code></td>
+            <td>iteration, episode, reward, end_condition, CSV 경로 요약</td>
+          </tr>
+          <tr>
+            <td>로컬 <code>--save-log</code></td>
+            <td><code>artifacts/logs/*_ownship_(F-16)[Blue].csv</code><br><code>artifacts/logs/*_target_(F-16)[Red].csv</code><br><code>artifacts/logs/*_summary.json</code></td>
+            <td>단일 로컬 교전 복기</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="code-block"><button class="copy">copy</button><pre>artifacts/
+├── dashboard/
+│   └── team01_sac_mlp_v1/
+│       ├── metrics.jsonl
+│       └── config.json
+└── logs/
+    └── team01/
+        └── sac_mlp_v1/
+            ├── training_log.csv
+            ├── policy_probe.csv
+            └── engagement_replays/
+                ├── replay_index.csv
+                ├── replay_index.jsonl
+                └── iter_000010/
+                    └── episode_00/
+                        ├── *_ownship_(F-16)[Blue].csv
+                        ├── *_target_(F-16)[Red].csv
+                        └── *_summary.json</pre></div>
+    </section>
+
+    <section class="file" id="dashboard">
+      <header>
+        <h2><span class="accent">5.</span> 대시보드 로그 뷰어 연결</h2>
+        <span class="role">Training + Replay</span>
+      </header>
+
+      <h3><span class="num">1</span>학습 지표와 replay를 함께 보기</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe tools\dashboard.py `
+  --training-logdir artifacts\dashboard `
+  --logdir artifacts\logs\team01\sac_mlp_v1\engagement_replays `
+  --default-tab replay `
+  --port 7860</pre></div>
+      <p>브라우저에서 <code>http://127.0.0.1:7860</code>을 열고 상단 탭을 전환합니다.</p>
+
+      <h3><span class="num">2</span>로컬 --save-log 결과만 보기</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe tools\dashboard.py `
+  --logdir artifacts\logs `
+  --default-tab replay `
+  --port 7860</pre></div>
+
+      <h3><span class="num">3</span>Training 탭을 기본으로 열기</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe tools\dashboard.py `
+  --training-logdir artifacts\dashboard `
+  --logdir artifacts\logs `
+  --default-tab training `
+  --port 7860</pre></div>
+
+      <h3><span class="num">4</span>포트 충돌 시 다른 포트 사용</h3>
+      <div class="code-block"><button class="copy">copy</button><pre>cd DogFightEnv\Release
+C:\Users\USER\anaconda3\envs\aip\python.exe tools\dashboard.py `
+  --training-logdir artifacts\dashboard `
+  --logdir artifacts\logs `
+  --default-tab replay `
+  --port 7861</pre></div>
+
+      <div class="callout tip">
+        <div class="bar"></div>
+        <div class="body">
+          <strong>탭별 입력</strong>
+          <code>Training</code> 탭은 <code>metrics.jsonl</code>을 읽고,
+          <code>Replay</code> 탭은 Blue/Red CSV 쌍을 찾습니다. 학습 중 저장한 replay는
+          <code>engagement_replays</code> 폴더를, 로컬 <code>--save-log</code>는
+          <code>artifacts/logs</code> 폴더를 <code>--logdir</code>로 지정하면 됩니다.
+        </div>
+      </div>
+    </section>
+
+    <section class="file" id="checklist">
+      <header>
+        <h2><span class="accent">6.</span> 점검 목록</h2>
+        <span class="role">로그가 안 보일 때</span>
+      </header>
+
+      <div class="checklist">
+        <h4>YAML / 학습</h4>
+        <ul>
+          <li><code>engagement_log.enabled: true</code>인지 확인한다.</li>
+          <li><code>interval</code>이 전체 iteration보다 너무 크지 않은지 확인한다.</li>
+          <li><code>scripts/run_experiment.py ... --dry-run</code>에서 engagement 옵션이 생성되는지 확인한다.</li>
+          <li><code>dashboard.enabled: true</code>이고 <code>dashboard.logdir</code>가 대시보드 실행 경로와 같은지 확인한다.</li>
+        </ul>
+      </div>
+
+      <div class="checklist">
+        <h4>CSV / Replay</h4>
+        <ul>
+          <li>Blue ownship CSV와 Red target CSV가 같은 폴더에 쌍으로 있는지 확인한다.</li>
+          <li><code>--logdir</code>가 CSV 파일이 들어 있는 상위 폴더를 가리키는지 확인한다.</li>
+          <li>학습 engagement replay는 <code>engagement_replays</code>를, 로컬 로그는 <code>artifacts/logs</code>를 우선 확인한다.</li>
+          <li>episode가 정상 종료되지 않고 프로세스가 죽은 경우 <code>--save-log</code> CSV가 없을 수 있다.</li>
+        </ul>
+      </div>
+
+      <details class="faq" open>
+        <summary>Q. dashboard.enabled와 engagement_log.enabled는 같은 기능인가?</summary>
+        <div class="answer">
+          <p>아닙니다. <code>dashboard.enabled</code>는 학습 scalar 지표를 <code>metrics.jsonl</code>로 남기는 설정이고,
+          <code>engagement_log.enabled</code>는 별도 평가 교전을 돌려 Replay용 CSV를 저장하는 설정입니다.</p>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>Q. --save-log와 engagement_log는 언제 구분해서 쓰나?</summary>
+        <div class="answer">
+          <p><code>engagement_log</code>는 학습 중 주기적으로 정책 궤적을 저장할 때 사용합니다.
+          <code>--save-log</code>는 학습이 끝난 bundle을 로컬에서 한 번 붙여 보고, 그 단일 episode를 복기할 때 사용합니다.</p>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>Q. replay가 대시보드에 안 뜨면 무엇부터 보나?</summary>
+        <div class="answer">
+          <p>먼저 <code>--logdir</code> 아래에 <code>*_ownship_(F-16)[Blue].csv</code>와
+          <code>*_target_(F-16)[Red].csv</code>가 있는지 확인합니다. 그 다음 포트 주소
+          <code>http://127.0.0.1:7860/?tab=replay</code>를 직접 열어 봅니다.</p>
+        </div>
+      </details>
+    </section>
+  </main>
+</div>
+
+<script>
+document.querySelectorAll(".copy").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const block = button.closest(".code-block");
+    const text = block ? block.innerText.replace(/^copy\\n?/, "") : "";
+    try {
+      await navigator.clipboard.writeText(text.trimEnd());
+      button.textContent = "copied";
+      button.classList.add("done");
+      setTimeout(() => {
+        button.textContent = "copy";
+        button.classList.remove("done");
+      }, 1200);
+    } catch {
+      button.textContent = "select";
+    }
+  });
+});
+
+const links = Array.from(document.querySelectorAll(".nav-link"));
+const sections = links
+  .map((link) => document.querySelector(link.getAttribute("href")))
+  .filter(Boolean);
+const activate = () => {
+  let current = sections[0];
+  for (const section of sections) {
+    if (section.getBoundingClientRect().top < 140) current = section;
+  }
+  links.forEach((link) => {
+    link.classList.toggle("active", link.getAttribute("href") === `#${current.id}`);
+  });
+};
+document.addEventListener("scroll", activate, { passive: true });
+activate();
+</script>
+</body>
+</html>

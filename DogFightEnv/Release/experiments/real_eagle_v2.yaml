@@ -1,0 +1,64 @@
+# real_eagle v2 - clean curriculum restart from stage 0 (2026-07-11)
+#
+# Why a fresh tag instead of resuming v1: stages 0-8 of v1 trained against a
+# moving target - the pre-Batch-A-D BT tree, the wrong spawn geometry
+# (10000ft vs the real 2000-3000ft main match), and a silently-inert `position`
+# reward term (all fixed 2026-07-08 through 2026-07-11). v2 starts clean against
+# the fully-fixed tree/reward/geometry so the whole run has one consistent
+# lineage. v1's artifacts are left intact under
+# artifacts/curriculum/real_eagle/v1 for reference / comparison.
+#
+# NOTE: keep this file pure ASCII - run_experiment.py prints the notes to a
+# cp949 (Korean) console, which crashes on en-dashes / arrows / other Unicode.
+#
+# run:
+#   python scripts\run_experiment.py experiments\real_eagle_v2.yaml
+# dry-run:
+#   python scripts\run_experiment.py experiments\real_eagle_v2.yaml --dry-run
+
+name: real_eagle_v2
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: v2
+
+env:
+  observation_mode: custom
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  observation_module: student.my_observation
+
+algo:
+  name: sac
+  framework: torch
+  lr: 3.0e-4
+  gamma: 0.99
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  replay_buffer_capacity: 100000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+runtime:
+  num_env_runners: 2
+  resume: false                     # fresh start from stage 0 (no prior v2 state)
+  # start_stage: 0                  # default is stage 0; uncomment to skip ahead
+
+policy_probe:
+  enabled: true
+  interval: 10
+  steps: 4
+  print: true
+
+notes: >
+  real_eagle v2 (2026-07-11). Clean restart from stage 0 against the fully-fixed
+  native BT (BT tactics Batches A-D plus the Task_Evade/LowYoYo/SingleSideOffset
+  release-cap fixes), corrected 2500ft main-match spawn geometry, phase-aware
+  WEZ plus phase-aware pursuit shaping, and the now-active position reward term.

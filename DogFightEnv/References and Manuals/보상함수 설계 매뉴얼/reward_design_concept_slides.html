@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>DogFight 보상 함수 설계 가이드 · 공중전 기하 개념</title>
+<style>
+  :root {
+    --bg: #050a18;
+    --bg-grad: radial-gradient(ellipse at top, #0b1729 0%, #050a18 60%);
+    --panel: rgba(15, 23, 42, 0.85);
+    --line: #1e293b;
+    --grid: rgba(56, 189, 248, 0.08);
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --gold: #fbbf24;
+    --blue: #60a5fa;
+    --blue-dim: #1d4ed8;
+    --red: #f87171;
+    --red-dim: #b91c1c;
+    --los: #fbbf24;
+    --good: #22c55e;
+    --bad: #ef4444;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg-grad);
+    color: var(--text);
+    font-family: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    overflow: hidden;
+  }
+
+  /* ===== Slide chrome ===== */
+  .deck {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    padding: 56px 80px 100px;
+    display: none;
+    flex-direction: column;
+    animation: fadeIn 0.35s ease;
+  }
+  .slide.active { display: flex; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .slide-tag {
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .slide h1 {
+    margin: 0 0 14px;
+    font-size: 36px;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+  }
+  .slide h1 .accent { color: var(--accent); }
+  .slide h1 .gold   { color: var(--gold); }
+
+  .slide .lead {
+    font-size: 16px;
+    color: var(--muted);
+    margin: 0 0 24px;
+    max-width: 900px;
+    line-height: 1.55;
+  }
+
+  /* ===== Body grid ===== */
+  .body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: 36px;
+    align-items: stretch;
+    min-height: 0;
+  }
+  .body.single { grid-template-columns: 1fr; }
+
+  .scene {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .scene::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+  .scene svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    position: relative;
+    z-index: 1;
+  }
+
+  .notes {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .notes h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    color: var(--accent-2);
+  }
+  .notes p { margin: 4px 0; line-height: 1.65; font-size: 15px; }
+  .notes ul { margin: 4px 0 0 20px; padding: 0; }
+  .notes li { margin: 6px 0; line-height: 1.55; font-size: 14px; }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-right: 6px;
+  }
+  .pill.good { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+  .pill.bad  { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
+  .pill.info { background: rgba(56, 189, 248, 0.18); color: #7dd3fc; }
+  .pill.gold { background: rgba(251, 191, 36, 0.18); color: #fde68a; }
+
+  .card {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 10px;
+    padding: 12px 16px;
+  }
+  .card.good { border-left-color: var(--good); }
+  .card.bad  { border-left-color: var(--bad); }
+  .card.gold { border-left-color: var(--gold); }
+  .card h4 {
+    margin: 0 0 6px;
+    font-size: 14px;
+    color: var(--accent);
+    letter-spacing: 0.3px;
+  }
+  .card.good h4 { color: #86efac; }
+  .card.bad  h4 { color: #fca5a5; }
+  .card.gold h4 { color: #fde68a; }
+  .card p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text); }
+
+  code, .mono {
+    font-family: "JetBrains Mono", "Consolas", monospace;
+    background: rgba(148, 163, 184, 0.14);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #f1f5f9;
+  }
+
+  /* SVG label tooltips */
+  .svg-label {
+    font-family: "Segoe UI", sans-serif;
+    font-size: 12px;
+    fill: #e2e8f0;
+  }
+  .svg-label.muted { fill: var(--muted); font-size: 11px; }
+  .svg-label.los   { fill: var(--gold); font-weight: 600; }
+  .svg-label.angle { fill: var(--accent); font-weight: 600; font-size: 13px; }
+  .svg-label.blue  { fill: var(--blue); }
+  .svg-label.red   { fill: var(--red); }
+
+  /* ===== Nav ===== */
+  .nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    background: rgba(5, 10, 24, 0.92);
+    border-top: 1px solid var(--line);
+    backdrop-filter: blur(8px);
+    z-index: 10;
+  }
+  .nav-title {
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+  .nav-title b { color: var(--text); font-weight: 600; }
+  .nav-buttons { display: flex; align-items: center; gap: 16px; }
+  .nav button {
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: var(--accent);
+    width: 40px;
+    height: 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.15s;
+  }
+  .nav button:hover {
+    background: rgba(56, 189, 248, 0.25);
+    border-color: var(--accent);
+  }
+  .nav .counter {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--muted);
+    font-size: 13px;
+    min-width: 60px;
+    text-align: center;
+  }
+  .nav .counter b { color: var(--accent); }
+
+  /* ===== Cover ===== */
+  .cover-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 40px;
+  }
+  .cover-text h1 { font-size: 52px; line-height: 1.1; margin-bottom: 16px; }
+  .cover-text .sub { font-size: 18px; color: var(--muted); margin-bottom: 24px; }
+  .cover-text .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .cover-text .tag {
+    padding: 6px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--accent);
+    background: rgba(56, 189, 248, 0.08);
+  }
+
+  /* ===== Reward table ===== */
+  table.reward {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  table.reward th, table.reward td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+  table.reward th {
+    background: rgba(56, 189, 248, 0.08);
+    color: var(--accent);
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  table.reward td:nth-child(3) { color: var(--muted); }
+  .sign-pos { color: #86efac; font-weight: 700; }
+  .sign-neg { color: #fca5a5; font-weight: 700; }
+
+  /* checklist */
+  ul.checklist { list-style: none; padding: 0; margin: 0; }
+  ul.checklist li {
+    padding: 10px 14px 10px 38px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    position: relative;
+    font-size: 14px;
+  }
+  ul.checklist li::before {
+    content: "✓";
+    position: absolute;
+    left: 14px;
+    top: 8px;
+    color: var(--good);
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  .quad-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .quad-cell {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: rgba(15, 23, 42, 0.6);
+  }
+  .quad-cell .h { font-size: 12px; color: var(--accent); margin-bottom: 4px; font-weight: 600; }
+  .quad-cell .b { font-size: 13px; }
+  .quad-cell.ideal { border-color: var(--good); background: rgba(34, 197, 94, 0.08); }
+  .quad-cell.danger { border-color: var(--bad); background: rgba(239, 68, 68, 0.08); }
+</style>
+</head>
+<body>
+
+<!-- ====== SVG SYMBOL DEFS ====== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- F-16 top-down silhouette pointing in +x direction -->
+    <symbol id="f16-blue" viewBox="-40 -28 90 56" overflow="visible">
+      <!-- main delta wing -->
+      <polygon points="-16,-22 25,-3 25,3 -16,22 -22,18 -22,-18"
+               fill="#3b82f6" stroke="#1e3a8a" stroke-width="0.6" stroke-linejoin="round"/>
+      <!-- fuselage -->
+      <polygon points="-26,-3 30,-2.5 38,-1 40,0 38,1 30,2.5 -26,3 -29,2 -29,-2"
+               fill="#93c5fd" stroke="#1e3a8a" stroke-width="0.6" stroke-linejoin="round"/>
+      <!-- pitot -->
+      <line x1="40" y1="0" x2="44" y2="0" stroke="#1e3a8a" stroke-width="0.8"/>
+      <!-- horizontal stabs -->
+      <polygon points="-23,-3 -32,-12 -25,-10 -22,-3" fill="#2563eb" stroke="#1e3a8a" stroke-width="0.4"/>
+      <polygon points="-23,3 -32,12 -25,10 -22,3" fill="#2563eb" stroke="#1e3a8a" stroke-width="0.4"/>
+      <!-- vertical tail (projected) -->
+      <polygon points="-22,-1.5 -30,0 -22,1.5" fill="#1e40af"/>
+      <!-- canopy -->
+      <ellipse cx="18" cy="0" rx="6" ry="2.5" fill="#1e293b"/>
+      <!-- exhaust -->
+      <circle cx="-27" cy="0" r="1.6" fill="#0f172a"/>
+    </symbol>
+
+    <symbol id="f16-red" viewBox="-40 -28 90 56" overflow="visible">
+      <polygon points="-16,-22 25,-3 25,3 -16,22 -22,18 -22,-18"
+               fill="#ef4444" stroke="#7f1d1d" stroke-width="0.6" stroke-linejoin="round"/>
+      <polygon points="-26,-3 30,-2.5 38,-1 40,0 38,1 30,2.5 -26,3 -29,2 -29,-2"
+               fill="#fca5a5" stroke="#7f1d1d" stroke-width="0.6" stroke-linejoin="round"/>
+      <line x1="40" y1="0" x2="44" y2="0" stroke="#7f1d1d" stroke-width="0.8"/>
+      <polygon points="-23,-3 -32,-12 -25,-10 -22,-3" fill="#dc2626" stroke="#7f1d1d" stroke-width="0.4"/>
+      <polygon points="-23,3 -32,12 -25,10 -22,3" fill="#dc2626" stroke="#7f1d1d" stroke-width="0.4"/>
+      <polygon points="-22,-1.5 -30,0 -22,1.5" fill="#991b1b"/>
+      <ellipse cx="18" cy="0" rx="6" ry="2.5" fill="#1e293b"/>
+      <circle cx="-27" cy="0" r="1.6" fill="#0f172a"/>
+    </symbol>
+
+    <!-- arrow markers -->
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#60a5fa"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f87171"/>
+    </marker>
+    <marker id="arrow-gold" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#38bdf8"/>
+    </marker>
+  </defs>
+</svg>
+
+<div class="deck">
+
+<!-- ============ SLIDE 1: COVER ============ -->
+<section class="slide active" data-title="표지">
+  <div class="cover-body">
+    <div class="cover-text">
+      <div class="slide-tag">DogFightEnv · Student Guide</div>
+      <h1>공중전 <span class="accent">기하 개념</span><br/>·<br/>보상 함수 <span class="gold">설계 직관</span></h1>
+      <div class="sub">
+        보상 함수를 잘 짜기 위해 먼저 알아야 할 공중전 기하의 핵심 개념을<br/>
+        F-16 탑뷰 그림으로 정성적으로 익혀봅시다.
+      </div>
+      <div class="tags">
+        <div class="tag">LOS</div>
+        <div class="tag">ATA · AA · HCA</div>
+        <div class="tag">WEZ</div>
+        <div class="tag">Closure</div>
+        <div class="tag">Energy</div>
+        <div class="tag">One-circle / Two-circle</div>
+      </div>
+    </div>
+    <div class="scene" style="height:420px;">
+      <svg viewBox="0 0 500 380" preserveAspectRatio="xMidYMid meet">
+        <!-- ownship (blue) lower-left, target (red) upper-right -->
+        <g transform="translate(120,260) rotate(-35)">
+          <use href="#f16-blue" x="-45" y="-30" width="90" height="60"/>
+        </g>
+        <g transform="translate(380,110) rotate(155)">
+          <use href="#f16-red" x="-45" y="-30" width="90" height="60"/>
+        </g>
+        <!-- LOS dashed line -->
+        <line x1="135" y1="245" x2="365" y2="125"
+              stroke="#fbbf24" stroke-width="2" stroke-dasharray="6 5" opacity="0.85"/>
+        <text x="245" y="178" class="svg-label los" text-anchor="middle">LOS</text>
+        <!-- Range R as the ownship-target distance, drawn parallel to LOS -->
+        <line x1="135" y1="245" x2="158" y2="272"
+              stroke="#38bdf8" stroke-width="1" opacity="0.45"/>
+        <line x1="365" y1="125" x2="388" y2="152"
+              stroke="#38bdf8" stroke-width="1" opacity="0.45"/>
+        <line x1="158" y1="272" x2="388" y2="152"
+              stroke="#38bdf8" stroke-width="1.6" opacity="0.75"
+              marker-start="url(#arrow-accent)" marker-end="url(#arrow-accent)"/>
+        <text x="278" y="225" class="svg-label angle" text-anchor="middle">Range R</text>
+        <!-- altitude tag -->
+        <text x="395" y="100" class="svg-label red">target</text>
+        <text x="110" y="290" class="svg-label blue">ownship</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 2: COORDINATE FRAME ============ -->
+<section class="slide" data-title="좌표계 기준">
+  <div class="slide-tag">01 · Coordinate Frame</div>
+  <h1>모든 보상은 <span class="accent">어떤 좌표계</span>에서 시작된다</h1>
+  <p class="lead">월드 좌표계(NED)와 기체 좌표계(Body)는 같은 물리량을 다른 의미로 해석합니다. 보상에서 "전방"이라는 단어가 무엇을 가리키는지 항상 명확히 합시다.</p>
+  <div class="body">
+    <div class="scene">
+      <svg viewBox="0 0 500 360" preserveAspectRatio="xMidYMid meet">
+        <!-- world NED axes -->
+        <g transform="translate(80,80)">
+          <line x1="0" y1="0" x2="100" y2="0" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <text x="108" y="5" class="svg-label angle">North (N, +x)</text>
+          <line x1="0" y1="0" x2="0" y2="100" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <text x="-5" y="118" class="svg-label angle" text-anchor="end">East (E, +y)</text>
+          <circle cx="0" cy="0" r="5" fill="#38bdf8"/>
+          <text x="0" y="-12" class="svg-label" text-anchor="middle">Down (D, +z, 화면 안쪽)</text>
+          <text x="-50" y="-30" class="svg-label muted" font-weight="700">World · NED</text>
+        </g>
+        <!-- body frame on aircraft -->
+        <g transform="translate(340,260) rotate(-30)">
+          <use href="#f16-blue" x="-50" y="-32" width="100" height="64"/>
+          <line x1="0" y1="0" x2="80" y2="0" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrow-gold)"/>
+          <text x="86" y="5" class="svg-label los">forward (x_b)</text>
+          <line x1="0" y1="0" x2="0" y2="50" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrow-gold)"/>
+          <text x="6" y="60" class="svg-label los">right (y_b)</text>
+        </g>
+        <text x="335" y="180" class="svg-label muted" font-weight="700">Body frame · 기체축</text>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="card">
+        <h4>World NED</h4>
+        <p>지구 기준 절대 위치/속도. 거리·고도·상대 위치 벡터 <code>(n, e, d)</code>는 보통 NED에서 계산합니다.</p>
+      </div>
+      <div class="card">
+        <h4>Body Frame</h4>
+        <p>기수 방향이 곧 <code>x_b</code>, 오른쪽 날개가 <code>y_b</code>. "내가 적을 향하고 있는가?"라는 질문은 본질적으로 Body frame에서의 방향 비교입니다.</p>
+      </div>
+      <div class="card gold">
+        <h4>보상 설계 팁</h4>
+        <p>"앞·뒤·왼쪽·오른쪽"은 항상 <b>누구의 Body frame인지</b> 명시하세요. 같은 공간 벡터도 ownship body와 target body에서 다른 의미가 됩니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 3: DISTANCE & ALTITUDE ============ -->
+<section class="slide" data-title="거리·고도">
+  <div class="slide-tag">02 · Range &amp; Altitude</div>
+  <h1>두 기체의 <span class="accent">상대 위치</span>: 거리와 고도차</h1>
+  <p class="lead">상대 위치 벡터 <code>(Δn, Δe, Δd)</code>에서 수평거리 <code>R</code>과 고도차 <code>Δh</code>가 나옵니다. 둘은 의미가 다르므로 보상에서도 분리해 다루는 것이 좋습니다.</p>
+  <div class="body">
+    <div class="scene">
+      <svg viewBox="0 0 500 360" preserveAspectRatio="xMidYMid meet">
+        <!-- side view: ground line -->
+        <line x1="30" y1="320" x2="470" y2="320" stroke="#475569" stroke-width="1" stroke-dasharray="2 4"/>
+        <text x="35" y="335" class="svg-label muted">ground</text>
+        <!-- ownship at lower-left -->
+        <g transform="translate(120,250)">
+          <use href="#f16-blue" x="-40" y="-25" width="80" height="50"/>
+        </g>
+        <!-- target at upper-right, higher -->
+        <g transform="translate(380,130)">
+          <use href="#f16-red" x="-40" y="-25" width="80" height="50"/>
+        </g>
+        <!-- altitude lines -->
+        <line x1="120" y1="250" x2="120" y2="320" stroke="#60a5fa" stroke-dasharray="3 3" stroke-width="1"/>
+        <line x1="380" y1="130" x2="380" y2="320" stroke="#f87171" stroke-dasharray="3 3" stroke-width="1"/>
+        <!-- delta h -->
+        <line x1="450" y1="130" x2="450" y2="250" stroke="#fbbf24" stroke-width="2"
+              marker-start="url(#arrow-gold)" marker-end="url(#arrow-gold)"/>
+        <text x="458" y="195" class="svg-label los">Δh</text>
+        <line x1="380" y1="130" x2="450" y2="130" stroke="#475569" stroke-dasharray="2 3" stroke-width="1"/>
+        <line x1="120" y1="250" x2="450" y2="250" stroke="#475569" stroke-dasharray="2 3" stroke-width="1"/>
+        <!-- range R (horizontal) -->
+        <line x1="120" y1="285" x2="380" y2="285" stroke="#38bdf8" stroke-width="2"
+              marker-start="url(#arrow-accent)" marker-end="url(#arrow-accent)"/>
+        <text x="250" y="305" class="svg-label angle" text-anchor="middle">Range R (수평거리)</text>
+        <!-- slant distance -->
+        <line x1="120" y1="250" x2="380" y2="130" stroke="#fbbf24" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.7"/>
+        <text x="240" y="180" class="svg-label muted">slant distance</text>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="card">
+        <h4>수평거리 R</h4>
+        <p>NE 평면 거리. 사격·추적·교전 단계 판단의 1차 기준. 너무 멀면 교전 자체가 의미 없고, 너무 가까우면 충돌·오버슈트 위험.</p>
+      </div>
+      <div class="card">
+        <h4>고도차 Δh</h4>
+        <p>위에 있으면 위치에너지 우위. 강하 기동으로 운동에너지로 전환 가능합니다.</p>
+      </div>
+      <div class="card good">
+        <h4>보상 팁 · 거리 shaping</h4>
+        <p>"<b>가까울수록</b> 좋다"고만 짜면 충돌을 학습할 위험이 있습니다. 적정 사거리 밴드를 두고 그 안에 들어왔을 때 보상을 주거나, 너무 가까울 때 페널티를 부과하세요.</p>
+      </div>
+      <div class="card good">
+        <h4>보상 팁 · 고도 shaping</h4>
+        <p>최저고도 페널티는 강하게, 고도 우위는 약하게. 강한 고도 보상은 정찰 비행을 부추길 수 있습니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 4: LOS ============ -->
+<section class="slide" data-title="LOS">
+  <div class="slide-tag">03 · Line of Sight</div>
+  <h1>LOS — 모든 각도의 <span class="gold">기준선</span></h1>
+  <p class="lead">LOS는 단순히 "내가 적을 보는 직선"이지만, ATA·AA·HCA 등 거의 모든 전술 각도의 기준이 됩니다. 보상에서 LOS 자체보다 LOS를 이용해 만든 각도가 더 자주 쓰입니다.</p>
+  <div class="body">
+    <div class="scene">
+      <svg viewBox="0 0 500 360" preserveAspectRatio="xMidYMid meet">
+        <!-- ownship lower-left, heading roughly upper-right -->
+        <g transform="translate(130,250) rotate(-25)">
+          <use href="#f16-blue" x="-50" y="-30" width="100" height="60"/>
+        </g>
+        <!-- target upper-right -->
+        <g transform="translate(380,120) rotate(180)">
+          <use href="#f16-red" x="-50" y="-30" width="100" height="60"/>
+        </g>
+        <!-- LOS -->
+        <line x1="155" y1="237" x2="355" y2="135" stroke="#fbbf24" stroke-width="2.5"
+              stroke-dasharray="7 5" opacity="0.9"
+              marker-end="url(#arrow-gold)"/>
+        <text x="250" y="178" class="svg-label los" text-anchor="middle">LOS (ownship → target)</text>
+        <!-- reverse LOS (target → ownship) -->
+        <line x1="355" y1="135" x2="155" y2="237" stroke="#f87171" stroke-width="1.5"
+              stroke-dasharray="3 4" opacity="0.5"
+              marker-end="url(#arrow-red)"/>
+        <text x="290" y="218" class="svg-label red">reverse LOS</text>
+        <!-- range label -->
+        <text x="135" y="280" class="svg-label blue">ownship</text>
+        <text x="395" y="105" class="svg-label red">target</text>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="card">
+        <h4>LOS 정의</h4>
+        <p>ownship 위치에서 target 위치로 그은 직선·방향벡터. 거꾸로 target에서 ownship으로 보면 reverse LOS.</p>
+      </div>
+      <div class="card">
+        <h4>왜 중요한가</h4>
+        <p>ATA는 "내 기수와 LOS의 각도", AA는 "적의 꼬리축과 reverse LOS의 각도"입니다. LOS가 없으면 어떤 각도도 정의되지 않습니다.</p>
+      </div>
+      <div class="card gold">
+        <h4>보상 팁</h4>
+        <p>LOS 자체에 직접 보상을 주는 일은 드뭅니다. 대신 LOS rate (LOS가 회전하는 속도)는 추적·요격 안정성을 보는 지표가 됩니다. LOS rate가 0에 가까우면 비례항법 같은 추적이 잘 되고 있다는 신호.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 5: ATA ============ -->
+<section class="slide" data-title="ATA">
+  <div class="slide-tag">04 · Antenna Train Angle</div>
+  <h1>ATA — <span class="accent">"내가 적을 향하고 있는가?"</span></h1>
+  <p class="lead">내 기수 방향 벡터와 LOS 사이의 각도. ATA가 작을수록 내 기수가 적을 정확히 가리키고 있다는 뜻입니다. 사격·미사일 유도의 기본 조건.</p>
+  <div class="body">
+    <div class="scene">
+      <svg viewBox="0 0 500 360" preserveAspectRatio="xMidYMid meet">
+        <!-- ownship at center-left, heading right (no rotation for clarity) -->
+        <g transform="translate(140,220)">
+          <use href="#f16-blue" x="-50" y="-30" width="100" height="60"/>
+          <!-- nose direction -->
+          <line x1="60" y1="0" x2="280" y2="0" stroke="#60a5fa" stroke-width="2"
+                stroke-dasharray="5 4" marker-end="url(#arrow-blue)"/>
+          <text x="200" y="-8" class="svg-label blue">기수 방향 (Body x)</text>
+        </g>
+        <!-- target upper-right -->
+        <g transform="translate(390,110) rotate(160)">
+          <use href="#f16-red" x="-40" y="-25" width="80" height="50"/>
+        </g>
+        <!-- LOS from ownship to target -->
+        <line x1="200" y1="220" x2="380" y2="120" stroke="#fbbf24" stroke-width="2.2"
+              stroke-dasharray="6 4" marker-end="url(#arrow-gold)"/>
+        <text x="270" y="155" class="svg-label los">LOS</text>
+        <!-- ATA arc -->
+        <path d="M 270 220 A 70 70 0 0 0 261 187" fill="none"
+              stroke="#38bdf8" stroke-width="2"/>
+        <text x="282" y="200" class="svg-label angle">ATA</text>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="card good">
+        <h4>ATA ≈ 0 (작다)</h4>
+        <p><span class="pill good">유리</span> 내 기수가 적을 정확히 가리키는 상태. 사격·록온·추적에 가장 좋은 자세.</p>
+      </div>
+      <div class="card bad">
+        <h4>ATA ≈ ±π (크다)</h4>
+        <p><span class="pill bad">불리</span> 적이 내 후방에 있다. 시야 밖이고 무기 발사도 불가능.</p>
+      </div>
+      <div class="card gold">
+        <h4>보상 컴포넌트 아이디어</h4>
+        <p>· "추격 의도"를 주고 싶을 때: <code>cos(ATA)</code>는 -1~+1로 부드럽게 변하는 좋은 shaping 신호.<br/>
+        · "각도가 작을수록 보상"을 직설적으로: <code>-|ATA|</code> 또는 가우시안 모양 보상.</p>
+      </div>
+      <div class="card">
+        <h4>주의</h4>
+        <p>ATA만 보상하면 적이 등 뒤로 빠져도 그저 빙빙 도는 정책이 학습될 수 있습니다. 항상 거리·AA와 함께 짜는 것이 안전합니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 6: AA ============ -->
+<section class="slide" data-title="AA">
+  <div class="slide-tag">05 · Aspect Angle</div>
+  <h1>AA — <span class="accent">"내가 적의 뒤에 있는가?"</span></h1>
+  <p class="lead">적 기수의 <b>꼬리 방향</b>(반대 방향)과 reverse LOS(적→나) 사이의 각도. AA가 작을수록 내가 적의 6시(꼬리) 방향에 가까이 있다는 뜻입니다.</p>
+  <div class="body">
+    <div class="scene">
+      <svg viewBox="0 0 500 360" preserveAspectRatio="xMidYMid meet">
+        <!-- target at upper-right, heading right -->
+        <g transform="translate(360,130)">
+          <use href="#f16-red" x="-50" y="-30" width="100" height="60"/>
+          <!-- target heading -->
+          <line x1="60" y1="0" x2="120" y2="0" stroke="#f87171" stroke-width="2"
+                stroke-dasharray="5 4" marker-end="url(#arrow-red)"/>
+          <text x="80" y="-8" class="svg-label red">적 기수</text>
+          <!-- target tail axis -->
+          <line x1="-60" y1="0" x2="-160" y2="0" stroke="#fb923c" stroke-width="2"
+                stroke-dasharray="5 4" marker-end="url(#arrow-gold)"/>
+          <text x="-130" y="-8" class="svg-label" fill="#fb923c">꼬리축 (tail axis)</text>
+        </g>
+        <!-- ownship at lower-left -->
+        <g transform="translate(140,260) rotate(-25)">
+          <use href="#f16-blue" x="-50" y="-30" width="100" height="60"/>
+        </g>
+        <!-- reverse LOS: target -> ownship -->
+        <line x1="335" y1="143" x2="165" y2="247" stroke="#fbbf24" stroke-width="2"
+              stroke-dasharray="5 4" marker-end="url(#arrow-gold)"/>
+        <text x="245" y="180" class="svg-label los">reverse LOS</text>
+        <!-- AA arc near target -->
+        <path d="M 290 130 A 70 70 0 0 0 308 168" fill="none"
+              stroke="#38bdf8" stroke-width="2"/>
+        <text x="280" y="170" class="svg-label angle">AA</text>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="card good">
+        <h4>AA ≈ 0 (작다)</h4>
+        <p><span class="pill good">유리</span> 내가 적의 정확한 6시(후방)에 있다. 적은 나를 보기 어렵고 무기로 겨누기도 어렵습니다.</p>
+      </div>
+      <div class="card bad">
+        <h4>AA ≈ ±π (크다)</h4>
+        <p><span class="pill bad">불리</span> 적이 정면으로 나를 향하고 있다. 적의 무기 사거리 안일 가능성 높음.</p>
+      </div>
+      <div class="card gold">
+        <h4>보상 컴포넌트 아이디어</h4>
+        <p>· "꼬리 추격 위치"를 보상: <code>cos(AA)</code>는 6시(AA=0)에서 +1, 정면(AA=π)에서 -1. 매끄러운 shaping에 적합.<br/>
+        · "정면 교전 회피"를 강하게: AA가 클 때 음의 페널티를 더해 head-on 회피 학습.</p>
+      </div>
+      <div class="card">
+        <h4>ATA와의 차이</h4>
+        <p>ATA는 <b>내 시점</b>(내 기수 vs LOS), AA는 <b>적 시점</b>(적 꼬리축 vs reverse LOS). 둘 다 작아야 진짜 "6시 뒤에서 정조준" 상태입니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 7: HCA ============ -->
+<section class="slide" data-title="HCA">
+  <div class="slide-tag">06 · Heading Crossing Angle</div>
+  <h1>HCA — 두 기체의 <span class="accent">진행 방향</span>은 얼마나 어긋나 있나?</h1>
+  <p class="lead">두 기체의 기수 방향 벡터 사이의 각도. 위치와 무관하게 "같은 방향으로 가는가, 정면으로 마주 보고 있는가"를 알려줍니다.</p>
+  <div class="body">
+    <div class="scene">
+      <svg viewBox="0 0 500 360" preserveAspectRatio="xMidYMid meet">
+        <!-- ownship -->
+        <g transform="translate(130,230) rotate(-10)">
+          <use href="#f16-blue" x="-50" y="-30" width="100" height="60"/>
+          <line x1="60" y1="0" x2="160" y2="0" stroke="#60a5fa" stroke-width="2"
+                stroke-dasharray="5 4" marker-end="url(#arrow-blue)"/>
+        </g>
+        <!-- target -->
+        <g transform="translate(350,140) rotate(45)">
+          <use href="#f16-red" x="-50" y="-30" width="100" height="60"/>
+          <line x1="60" y1="0" x2="160" y2="0" stroke="#f87171" stroke-width="2"
+                stroke-dasharray="5 4" marker-end="url(#arrow-red)"/>
+        </g>
+        <!-- HCA visualization: parallel transport target heading to ownship for visual comparison -->
+        <g transform="translate(320,290)">
+          <line x1="0" y1="0" x2="100" y2="-15" stroke="#60a5fa" stroke-width="1.5" opacity="0.7" marker-end="url(#arrow-blue)"/>
+          <line x1="0" y1="0" x2="80" y2="55" stroke="#f87171" stroke-width="1.5" opacity="0.7" marker-end="url(#arrow-red)"/>
+          <path d="M 50 0 A 50 50 0 0 1 40 30" fill="none" stroke="#38bdf8" stroke-width="2"/>
+          <text x="62" y="20" class="svg-label angle">HCA</text>
+          <text x="0" y="-22" class="svg-label muted">두 기수의 방향 비교</text>
+        </g>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="card good">
+        <h4>HCA ≈ 0</h4>
+        <p><span class="pill good">유리(추격)</span> 두 기체가 같은 방향으로 비행 중. 꼬리 추격 상태에 가깝습니다.</p>
+      </div>
+      <div class="card bad">
+        <h4>HCA ≈ ±π</h4>
+        <p><span class="pill bad">위험(head-on)</span> 두 기체가 정면으로 마주 보는 중. 정면 교전, 통과 후 누가 먼저 선회하느냐의 게임으로 들어갑니다.</p>
+      </div>
+      <div class="card">
+        <h4>HCA ≈ ±π/2</h4>
+        <p><span class="pill info">직교 교차</span> 흔히 "측면 교차"라 부르는 자세. 짧은 시간 LOS rate가 크게 변합니다.</p>
+      </div>
+      <div class="card gold">
+        <h4>보상 팁</h4>
+        <p>HCA는 ATA·AA에 비해 직접 보상 신호로 쓰이는 빈도는 낮지만, "추격 단계 진입 게이트" 같은 조건부 트리거로 쓰면 유용합니다. 예: HCA가 작아진 시점부터 추격 보상을 활성화.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 8: ATA × AA MATRIX ============ -->
+<section class="slide" data-title="ATA × AA">
+  <div class="slide-tag">07 · ATA × AA Matrix</div>
+  <h1>ATA × AA — 공중전 <span class="gold">4가지 전술 상황</span></h1>
+  <p class="lead">ATA와 AA의 크기 조합으로 거의 모든 1v1 자세가 분류됩니다. 보상 함수의 "방향성"은 결국 이 4분면 중 어디로 정책을 끌고 갈 것인지의 문제입니다.</p>
+  <div class="body">
+    <div class="scene">
+      <svg viewBox="0 0 500 400" preserveAspectRatio="xMidYMid meet">
+        <!-- axes -->
+        <line x1="80" y1="200" x2="450" y2="200" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-accent)"/>
+        <line x1="250" y1="370" x2="250" y2="40" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-accent)"/>
+        <text x="455" y="205" class="svg-label muted">ATA 大</text>
+        <text x="80" y="195" class="svg-label muted">ATA 小</text>
+        <text x="260" y="40" class="svg-label muted">AA 大</text>
+        <text x="260" y="380" class="svg-label muted">AA 小</text>
+
+        <!-- Quadrant 1: bottom-left (small ATA, small AA): IDEAL tail chase -->
+        <rect x="80" y="200" width="170" height="170" fill="rgba(34,197,94,0.08)" stroke="#22c55e" stroke-width="1.2" rx="6"/>
+        <g transform="translate(120,290)">
+          <use href="#f16-red" x="-30" y="-18" width="60" height="36"/>
+        </g>
+        <g transform="translate(195,290) rotate(0)">
+          <use href="#f16-blue" x="-30" y="-18" width="60" height="36"/>
+        </g>
+        <text x="165" y="335" class="svg-label" text-anchor="middle" fill="#86efac" font-weight="700">꼬리 추격 (IDEAL)</text>
+
+        <!-- Quadrant 2: top-left (small ATA, large AA): head-on -->
+        <rect x="80" y="40" width="170" height="160" fill="rgba(251,191,36,0.06)" stroke="#fbbf24" stroke-width="1.2" rx="6"/>
+        <g transform="translate(120,120) rotate(0)">
+          <use href="#f16-blue" x="-30" y="-18" width="60" height="36"/>
+        </g>
+        <g transform="translate(210,120) rotate(180)">
+          <use href="#f16-red" x="-30" y="-18" width="60" height="36"/>
+        </g>
+        <text x="165" y="178" class="svg-label" text-anchor="middle" fill="#fde68a" font-weight="700">정면 교전 (Head-On)</text>
+
+        <!-- Quadrant 3: bottom-right (large ATA, small AA): we got passed -->
+        <rect x="250" y="200" width="200" height="170" fill="rgba(56,189,248,0.05)" stroke="#38bdf8" stroke-width="1.2" rx="6"/>
+        <g transform="translate(290,290) rotate(180)">
+          <use href="#f16-blue" x="-30" y="-18" width="60" height="36"/>
+        </g>
+        <g transform="translate(380,290)">
+          <use href="#f16-red" x="-30" y="-18" width="60" height="36"/>
+        </g>
+        <text x="350" y="335" class="svg-label" text-anchor="middle" fill="#7dd3fc" font-weight="700">놓침 (오버슈트)</text>
+
+        <!-- Quadrant 4: top-right (large ATA, large AA): mutual disengage -->
+        <rect x="250" y="40" width="200" height="160" fill="rgba(148,163,184,0.06)" stroke="#64748b" stroke-width="1.2" rx="6"/>
+        <g transform="translate(295,120) rotate(180)">
+          <use href="#f16-blue" x="-30" y="-18" width="60" height="36"/>
+        </g>
+        <g transform="translate(390,120) rotate(0)">
+          <use href="#f16-red" x="-30" y="-18" width="60" height="36"/>
+        </g>
+        <text x="345" y="178" class="svg-label" text-anchor="middle" fill="#cbd5e1" font-weight="700">서로 등 돌림</text>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="quad-grid">
+        <div class="quad-cell ideal">
+          <div class="h">ATA 小 · AA 小 (이상)</div>
+          <div class="b">내가 적의 6시 뒤에서 정확히 가리키고 있음. 보상을 가장 크게 줄 영역.</div>
+        </div>
+        <div class="quad-cell">
+          <div class="h">ATA 小 · AA 大 (Head-On)</div>
+          <div class="b">정면 교전. 일순간 사격 기회는 있지만 통과 후 누가 먼저 선회하느냐가 관건.</div>
+        </div>
+        <div class="quad-cell">
+          <div class="h">ATA 大 · AA 小 (놓침)</div>
+          <div class="b">적이 내 등 뒤로 빠졌지만 내 기수는 다른 곳을 향함. 빠르게 회복 기동 필요.</div>
+        </div>
+        <div class="quad-cell danger">
+          <div class="h">ATA 大 · AA 大 (역전)</div>
+          <div class="b">적이 내 후방에서 내 꼬리를 추격 중. 가장 위험. 회피 기동 필요.</div>
+        </div>
+      </div>
+      <div class="card gold">
+        <h4>보상 설계 핵심</h4>
+        <p>두 각도를 한 번에 줄이도록 유도해야 합니다. 흔한 형태는 <code>w₁·cos(ATA) + w₂·cos(AA)</code>처럼 두 항을 더하는 방식. 두 항의 가중치를 어떻게 잡느냐가 정책 스타일을 결정합니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 9: WEZ ============ -->
+<section class="slide" data-title="WEZ">
+  <div class="slide-tag">08 · Weapon Engagement Zone</div>
+  <h1>WEZ — <span class="gold">무기가 닿는 원뿔</span></h1>
+  <p class="lead">WEZ는 "내 무기가 적을 명중시킬 수 있는 공간". 기수 정면을 중심으로 좁은 원뿔 모양이고, 적정 거리 범위가 있습니다. ATA·거리가 동시에 조건을 만족할 때만 WEZ 안.</p>
+  <div class="body">
+    <div class="scene">
+      <svg viewBox="0 0 500 360" preserveAspectRatio="xMidYMid meet">
+        <!-- ownship at center-left -->
+        <g transform="translate(130,200)">
+          <use href="#f16-blue" x="-50" y="-30" width="100" height="60"/>
+        </g>
+        <!-- WEZ cone shape (close range arc, far range arc) -->
+        <path d="M 130 200 L 350 130 A 250 250 0 0 1 350 270 Z"
+              fill="rgba(34,197,94,0.18)" stroke="#22c55e" stroke-width="1.5"/>
+        <!-- min range circle -->
+        <path d="M 130 200 m -50 0 a 50 50 0 1 0 100 0 a 50 50 0 1 0 -100 0"
+              fill="rgba(239,68,68,0.18)" stroke="#ef4444" stroke-width="1" stroke-dasharray="3 3"/>
+        <text x="130" y="205" class="svg-label" text-anchor="middle" fill="#fca5a5" font-size="11">너무 가까움</text>
+        <!-- target inside WEZ -->
+        <g transform="translate(290,190) rotate(160)">
+          <use href="#f16-red" x="-30" y="-18" width="60" height="36"/>
+        </g>
+        <text x="290" y="160" class="svg-label" text-anchor="middle" fill="#86efac" font-weight="700">WEZ 안</text>
+        <!-- target outside (far) -->
+        <g transform="translate(430,80) rotate(160)">
+          <use href="#f16-red" x="-25" y="-15" width="50" height="30"/>
+        </g>
+        <text x="430" y="60" class="svg-label" text-anchor="middle" fill="#fca5a5">너무 멀어 WEZ 밖</text>
+
+        <text x="245" y="335" class="svg-label muted" text-anchor="middle">기수 정면의 좁은 원뿔 (각도 조건) + 적정 거리 (사거리 조건)</text>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="card good">
+        <h4>WEZ 안</h4>
+        <p><span class="pill good">매우 유리</span> ATA 작음 + 적정 거리. 무기 발사 조건 충족. 가장 크게 보상받을 상황.</p>
+      </div>
+      <div class="card bad">
+        <h4>적의 WEZ 안에 내가</h4>
+        <p><span class="pill bad">위험</span> 거꾸로 내가 적의 사거리 안. 음의 보상을 강하게 부여하면 회피 기동을 학습.</p>
+      </div>
+      <div class="card gold">
+        <h4>보상 컴포넌트 아이디어</h4>
+        <p>· <b>이산형</b>: WEZ 안에 들어간 step마다 +small bonus, 적의 WEZ 안일 때 -small penalty.<br/>
+        · <b>연속형</b>: ATA·거리가 WEZ 조건에 얼마나 가까운지를 부드러운 함수(가우시안 등)로 만들면 sparse reward 문제 완화.</p>
+      </div>
+      <div class="card">
+        <h4>참고: 환경 기본값</h4>
+        <p>현재 DogFightEnv 기본 WEZ는 <code>각도 2°, 거리 500–3000ft</code>. 학생이 보상에서 사용하는 WEZ 정의와 환경 종료 판정 WEZ를 일치시킬지, 분리할지 의식적으로 선택하세요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 10: CLOSURE ============ -->
+<section class="slide" data-title="Closure">
+  <div class="slide-tag">09 · Closure / Range Rate</div>
+  <h1>Closure — 거리가 <span class="accent">빨라지나, 멀어지나</span></h1>
+  <p class="lead">두 기체의 거리 변화율. 접근 중이면 양의 Closure, 멀어지면 음의 Closure. 단순 거리보다 "추격 의지"를 더 잘 보여주는 신호입니다.</p>
+  <div class="body">
+    <div class="scene">
+      <svg viewBox="0 0 500 360" preserveAspectRatio="xMidYMid meet">
+        <!-- top scene: approaching -->
+        <g transform="translate(0,40)">
+          <text x="20" y="0" class="svg-label" fill="#86efac" font-weight="700">+ Closure (접근)</text>
+          <g transform="translate(110,40)">
+            <use href="#f16-blue" x="-40" y="-25" width="80" height="50"/>
+          </g>
+          <g transform="translate(360,40) rotate(180)">
+            <use href="#f16-red" x="-40" y="-25" width="80" height="50"/>
+          </g>
+          <line x1="160" y1="40" x2="220" y2="40" stroke="#22c55e" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <line x1="320" y1="40" x2="260" y2="40" stroke="#22c55e" stroke-width="2" marker-end="url(#arrow-accent)"/>
+          <text x="245" y="85" class="svg-label" text-anchor="middle" fill="#86efac">거리 감소 중</text>
+        </g>
+
+        <!-- bottom scene: separating -->
+        <g transform="translate(0,220)">
+          <text x="20" y="0" class="svg-label" fill="#fca5a5" font-weight="700">− Closure (이탈)</text>
+          <g transform="translate(110,40) rotate(180)">
+            <use href="#f16-blue" x="-40" y="-25" width="80" height="50"/>
+          </g>
+          <g transform="translate(360,40)">
+            <use href="#f16-red" x="-40" y="-25" width="80" height="50"/>
+          </g>
+          <line x1="160" y1="40" x2="100" y2="40" stroke="#ef4444" stroke-width="2" marker-end="url(#arrow-red)"/>
+          <line x1="320" y1="40" x2="380" y2="40" stroke="#ef4444" stroke-width="2" marker-end="url(#arrow-red)"/>
+          <text x="245" y="85" class="svg-label" text-anchor="middle" fill="#fca5a5">거리 증가 중</text>
+        </g>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="card">
+        <h4>Closure 정의</h4>
+        <p><code>dR/dt</code> 의 부호를 뒤집은 양 (혹은 그대로 쓰기도 함). 양수면 접근, 음수면 이탈. 단순히 거리 변화량을 step 단위로 차분해도 근사 가능.</p>
+      </div>
+      <div class="card good">
+        <h4>거리가 멀 때 + Closure</h4>
+        <p>"내가 적극적으로 따라가고 있다"는 신호. 학습 초기에 양의 보상을 주면 추격 학습이 잘 시작됩니다.</p>
+      </div>
+      <div class="card bad">
+        <h4>WEZ 안에서 너무 큰 + Closure</h4>
+        <p>오버슈트 위험. 적정 거리에서 너무 빨리 접근하면 사격 기회를 놓치고 적의 후방을 내주게 됩니다. 거리 밴드를 두고 그 안에선 Closure 보상을 줄이세요.</p>
+      </div>
+      <div class="card gold">
+        <h4>보상 팁</h4>
+        <p>"거리 감소량"보다 "<b>거리 × Closure</b>"가 의도와 더 맞을 때가 많습니다. 멀 때는 접근에 큰 보상, 가까울 때는 적게. 거리에 따라 Closure 보상의 게인을 조절하세요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 11: ENERGY ============ -->
+<section class="slide" data-title="Energy">
+  <div class="slide-tag">10 · Energy</div>
+  <h1>Energy — <span class="accent">위치에너지 + 운동에너지</span>의 합</h1>
+  <p class="lead">"내가 앞으로 어떤 기동을 할 수 있는가"의 잠재력. 고도가 높거나 속도가 빠르면 에너지가 많고, 그만큼 향후 기동 자유도가 큽니다.</p>
+  <div class="body">
+    <div class="scene">
+      <svg viewBox="0 0 500 360" preserveAspectRatio="xMidYMid meet">
+        <line x1="30" y1="320" x2="470" y2="320" stroke="#475569" stroke-width="1" stroke-dasharray="2 4"/>
+        <!-- high alt fast -->
+        <g transform="translate(140,90)">
+          <use href="#f16-blue" x="-50" y="-30" width="100" height="60"/>
+          <line x1="60" y1="0" x2="160" y2="0" stroke="#60a5fa" stroke-width="3" marker-end="url(#arrow-blue)"/>
+          <text x="115" y="-10" class="svg-label blue">큰 속도</text>
+        </g>
+        <line x1="140" y1="90" x2="140" y2="320" stroke="#60a5fa" stroke-dasharray="3 3"/>
+        <text x="50" y="200" class="svg-label blue" font-weight="700">높은 고도</text>
+        <text x="50" y="218" class="svg-label muted">→ 큰 PE</text>
+
+        <!-- low alt slow -->
+        <g transform="translate(380,270)">
+          <use href="#f16-red" x="-40" y="-25" width="80" height="50"/>
+          <line x1="50" y1="0" x2="80" y2="0" stroke="#f87171" stroke-width="2" marker-end="url(#arrow-red)"/>
+          <text x="60" y="-10" class="svg-label red">작은 속도</text>
+        </g>
+        <text x="430" y="285" class="svg-label red" font-weight="700">낮은 고도</text>
+        <text x="430" y="303" class="svg-label muted">→ 작은 PE+KE</text>
+
+        <text x="250" y="350" class="svg-label muted" text-anchor="middle">Specific Energy ≈ h + V² / (2g)</text>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="card">
+        <h4>에너지 우위의 의미</h4>
+        <p>에너지가 많으면 (1) 강하·가속으로 KE 폭발 가능, (2) 큰 G 기동 가능, (3) 도주·재접근 모두 자유. "다음 기회"를 만들어내는 자원입니다.</p>
+      </div>
+      <div class="card good">
+        <h4>+ Δ Energy</h4>
+        <p>에너지 우위 보상은 학습 초기에는 비행 안정성을 학습시키는 부드러운 신호로 작동합니다.</p>
+      </div>
+      <div class="card bad">
+        <h4>주의</h4>
+        <p>에너지 보상을 강하게 주면 "그냥 고고도에서 빙빙 도는 정책"이 학습될 수 있습니다. 추격·교전 보상보다 작은 가중치로 사용하세요.</p>
+      </div>
+      <div class="card gold">
+        <h4>보상 팁</h4>
+        <p>· 절대 에너지보다 <b>상대 에너지</b>(ownship − target)를 보상하면 의도가 또렷합니다.<br/>· 보상에 직접 넣지 않더라도, 종료 시 잔여 에너지를 마지막 보상에 더하면 효율 좋은 정책 학습이 가능.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 12: ONE-CIRCLE / TWO-CIRCLE ============ -->
+<section class="slide" data-title="One/Two-Circle">
+  <div class="slide-tag">11 · Turning Fight</div>
+  <h1>Head-On 통과 후 — <span class="accent">One-circle</span> vs <span class="gold">Two-circle</span></h1>
+  <p class="lead">정면 교차 직후 누가 어느 방향으로 선회하느냐에 따라 두 가지 흐름이 결정됩니다. 회전 반경이 작은 기체와 회전율이 높은 기체의 유불리가 갈립니다.</p>
+  <div class="body">
+    <div class="scene">
+      <svg viewBox="0 0 500 360" preserveAspectRatio="xMidYMid meet">
+        <!-- One-circle: both turn same direction (e.g., both right -> same circle) -->
+        <g transform="translate(0,30)">
+          <text x="20" y="0" class="svg-label gold" font-weight="700">One-Circle (같은 방향 선회)</text>
+          <circle cx="135" cy="80" r="55" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <g transform="translate(80,80) rotate(90)">
+            <use href="#f16-blue" x="-20" y="-12" width="40" height="24"/>
+          </g>
+          <g transform="translate(190,80) rotate(-90)">
+            <use href="#f16-red" x="-20" y="-12" width="40" height="24"/>
+          </g>
+          <text x="135" y="155" class="svg-label muted" text-anchor="middle">작은 회전반경이 유리</text>
+        </g>
+
+        <!-- Two-circle: turn opposite ways -->
+        <g transform="translate(280,30)">
+          <text x="20" y="0" class="svg-label" fill="#38bdf8" font-weight="700">Two-Circle (반대 방향 선회)</text>
+          <circle cx="80" cy="80" r="40" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <circle cx="180" cy="80" r="40" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <g transform="translate(80,40) rotate(0)">
+            <use href="#f16-blue" x="-20" y="-12" width="40" height="24"/>
+          </g>
+          <g transform="translate(180,40) rotate(180)">
+            <use href="#f16-red" x="-20" y="-12" width="40" height="24"/>
+          </g>
+          <text x="130" y="155" class="svg-label muted" text-anchor="middle">빠른 회전율이 유리</text>
+        </g>
+
+        <text x="250" y="280" class="svg-label" text-anchor="middle" fill="#e2e8f0">
+          F-16끼리 1:1이면 결국 비행기 능력보다 <tspan font-weight="700" fill="#fbbf24">조종(정책) 선택</tspan>이 더 중요해진다
+        </text>
+      </svg>
+    </div>
+    <div class="notes">
+      <div class="card">
+        <h4>One-Circle</h4>
+        <p>둘 다 같은 방향으로 선회 → 한 원 안에서 마주침. 회전 반경이 더 작은 기체가 먼저 적의 6시를 잡는다.</p>
+      </div>
+      <div class="card">
+        <h4>Two-Circle</h4>
+        <p>서로 반대 방향으로 선회 → 각자 다른 원. 회전율(turn rate)이 더 높은 기체가 먼저 다음 head-on에서 우위.</p>
+      </div>
+      <div class="card">
+        <h4>보상 팁</h4>
+        <p>turn rate / radius 자체를 보상에 직접 넣지는 마세요. ATA·AA·closure가 결과적으로 좋은 선회를 유도합니다. 다만 "긴 turn 중 ATA 변화량"을 게이트로 활용하면 head-on 후 회복을 학습시키는 데 도움이 됩니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 13: REWARD COMPONENT GUIDE ============ -->
+<section class="slide" data-title="보상 컴포넌트">
+  <div class="slide-tag">12 · Reward Recipe</div>
+  <h1>보상 컴포넌트 <span class="gold">정성적 가이드</span></h1>
+  <p class="lead">앞에서 본 모든 개념을 보상 함수에 매핑한 표입니다. 수치는 정성적 권장(부호와 상대 크기)만 표기합니다. 실제 값은 학생이 실험으로 조정.</p>
+  <div class="body single">
+    <table class="reward">
+      <thead>
+        <tr>
+          <th>컴포넌트</th>
+          <th>기반 개념</th>
+          <th>의도</th>
+          <th>권장 부호 · 강도</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>pursuit</b></td>
+          <td>ATA</td>
+          <td>"적을 향해 기수를 두라"</td>
+          <td><span class="sign-pos">+ 중</span> · <code>cos(ATA)</code> 권장</td>
+        </tr>
+        <tr>
+          <td><b>positioning</b></td>
+          <td>AA</td>
+          <td>"적의 6시 뒤로 가라"</td>
+          <td><span class="sign-pos">+ 중</span> · <code>cos(AA)</code> 권장</td>
+        </tr>
+        <tr>
+          <td><b>closure</b></td>
+          <td>거리 · Closure</td>
+          <td>"멀 때는 좁히고, 가까우면 유지"</td>
+          <td><span class="sign-pos">+ 약</span> · 거리 게인 함수 곁들이기</td>
+        </tr>
+        <tr>
+          <td><b>wez_bonus</b></td>
+          <td>WEZ 안 여부</td>
+          <td>"내 사거리 안 + 정조준"</td>
+          <td><span class="sign-pos">+ 강</span> · 이산형 step bonus</td>
+        </tr>
+        <tr>
+          <td><b>wez_threat</b></td>
+          <td>적의 WEZ 안에 내가</td>
+          <td>"적의 사거리에서 벗어나라"</td>
+          <td><span class="sign-neg">− 강</span> · 회피 학습 유도</td>
+        </tr>
+        <tr>
+          <td><b>altitude_safety</b></td>
+          <td>최저고도</td>
+          <td>"지면 충돌하지 마라"</td>
+          <td><span class="sign-neg">− 매우 강</span> · 종료 가까운 페널티</td>
+        </tr>
+        <tr>
+          <td><b>energy</b></td>
+          <td>Specific energy</td>
+          <td>"고도·속도 우위 유지"</td>
+          <td><span class="sign-pos">+ 약</span> · 강하면 회피 정책 위험</td>
+        </tr>
+        <tr>
+          <td><b>step</b></td>
+          <td>스텝 카운트</td>
+          <td>"우물쭈물하지 말고 결정해라"</td>
+          <td><span class="sign-neg">− 매우 약</span> · 매 step 작은 음수</td>
+        </tr>
+        <tr>
+          <td><b>damage</b></td>
+          <td>피해량 차이</td>
+          <td>"내가 맞히고, 안 맞아라"</td>
+          <td><span class="sign-pos">+ 큰</span> / <span class="sign-neg">− 큰</span></td>
+        </tr>
+        <tr>
+          <td><b>terminal_win</b></td>
+          <td>승리</td>
+          <td>"이기는 것 자체가 목적"</td>
+          <td><span class="sign-pos">+ 매우 큰</span> · 한 번만</td>
+        </tr>
+        <tr>
+          <td><b>terminal_lose</b></td>
+          <td>패배 · 추락 · 연료</td>
+          <td>"패배·추락은 절대 피해라"</td>
+          <td><span class="sign-neg">− 매우 큰</span> · 한 번만</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ SLIDE 14: CHECKLIST ============ -->
+<section class="slide" data-title="체크리스트">
+  <div class="slide-tag">13 · Final Checklist</div>
+  <h1>보상 설계 <span class="gold">체크리스트</span></h1>
+  <p class="lead">학습을 돌리기 전, 그리고 학습이 의도와 다르게 갈 때 다시 한 번 확인할 항목들입니다.</p>
+  <div class="body">
+    <div>
+      <ul class="checklist">
+        <li><b>부호가 명확한가?</b> 각 컴포넌트가 "왜 양수인지, 왜 음수인지" 한 문장으로 설명 가능한지.</li>
+        <li><b>단위가 일관된가?</b> 각도는 라디안인지 도(deg)인지, 거리는 ft인지 m인지. 컴포넌트끼리 크기 차이가 단위 때문은 아닌지.</li>
+        <li><b>상쇄 위험은 없는가?</b> ATA 보상과 AA 보상이 서로 반대 방향을 가리키는 자세는 없는지.</li>
+        <li><b>종료 보상이 step 보상에 비해 너무 크거나 작지 않은가?</b> 너무 크면 sparse, 너무 작으면 의미 없음.</li>
+        <li><b>안전 페널티(최저고도·연료)는 충분히 큰가?</b> 추락·연료고갈을 학습 초기에 회피하도록.</li>
+        <li><b>학습 초기에는 sparse, 후기에는 shaping?</b> 또는 그 반대? 의도가 분명한가.</li>
+        <li><b>Tacview Replay로 행동을 직접 확인했는가?</b> 보상 곡선만 보지 말고 실제 교전 모양이 의도와 맞는지.</li>
+      </ul>
+    </div>
+    <div class="notes">
+      <div class="card gold">
+        <h4>마무리</h4>
+        <p>좋은 보상 함수는 "사람이 가르치고 싶은 행동"과 "보상이 실제로 만드는 행동"이 일치하는 함수입니다. 그 일치 여부는 reward 그래프가 아니라 <b>실제 교전 궤적</b>에서만 보입니다.</p>
+        <p>이 슬라이드의 모든 개념은 그 일치성을 만들기 위한 <b>도구 상자</b>입니다. 어떤 도구를 언제 꺼낼지는 여러분의 설계 선택입니다. 즐거운 도그파이트가 되길!</p>
+      </div>
+      <div class="card">
+        <h4>다음 단계</h4>
+        <p>· <code>student/my_reward.py</code>에 컴포넌트별 함수를 짠다.<br/>
+           · 가중치를 <code>MY_REWARD_CONFIG</code>에 분리해 두면 비교 실험이 쉬워진다.<br/>
+           · 학습 후 <code>tools/dashboard.py</code>의 Replay 탭에서 교전을 눈으로 확인한다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<!-- ============ NAV ============ -->
+<div class="nav">
+  <div class="nav-title">DogFight 보상 함수 설계 가이드 · <b id="slide-title">표지</b></div>
+  <div class="nav-buttons">
+    <button id="prev" aria-label="이전 슬라이드">←</button>
+    <div class="counter"><b id="cur">1</b> / <span id="total">14</span></div>
+    <button id="next" aria-label="다음 슬라이드">→</button>
+  </div>
+</div>
+
+<script>
+  (function() {
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const cur = document.getElementById('cur');
+    const total = document.getElementById('total');
+    const titleEl = document.getElementById('slide-title');
+    let idx = 0;
+    total.textContent = slides.length;
+
+    function show(i) {
+      idx = Math.max(0, Math.min(slides.length - 1, i));
+      slides.forEach((s, k) => s.classList.toggle('active', k === idx));
+      cur.textContent = idx + 1;
+      const t = slides[idx].dataset.title || '';
+      titleEl.textContent = t;
+    }
+
+    document.getElementById('prev').addEventListener('click', () => show(idx - 1));
+    document.getElementById('next').addEventListener('click', () => show(idx + 1));
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault(); show(idx + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault(); show(idx - 1);
+      } else if (e.key === 'Home') {
+        show(0);
+      } else if (e.key === 'End') {
+        show(slides.length - 1);
+      }
+    });
+
+    show(0);
+  })();
+</script>
+
+</body>
+</html>
