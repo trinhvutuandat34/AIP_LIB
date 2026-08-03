@@ -186,7 +186,12 @@ def _build_two_circle_v4(start_index: int) -> list[CurriculumStage]:
                     "(v4 5-alpha ladder)."
                 ),
                 target_mode="behavior_tree",
-                episode_step_limit=18000,
+                # 12000 = 200s @ 60Hz (COMPETITION_RULES.md Sec5 match length).
+                # Was 18000 (300s) -- the one v4 stage the 2026-07-16 episode-length
+                # correction missed while every sibling (obfm/habfm/full_dogfight)
+                # already used 12000; training the tie-break rehearsal at 300s teaches
+                # pacing/energy management against the wrong match clock. Fixed 2026-08-01.
+                episode_step_limit=12000,
                 max_iterations=200,
                 checkpoint_interval=10,
                 reward_overrides=dict(_TWO_CIRCLE_V4_REWARD_OVERRIDES),

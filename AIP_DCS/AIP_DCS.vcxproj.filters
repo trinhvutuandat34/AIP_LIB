@@ -372,6 +372,9 @@
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_Notch.h">
       <Filter>BehaviorTree\Task</Filter>
     </ClInclude>
+    <ClInclude Include="BehaviorTree\BT_Content\Task\Task_GunTrack.h">
+      <Filter>BehaviorTree\Task</Filter>
+    </ClInclude>
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_OneCircleFight.h">
       <Filter>BehaviorTree\Task</Filter>
     </ClInclude>
@@ -624,6 +627,9 @@
       <Filter>BehaviorTree\Task</Filter>
     </ClCompile>
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_VerticalScissors.cpp">
+      <Filter>BehaviorTree\Task</Filter>
+    </ClCompile>
+    <ClCompile Include="BehaviorTree\BT_Content\Task\Task_GunTrack.cpp">
       <Filter>BehaviorTree\Task</Filter>
     </ClCompile>
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_pure.cpp">

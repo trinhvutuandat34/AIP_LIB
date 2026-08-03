@@ -948,6 +948,21 @@ class CurriculumTrainer:
                 "debug_io": args.debug_io,
             },
         )
+        # --- Gradient clipping (added 2026-08-01) ---------------------------------
+        # The definitive fix for the SAC NaN divergence that killed real_eagle v4 at
+        # stage 4 (obfm_offensive), iter 248: a single unclipped gradient spike on a
+        # terminal transition pushed a weight to Inf, and NaN then propagated for the
+        # remaining 582 iterations (all of stages 4-7 -> those bundles are unusable).
+        # build_algorithm_config() lives in the src/dogfight/** no-edit boundary and
+        # does NOT plumb grad_clip, so it is applied here on the returned config. This
+        # entry script (train_curriculum.py, at the Release root) is an explicitly
+        # allowed edit surface per CLAUDE.md's boundary table ("route new logic through
+        # ... the entry scripts train_*.py/run_*.py"). Applied once per stage build, so
+        # it covers every curriculum stage and every run (v4 resume, v5, etc.).
+        # global_norm=1.0 is a tight, safe clip for unattended runs; raise toward ~10
+        # if a stable run's learning is measurably too slow. Grad-clip is orthogonal to
+        # (and complements) the reward finite-guard/clamp in student/my_reward.py.
+        config = config.training(grad_clip=1.0, grad_clip_by="global_norm")
         return config.build_algo()
 
     def _restore_weights(self, algorithm, stage: CurriculumStage,

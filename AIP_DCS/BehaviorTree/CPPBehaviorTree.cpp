@@ -99,6 +99,7 @@ void UCPPBehaviorTree::init()
 	Factory.registerNodeType<Action::DECO_ClosureRateCheck>("DECO_ClosureRateCheck");
 	Factory.registerNodeType<Action::Task_Empty>("Task_Empty");
 	Factory.registerNodeType<Action::Task_pure>("Task_Pure");
+	Factory.registerNodeType<Action::Task_GunTrack>("Task_GunTrack");
 	Factory.registerNodeType<Action::Task_LeadPursuit>("Task_LeadPursuit");
 	Factory.registerNodeType<Action::Task_Evade>("Task_Evade");
 	Factory.registerNodeType<Action::Task_ClimbToSafeAltitude>("Task_ClimbToSafeAltitude");

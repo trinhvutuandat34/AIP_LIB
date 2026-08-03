@@ -66,6 +66,7 @@ Required contract:
 """
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -103,6 +104,11 @@ MY_REWARD_CONFIG = {
     "energy_scale": 0.0,
     "energy_ref_m": 1000.0,
     "low_altitude_penalty": 0.1,
+    # Per-step total-reward clamp (finite-guard, added 2026-08-01). Wide enough
+    # that terminal +/-100 and all normal shaping never touch it; only bounds a
+    # pathological outlier. Set to 0.0 to disable the clamp (the NaN/Inf coercion
+    # always runs regardless). See the finite-guard block in compute_reward().
+    "reward_clip": 150.0,
     "wez_step_ratio": 6.0,
     "wez_sim_hz": 60.0,
     "win_reward": 100.0,
@@ -224,6 +230,25 @@ def compute_reward(
         r_survival + r_step + r_pursuit + r_position + r_advantage
         + r_energy + r_damage + r_safety + r_terminal
     )
+
+    # --- Finite-guard + outlier clamp (added 2026-08-01) ----------------------
+    # Defense-in-depth against the SAC NaN divergence that killed real_eagle v4
+    # (paired with the grad_clip fix in train_curriculum.py). A single non-finite
+    # reward entering the replay buffer poisons every subsequent TD target, so
+    # guard it at the source: any NaN/Inf component is coerced to 0.0, and the
+    # per-step total is clamped to +/- reward_clip. The clamp is deliberately wide
+    # (150) -- the terminal +/-100 plus all normal shaping (|damage|<=~2, every
+    # other term <1) never reaches it, so normal-range learning dynamics are
+    # UNCHANGED; it only catches a pathological geometry that would otherwise emit
+    # a runaway magnitude. Set reward_clip=0 in a stage's overrides to disable.
+    reward_clip = float(reward_config.get("reward_clip", 150.0))
+    for _name, _value in components.items():
+        if not math.isfinite(_value):
+            components[_name] = 0.0
+    if not math.isfinite(total):
+        total = float(sum(components.values()))
+    if reward_clip > 0.0:
+        total = max(-reward_clip, min(reward_clip, total))
     return float(total), components
 
 

@@ -1,0 +1,98 @@
+# real_eagle v5 - the stability-corrected restart of v4 (2026-08-01).
+#
+# WHY v5 (a fresh tag, not a v4 resume): v4 diverged to NaN at stage 4
+# (obfm_offensive) iter 248 and its reward_mean stayed NaN for the final 582
+# iterations, so stages 4-7's checkpoints/bundles carry NaN weights and cannot
+# be resumed. v4/curriculum_state.json is status="failed". A clean tag restarts
+# from stage 0 while keeping v4's forensic record intact. Do NOT --resume v4.
+#
+# WHAT CHANGED vs v4 (all fixes verified static; validated by RUNNING this):
+#   1. Gradient clipping -- grad_clip=1.0, grad_clip_by="global_norm" is applied
+#      in train_curriculum.py::_build_algorithm (the config builder in
+#      src/dogfight/** does not plumb it). This is THE fix for the v4 NaN spike.
+#   2. Reward finite-guard + outlier clamp -- student/my_reward.py coerces any
+#      NaN/Inf component to 0 and clamps the per-step total to +/- reward_clip
+#      (150; wide enough that normal-range dynamics are unchanged).
+#   3. Two-circle episode length corrected 18000->12000 (200s @ 60Hz) in
+#      student/my_curriculum.py -- the one v4 stage the 200s correction missed.
+# The curriculum (student.my_curriculum), reward (student.my_reward) and
+# observation (student.my_observation_v2, 15 features) modules are otherwise the
+# same as v4 -- this run is about STABILITY, one variable changed set at a time.
+#
+# NOTE: keep this file pure ASCII (run_experiment.py prints notes to a cp949
+# console, which crashes on non-ASCII).
+#
+# run:
+#   python scripts\run_experiment.py experiments\real_eagle_v5.yaml
+# dry-run (validate wiring without training):
+#   python scripts\run_experiment.py experiments\real_eagle_v5.yaml --dry-run
+# watch for NaN early -- if training_log.csv reward_mean ever prints "nan",
+# stop and lower algo.lr to 1.0e-4 before relaunching (grad_clip should make
+# this unnecessary; it is the documented next lever).
+
+name: real_eagle_v5
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: v5
+
+env:
+  observation_mode: custom
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  observation_module: student.my_observation_v2
+
+curriculum:
+  stages_module: student.my_curriculum
+
+algo:
+  name: sac
+  framework: torch
+  # 3.0e-4 is the SAC standard and is retained: grad_clip (train_curriculum.py)
+  # addresses the divergence directly, so lr need not be sacrificed (this team is
+  # compute-poor -- a lower lr costs iterations). Drop to 1.0e-4 ONLY if a run
+  # still shows NaN despite grad_clip.
+  lr: 3.0e-4
+  gamma: 0.99
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  replay_buffer_capacity: 100000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+runtime:
+  # num_env_runners=0 kept from v4: the box hit msgpack-OOM / concat_episode
+  # races under remote workers (ner=2). Single-process is the reliable path for
+  # an unattended run; revisit only with confirmed RAM headroom right before launch.
+  num_env_runners: 0
+  resume: true                      # fresh start (no v5 state yet); resumes if interrupted
+
+policy_probe:
+  enabled: true
+  interval: 10
+  steps: 4
+  print: true
+
+# Periodic greedy-policy Tacview replays -- the trajectory-level view whose
+# absence made v3's crash-suicide invisible until the aggregates were audited.
+engagement_log:
+  enabled: true
+  interval: 100
+  steps: 400
+  episodes: 1
+  print: true
+
+notes: >
+  real_eagle v5 (2026-08-01). Stability-corrected restart of v4 (which diverged
+  to NaN at stage 4 iter 248 -> stages 4-7 bundles unusable). Fixes carried in
+  code, not YAML: grad_clip=1.0/global_norm in train_curriculum.py; reward
+  finite-guard + 150 clamp in student/my_reward.py; two-circle episode length
+  18000->12000 in student/my_curriculum.py. Same curriculum/reward/obs modules
+  as v4 -- one stability variable set changed. Do NOT resume v4 (NaN state).

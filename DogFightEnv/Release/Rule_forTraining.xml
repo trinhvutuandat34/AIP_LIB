@@ -132,12 +132,50 @@
 
             </Fallback>
 
+            <!-- GATE 2.5 - Gun-solution hold (added 2026-08-01). When already inside the gun
+                 band AND well aligned (own ATA under 5 deg; range 150 to 914 m, i.e. the
+                 500 to 3000 ft Phase 1 WEZ), STOP maneuvering and TRACK via Task_GunTrack, so a
+                 solution already in hand is not thrown away by Gate 4's positional maneuvers
+                 pulling off it. Task_GunTrack = pure-pursuit aim (like Task_Pure) but with a
+                 SPEED-MATCHING throttle: Task_Pure's fixed 0.7 keeps closing when already
+                 overtaking and sails through the band, which is the mechanism behind the
+                 documented eval symptom "reaches ATA 0.1 to 1.0 deg and range 270 to 511 m yet
+                 logs 0 WEZ steps" (alignment and range each achieved, but not held at the same
+                 instant). Sits below Gate 1 (threat) and Gate 2 (merge) so survival and the
+                 merge still preempt; above Gate 3/Gate 4 so tracking beats energy tactics and
+                 positional offense once the shot exists.
+                 REQUIRES A DLL REBUILD: Task_GunTrack is a new C++ node
+                 (AIP_DCS/BehaviorTree/BT_Content/Task/Task_GunTrack.*); rebuild AIP_DCS
+                 (Debug|x64) and redeploy AIP_BASE.dll/AIP_BASE_target.dll before this branch
+                 loads. The decorators (DECO_DistanceCheck/DECO_LOSCheck) are already registered.
+                 UNTESTED on this box (no local sim); after the rebuild, validate with a BT vs RL
+                 local run and confirm ep_wez_steps rises before trusting it. To revert: delete
+                 this one Sequence (and optionally the Task_GunTrack node + its registration). -->
+            <Sequence name="Gate2p5_GunSolutionHold">
+              <DECO_DistanceCheck name="Gun_DistGt150" UpDown="Greater" Distance="150" BB="{BB}"/>
+              <DECO_DistanceCheck name="Gun_DistLt914" UpDown="Less" Distance="914" BB="{BB}"/>
+              <DECO_LOSCheck name="Gun_OwnATA_Lt5" UpDown="Less" InputLOS="5" Which="Own" BB="{BB}"/>
+              <Task_GunTrack name="Gun_Track" BB="{BB}"/>
+            </Sequence>
+
             <!-- GATE 3 - Energy-ratio guard, scoped narrowly in front of the offensive branches
                  only (scope decision: leave the existing safety/defensive priority order above
-                 untouched). 0.8-1.2 "matched" falls through unchanged to Gate 4. -->
+                 untouched). The "matched" band (now 0.8 to 1.4) falls through unchanged to Gate 4.
+                 EDIT 2026-08-01 (hypothesis H1, energy-guard shadowing): superior threshold raised
+                 1.2 to 1.4. At only a ~20 percent energy edge (1.2), Gate 3 committed to
+                 Task_AnglesTactics (a flat pressing turn) and shadowed the entire Gate 4 selector,
+                 including HighYoYoUp, the better answer when close and overtaking. Reserving the
+                 commitment for a clearer ~40 percent edge routes marginal-advantage geometry to
+                 Gate 4's situation-specific maneuvers instead. The inferior threshold (0.8) is left
+                 ALONE on purpose: it gates Task_EnergyTactics (extend/survive when disadvantaged),
+                 a survival behavior not worth weakening blind. UNTESTED on this box; revert by
+                 changing 1.4 back to 1.2. Reading Task_Notch.cpp REFUTED the paired H3 (Notch
+                 over-fire): Notch already self-gates narrowly (beam 70-110 deg, Distance under
+                 2000 m, 1.5 s cap) and does not fire when we are the one behind, so it was left
+                 untouched. -->
             <Fallback name="Gate3_EnergyState">
               <Sequence name="Gate3_EnergySuperior">
-                <DECO_EnergyRatioCheck name="Gate3_Ratio_Gt1_2" UpDown="Greater" Ratio="1.2" BB="{BB}"/>
+                <DECO_EnergyRatioCheck name="Gate3_Ratio_Gt1_4" UpDown="Greater" Ratio="1.4" BB="{BB}"/>
                 <Task_AnglesTactics name="Gate3_AnglesTactics" BB="{BB}"/>
               </Sequence>
               <Sequence name="Gate3_EnergyInferior">

@@ -68,6 +68,7 @@ from dogfight.unreal import AIType, ProviderCommandPolicy, UnrealAIPilotUDPClien
 from student.inference_providers import (
     RemappedRLProvider,
     StudentHybridProvider,
+    require_healthy_bundle,
     verify_bundle_observation,
 )
 
@@ -85,11 +86,22 @@ SERVER_PORT = 9999
 MODE = "hybrid"   # 팀 확정 전략: Hybrid(residual) -- BT가 안전망, RL이 그 위에 보정을 얹음
 
 # RL 모드 설정
-# v4 커리큘럼은 stage 4(obfm_offensive)에서 정지된 상태(진행 중인 프로세스 없음, final_bundle
-# 없음) -- 현재 쓸 수 있는 가장 최신/완성된 bundle은 stage 3(autopilot_pursuit)의 final_bundle.
-# 주의: 이 bundle은 추격(pursuit)까지만 학습되었고 실제 BT 상대 교전 학습은 아직 못 마쳤음 --
-# 제출 전 v4를 stage 4 이후로 재개하는 것이 최우선 과제 (memory/project_v4_recovery 참고).
-BUNDLE_DIR = "artifacts/curriculum/real_eagle/v4/stage_3_autopilot_pursuit/final_bundle"
+# =========================================================================
+# !!! 경고 (2026-08-01 검증): 아래 BUNDLE_DIR은 "고장난" 모델을 가리킵니다.
+#     제출용이 아니라 자리표시자입니다. 실제 학습 아티팩트를 직접 확인한 결과:
+#       - v4/stage_3 (아래 경로)  = 최종 crash_rate 100%, reward -1.001,
+#                                   접근 실패(min-distance 4.8 km) -- 100% 추락 정책
+#       - v4/stage_4~7            = SAC가 stage 4 iter 248에서 NaN 발산 -> 가중치 손상
+#       - v4/stage_0~2            = loiter/고정 표적만 상대(실전 교전 미학습)
+#     즉, 현재 경진대회에 쓸 수 있는 RL bundle이 하나도 없습니다.
+#
+# 조치: experiments/real_eagle_v5.yaml 로 안정화 재학습(grad_clip + reward guard)
+#     을 돌린 뒤, full_dogfight 까지 통과한 안정적인 bundle 경로로 아래를 교체하세요.
+#     v5 완료 전에 실전 슬롯이 온다면 MODE="bt"(순수 BT)가 유일하게 안전한 제출입니다
+#     -- residual hybrid는 고장난 RL을 더해도 BT 베이스까지 함께 망가뜨립니다
+#     (NaN -> clip_action이 전체 action을 0으로 -> idle stall).
+# =========================================================================
+BUNDLE_DIR = "artifacts/curriculum/real_eagle/v4/stage_3_autopilot_pursuit/final_bundle"  # TODO: v5 안정 bundle로 교체
 OBSERVATION_MODE = "real_eagle15"                  # student.my_observation_v2의 OBSERVATION_MODE
 OBSERVATION_MODULE = "student.my_observation_v2"   # 학습 시 사용한 custom 관측 모듈
 
@@ -97,7 +109,7 @@ OBSERVATION_MODULE = "student.my_observation_v2"   # 학습 시 사용한 custom
 # - 기본 배포 Rule은 Rule_forTraining.xml입니다 (2026-07-15 20종 기동 전부 재구성+재배포됨).
 # - 팀별 BT DLL/XML을 제출하는 경우 파일을 Release 루트에 두고 아래 이름을 바꾸세요.
 BT_DLL = "AIP_BASE.dll"
-BT_RULE_XML = "Rule_forTraining.xml"  # 예: "Rule_real_eagle.xml" (아직 별도 파일 없음)
+BT_RULE_XML = "Rule_forTraining.xml"  # BT 튜닝은 이 파일에서 직접 진행
 
 # Hybrid 모드 설정 (MODE="hybrid" 일 때만 사용)
 HYBRID_MODE = "residual"   # "residual" | "blend" | "switch"
@@ -111,6 +123,12 @@ COMMAND_DELAY_SEC = 0.0
 RECV_TIMEOUT_SEC = 0.2
 ACTION_REPEAT = 6          # 학습 step_ratio=6과 맞춰 6개 PlaneInfo pair마다 새 policy 호출
 DEBUG_ACTION_REPEAT = False
+
+# 번들 건전성 게이트 (2026-08-01 추가): RL 번들 가중치에 NaN/Inf가 있으면 실전에 내보내지
+# 않습니다 (v4 stage 4~7의 NaN 발산이 정확히 이 경우). False = 비정상 번들이면 경고 후
+# BT 전용으로 자동 강등(연결 실패 대신 BT 바닥으로 교전 진행). True = 즉시 예외 발생
+# (제출 전 로컬 점검용 -- 문제를 크게 알리고 멈춤).
+STRICT_BUNDLE_HEALTH = False
 
 
 # =============================================================================
@@ -145,6 +163,13 @@ def build_action_provider():
     if metadata_path.exists():
         bundle_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
         verify_bundle_observation(bundle_payload, OBSERVATION_MODE, OBSERVATION_MODULE)
+
+    # 번들 건전성 게이트: NaN/Inf 가중치면 실전 투입 거부. residual hybrid에서 NaN RL은
+    # BT 베이스까지 함께 망가뜨리므로(전체 action -> 0 -> idle stall) MODE와 무관하게
+    # 비정상이면 BT 전용으로 강등한다. strict=True면 여기서 예외를 던진다.
+    if not require_healthy_bundle(str(bundle_path), strict=STRICT_BUNDLE_HEALTH):
+        print(f"[{TEAM_NAME}] 번들 비정상 -> BT 전용으로 강등 (안전 바닥): {BT_DLL}")
+        return BTActionProvider(dll_name=BT_DLL)
 
     print(f"[{TEAM_NAME}] RL 모델 로드: {bundle_path}")
     rl_provider = RemappedRLProvider(

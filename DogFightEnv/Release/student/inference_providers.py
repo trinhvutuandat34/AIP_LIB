@@ -33,11 +33,13 @@ What this fixes:
 """
 from __future__ import annotations
 
+import math
 from typing import Callable
 
 import numpy as np
 
 from dogfight.ai.action_provider import ActionContext, ActionProvider, ActionResult, clip_action
+from dogfight.ai.checkpoint_io import load_lightweight_policy_bundle
 from dogfight.ai.rl_action_provider import RLActionProvider
 
 
@@ -232,3 +234,133 @@ def verify_bundle_observation(
             f"cannot be verified (runtime: mode={observation_mode!r}, "
             f"module={observation_module!r})."
         )
+
+
+# =============================================================================
+# Bundle-health gate (added 2026-08-01)
+# -----------------------------------------------------------------------------
+# Closes the "ship a broken policy" footgun. real_eagle v4 diverged to NaN at
+# stage 4 (its stages 4-7 bundles carry NaN weights) and stage 3 collapsed to a
+# 100%-crash policy. In residual-hybrid mode a NaN RL bundle is *worse* than no
+# RL at all: StudentHybridProvider adds `residual_scale * RL` to the BT action,
+# so a NaN RL output propagates into the sum and clip_action's nan_to_num then
+# zeroes the ENTIRE action (BT base included) -> idle stall. This gate inspects
+# the actual weights for NaN/Inf before any packet is sent, so a corrupted
+# bundle can never reach the wire.
+#
+# Bundle metadata records no training metrics (verified: only config/obs/model
+# keys), so weight finiteness is the robust, portable health signal -- and it is
+# exactly what distinguishes a NaN-diverged bundle from a good one. A degenerate-
+# but-finite policy (e.g. the 100%-crash stage_3) can't be detected from weights
+# alone; catch that with a run_local_dogfight.py smoke match, not this gate.
+# =============================================================================
+
+def _iter_weight_leaves(state, prefix: str = ""):
+    """Yield (name, leaf) for every array/tensor leaf in a nested RLModule state."""
+    if isinstance(state, dict):
+        for key, value in state.items():
+            child = f"{prefix}.{key}" if prefix else str(key)
+            yield from _iter_weight_leaves(value, child)
+    elif isinstance(state, (list, tuple)):
+        for idx, value in enumerate(state):
+            yield from _iter_weight_leaves(value, f"{prefix}[{idx}]")
+    else:
+        yield prefix or "<root>", state
+
+
+def _leaf_nonfinite_counts(leaf):
+    """Return (n_nan, n_inf, size) for one leaf, or None if it isn't numeric.
+
+    Handles numpy arrays and torch tensors; non-floating dtypes (int/bool buffer
+    indices etc.) can't be NaN, so they report clean. Scalars via math.isfinite.
+    """
+    if hasattr(leaf, "detach") and hasattr(leaf, "cpu"):   # torch tensor
+        try:
+            leaf = leaf.detach().cpu().numpy()
+        except Exception:
+            return None
+    if isinstance(leaf, np.ndarray):
+        if leaf.size == 0:
+            return (0, 0, 0)
+        if not np.issubdtype(leaf.dtype, np.floating):
+            return (0, 0, int(leaf.size))
+        return (int(np.isnan(leaf).sum()), int(np.isinf(leaf).sum()), int(leaf.size))
+    if isinstance(leaf, (float, np.floating)):
+        return (int(math.isnan(leaf)), int(math.isinf(leaf)), 1)
+    if isinstance(leaf, (int, np.integer, bool)):
+        return (0, 0, 1)
+    return None
+
+
+def check_bundle_weight_health(bundle_dir: str) -> dict:
+    """Inspect a lightweight bundle's weights for NaN/Inf.
+
+    Returns a report dict: {healthy, n_tensors, n_params, n_nan, n_inf,
+    offenders (up to 8 'name: nan=..,inf=..' strings), skipped (non-numeric
+    leaves)}. Never raises for a merely-unhealthy bundle -- raising is the
+    caller's policy (see require_healthy_bundle / my_submission.py).
+    """
+    _meta, weights = load_lightweight_policy_bundle(bundle_dir)
+    n_tensors = n_params = n_nan = n_inf = skipped = 0
+    offenders: list[str] = []
+    for name, leaf in _iter_weight_leaves(weights):
+        counts = _leaf_nonfinite_counts(leaf)
+        if counts is None:
+            skipped += 1
+            continue
+        nan, inf, size = counts
+        n_tensors += 1
+        n_params += size
+        n_nan += nan
+        n_inf += inf
+        if (nan or inf) and len(offenders) < 8:
+            offenders.append(f"{name}: nan={nan}, inf={inf}")
+    return {
+        "healthy": (n_nan == 0 and n_inf == 0 and n_tensors > 0),
+        "n_tensors": n_tensors,
+        "n_params": n_params,
+        "n_nan": n_nan,
+        "n_inf": n_inf,
+        "offenders": offenders,
+        "skipped": skipped,
+    }
+
+
+def require_healthy_bundle(bundle_dir: str, *, strict: bool = False) -> bool:
+    """Gate a bundle before it flies. Returns True if healthy.
+
+    On an unhealthy (NaN/Inf) or empty bundle: prints a loud report and either
+    raises ValueError (strict=True -- fail closed, for pre-submission testing) or
+    returns False (strict=False -- the caller degrades to BT-only, so a match
+    still runs on the BT floor rather than failing to connect). Empty/zero-tensor
+    bundles are treated as unhealthy (nothing was actually loaded).
+    """
+    report = check_bundle_weight_health(bundle_dir)
+    if report["healthy"]:
+        print(
+            f"[DogFightEnv][bundle-health] OK -- {report['n_tensors']} tensors / "
+            f"{report['n_params']} params, no NaN/Inf ({bundle_dir})."
+        )
+        return True
+
+    lines = [
+        "[DogFightEnv][bundle-health] !!! UNHEALTHY BUNDLE -- refusing to fly it as-is.",
+        f"    bundle : {bundle_dir}",
+        f"    tensors: {report['n_tensors']} ({report['n_params']} params), "
+        f"NaN={report['n_nan']} Inf={report['n_inf']}",
+    ]
+    if report["n_tensors"] == 0:
+        lines.append("    reason : no numeric tensors found -- bundle is empty/corrupt.")
+    for off in report["offenders"]:
+        lines.append(f"    bad    : {off}")
+    lines.append(
+        "    This is exactly the real_eagle v4 stage 4-7 NaN-divergence failure. "
+        "Retrain via experiments/real_eagle_v5.yaml (grad_clip) and point BUNDLE_DIR "
+        "at a stable stage's final_bundle."
+    )
+    message = "\n".join(lines)
+    if strict:
+        raise ValueError(message)
+    print(message)
+    print("[DogFightEnv][bundle-health] Degrading to BT-only for this run (safe floor).")
+    return False

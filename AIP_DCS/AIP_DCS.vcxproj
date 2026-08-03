@@ -256,6 +256,7 @@
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_NoseToNoseTurn.h" />
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_NoseToTailTurn.h" />
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_Notch.h" />
+    <ClInclude Include="BehaviorTree\BT_Content\Task\Task_GunTrack.h" />
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_OneCircleFight.h" />
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_RollingScissors.h" />
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_SingleSideOffset.h" />
@@ -324,6 +325,7 @@
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_RollingScissors.cpp" />
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_SingleSideOffset.cpp" />
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_VerticalScissors.cpp" />
+    <ClCompile Include="BehaviorTree\BT_Content\Task\Task_GunTrack.cpp" />
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_pure.cpp" />
     <ClCompile Include="BehaviorTree\bt_factory.cpp" />
     <ClCompile Include="BehaviorTree\condition_node.cpp" />

@@ -1,6 +1,7 @@
 #pragma once
 #include "Task_Empty.h"
 #include "Task_pure.h"
+#include "Task_GunTrack.h"
 #include "Task_LeadPursuit.h"
 #include "Task_Evade.h"
 #include "Task_ClimbToSafeAltitude.h"
