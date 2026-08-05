@@ -171,11 +171,15 @@ StickValue StickController::GetStick(Vector3 MyLocation_FNED, Vector3 MyRotation
 	//피치 커맨드 생성 부분
 	float PitchCMD = 0;;
 
-	// 2026-08-05 near-target authority boost: integral cap 0.25 -> 0.6 so the (now un-truncated)
-	// pitch integral can pull harder in the 1-5 deg band to close a static pointing error the
-	// type-0 proportional term cannot. Proportional (LOS/6) left unchanged to limit blast radius
-	// on other maneuvers. Revert = 0.6 back to 0.25 (and the two int->float edits above).
-	float ERROR_Effect = clamp(LOS / 6 + clamp(GetLOSErrorSUM(LOS) / 7.5, 0, 0.6), 0, 1.5);
+	// 2026-08-05: cap widening to 0.6 (tried same day) was REVERTED after eval_matchup.py showed
+	// it made things worse, not better -- 0% WEZ-contact across a 20-episode mirror sweep vs.
+	// dwell time in nearly every episode pre-fix (artifacts/eval/bt_vs_bt_postfix_mirror.csv vs.
+	// bt_vs_bt_obfm.csv). Root cause read: the int->float truncation fix above (still kept -- it's
+	// a strict correctness fix) already unlocks real integral authority that never existed before;
+	// stacking a 2.4x wider cap on top of that newly-live term caused windup/overshoot instead of
+	// closing the static error. Left at the original 0.25 cap so only the truncation fix is live;
+	// re-evaluate whether more integral authority is still needed once that's validated alone.
+	float ERROR_Effect = clamp(LOS / 6 + clamp(GetLOSErrorSUM(LOS) / 7.5, 0, 0.25), 0, 1.5);
 	//float ERROR_Effect = clamp(LOS / 6, 0, 1.5);
 
 
