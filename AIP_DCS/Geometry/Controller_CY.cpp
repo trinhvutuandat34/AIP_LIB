@@ -44,14 +44,14 @@ float StickController::GetLOSErrorSUM(float LOSError)
 		else
 			ErrorSum[SumCount % 60] = 0;
 	}
-	int sum = 0;
+	float sum = 0.0f;   // 2026-08-05: was int -> `sum += ErrorSum[i]` truncated every sub-1-deg LOS to 0, killing near-target integral action (BT parked ~4.5 deg off even a stationary target -> 0 WEZ).
 
 	for (int i = 0; i < ErrorSum.size(); i++)
 	{
 		sum += ErrorSum[i];
 	}
 
-	float Re = sum / 60;
+	float Re = sum / 60.0f;   // 2026-08-05: was `sum / 60` int division (another sub-1 truncation)
 
 	return Re;
 }
@@ -171,7 +171,11 @@ StickValue StickController::GetStick(Vector3 MyLocation_FNED, Vector3 MyRotation
 	//피치 커맨드 생성 부분
 	float PitchCMD = 0;;
 
-	float ERROR_Effect = clamp(LOS / 6 + clamp(GetLOSErrorSUM(LOS) / 7.5, 0, 0.25), 0, 1.5);
+	// 2026-08-05 near-target authority boost: integral cap 0.25 -> 0.6 so the (now un-truncated)
+	// pitch integral can pull harder in the 1-5 deg band to close a static pointing error the
+	// type-0 proportional term cannot. Proportional (LOS/6) left unchanged to limit blast radius
+	// on other maneuvers. Revert = 0.6 back to 0.25 (and the two int->float edits above).
+	float ERROR_Effect = clamp(LOS / 6 + clamp(GetLOSErrorSUM(LOS) / 7.5, 0, 0.6), 0, 1.5);
 	//float ERROR_Effect = clamp(LOS / 6, 0, 1.5);
 
 

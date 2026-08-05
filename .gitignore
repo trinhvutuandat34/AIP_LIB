@@ -23,3 +23,11 @@ bin/
 # Vendored packaged Unreal builds (binaries only, no source, ~1GB — see
 # CLAUDE.md; re-obtain from competition organizers rather than tracking here)
 Windows/
+
+# Training/eval run output (regeneratable, large file counts under artifacts/curriculum
+# and artifacts/ray_results in particular — don't let these hang `git add -A`)
+DogFightEnv/Release/artifacts/
+DogFightEnv/Release/logs/
+*.log
+*.bak
+*.bak_*

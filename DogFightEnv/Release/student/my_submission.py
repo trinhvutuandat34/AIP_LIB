@@ -71,6 +71,9 @@ from student.inference_providers import (
     require_healthy_bundle,
     verify_bundle_observation,
 )
+# DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. Guards the two
+# no-edit-client fragilities that risk a competition-day disconnect/DQ (COMPETITION_RULES Sec8).
+from student.submission_resilience import ResilientActionProvider, supervise_client
 
 
 # =============================================================================
@@ -83,7 +86,13 @@ SERVER_IP = "221.151.77.208"   # TODO: 운영 공지로 최신 서버 IP 확정 
 SERVER_PORT = 9999
 
 # 사용할 백엔드 모드 선택: "rl" | "bt" | "hybrid"
-MODE = "hybrid"   # 팀 확정 전략: Hybrid(residual) -- BT가 안전망, RL이 그 위에 보정을 얹음
+# TEMP SAFE DEFAULT (2026-08-05): forced to "bt" until a bundle is validated (via
+# eval_matchup.py, beats pure BT) -- BUNDLE_DIR below still points at the v4 stage_3 bundle,
+# documented (below) as a 100%-crash policy. The health gate only catches NaN/Inf weights, not
+# this (finite-but-degenerate), so "hybrid" would blend that crash behavior into the BT floor
+# every match. Team-confirmed target strategy is still Hybrid(residual) -- flip back once
+# BUNDLE_DIR points at a bundle that actually beats BT-alone.
+MODE = "bt"   # was "hybrid" -- see note above
 
 # RL 모드 설정
 # =========================================================================
@@ -201,7 +210,10 @@ def main():
         print(f"BT DLL/XML: {BT_DLL} / {BT_RULE_XML}")
 
     with activate_rule_xml(BT_RULE_XML, ROOT):
-        action_provider = build_action_provider()
+        # DQ hardening (2026-08-05): a never-throw provider wrapper + a reconnect supervisor so a
+        # transient network error or a runtime hiccup self-heals instead of ending the session (a
+        # disconnect = DQ risk, COMPETITION_RULES Sec8). See student/submission_resilience.py.
+        action_provider = ResilientActionProvider(build_action_provider())
         observation_hook = (
             load_observation_hook(OBSERVATION_MODULE)
             if OBSERVATION_MODULE
@@ -219,20 +231,21 @@ def main():
             debug_action_repeat=DEBUG_ACTION_REPEAT,
         )
 
-        client = UnrealAIPilotUDPClient(
-            command_policy=command_policy,
-            server_ip=SERVER_IP,
-            server_port=SERVER_PORT,
-            team_name=TEAM_NAME,
-            ai_type=AI_TYPE,
-            heartbeat_interval_sec=HEARTBEAT_SEC,
-            command_delay_sec=COMMAND_DELAY_SEC,
-            recv_timeout_sec=RECV_TIMEOUT_SEC,
-            enable_terminal_monitor=True,   # 패킷 모니터 표시
-        )
+        def make_client():
+            return UnrealAIPilotUDPClient(
+                command_policy=command_policy,
+                server_ip=SERVER_IP,
+                server_port=SERVER_PORT,
+                team_name=TEAM_NAME,
+                ai_type=AI_TYPE,
+                heartbeat_interval_sec=HEARTBEAT_SEC,
+                command_delay_sec=COMMAND_DELAY_SEC,
+                recv_timeout_sec=RECV_TIMEOUT_SEC,
+                enable_terminal_monitor=True,   # 패킷 모니터 표시
+            )
 
         try:
-            client.run()
+            supervise_client(make_client)
         finally:
             action_provider.close()
             print(f"[{TEAM_NAME}] 클라이언트 종료")

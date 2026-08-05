@@ -75,10 +75,24 @@
               <Task_Notch name="Gate1_Notch" BB="{BB}"/>
               <Sequence name="Gate1_JinkingTurn_NotHeadOn">
                 <DECO_AngleOffCheck name="Gate1_Jink_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
+                <!-- GUN-SOLUTION CARVE-OUT (2026-08-05, XML-only, NO rebuild). Root-cause trace
+                     found Gate 1 (this jink/break) sits ABOVE Gate 2.5 (Gun_Track) with no
+                     angular awareness, so the instant a maneuvering defender's nose sweeps into
+                     our forward hemisphere it yanks the nose off an in-hand shot -> 0 WEZ in 80
+                     eval eps. This DECO_LOSCheck fires the jink ONLY when own ATA >= 8 deg; when
+                     own ATA < 8 (we are tracking a gun solution) it FAILS, so Gate 1 falls
+                     through and Gate 2.5 gets to hold. Shares the 8-deg threshold with the
+                     widened Gun_OwnATA_Lt8 below (complementary: jink >= 8, gun-hold <= 8).
+                     Deliberately aggressive: in a mutual high-aspect pass we keep OUR tracking
+                     shot instead of defending; the failure mode was being too passive. Tune 8
+                     against the geometry trace; revert = delete this one DECO_LOSCheck. -->
+                <DECO_LOSCheck name="Gate1_Jink_NotGunSolution_OwnATA_Ge8" UpDown="Greater" InputLOS="8" Which="Own" BB="{BB}"/>
                 <Task_JinkingTurn name="Gate1_JinkingTurn" BB="{BB}"/>
               </Sequence>
               <Sequence name="Gate1_TheBreak_NotHeadOn">
                 <DECO_AngleOffCheck name="Gate1_Break_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
+                <!-- Same gun-solution carve-out as Gate1_JinkingTurn above (own ATA >= 8). -->
+                <DECO_LOSCheck name="Gate1_Break_NotGunSolution_OwnATA_Ge8" UpDown="Greater" InputLOS="8" Which="Own" BB="{BB}"/>
                 <Task_Evade name="Gate1_TheBreak" BB="{BB}"/>
               </Sequence>
             </Fallback>
@@ -154,7 +168,14 @@
             <Sequence name="Gate2p5_GunSolutionHold">
               <DECO_DistanceCheck name="Gun_DistGt150" UpDown="Greater" Distance="150" BB="{BB}"/>
               <DECO_DistanceCheck name="Gun_DistLt914" UpDown="Less" Distance="914" BB="{BB}"/>
-              <DECO_LOSCheck name="Gun_OwnATA_Lt5" UpDown="Less" InputLOS="5" Which="Own" BB="{BB}"/>
+              <!-- WIDENED 5 -> 8 deg (2026-08-05): pseudo-hysteresis dwell, no rebuild. True
+                   enter/exit hysteresis needs a RUNNING latch (SyncActionNode forbids RUNNING ->
+                   C++ change); widening the single hold gate is the rebuild-free approximation,
+                   holds the track through a defender's jink out to 8 deg instead of dropping at
+                   5, giving the pure-pursuit loop more dwell to grind ATA toward the 1.0-deg WEZ.
+                   Shares 8 deg with Gate 1's carve-out (complementary). Range stays 150-914 m
+                   (physical gun range; WEZ max 914.4 m). Revert = 8 back to 5. -->
+              <DECO_LOSCheck name="Gun_OwnATA_Lt8" UpDown="Less" InputLOS="8" Which="Own" BB="{BB}"/>
               <Task_GunTrack name="Gun_Track" BB="{BB}"/>
             </Sequence>
 

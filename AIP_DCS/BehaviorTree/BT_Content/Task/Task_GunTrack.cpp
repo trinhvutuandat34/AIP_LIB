@@ -34,6 +34,9 @@ namespace Action
 		// risks over-lead overshoot at gun range (see Task_OneCircleFight's note) -- holding a
 		// solution wants stability, not corner-cutting. (A small range-scaled lead is a possible
 		// future refinement if replays show the pipper lagging a hard-turning target.)
+		// NOTE 2026-08-05: a bounded lead feedforward was tried here and REVERTED -- the trace
+		// showed a STATIC ~4.5 deg pointing error (near-zero crossing/LOS-rate), not a lag, so
+		// the real fix is in Controller_CY::GetStick (near-zero-error authority), not the aim.
 		(*BB)->VP_Cartesian = (*BB)->TargetLocaion_Cartesian;
 
 		// Throttle: speed-match the bandit. overtake > 0 means we are faster and will overshoot

@@ -42,6 +42,7 @@ import json
 import math
 import os
 import sys
+import tempfile
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -61,6 +62,7 @@ os.environ["PYTHONPATH"] = os.pathsep.join(_pythonpath_entries)
 _RAY_RAYLET_START_WAIT_TIME_S = "60"
 
 from ray.tune.registry import register_env
+from ray.tune.logger import UnifiedLogger
 
 from DogFightEnvWrapper import DogFightWrapper
 from student.obfm_scenario_wrapper import ObfmScenarioWrapper
@@ -111,6 +113,29 @@ def _ensure_ray_runtime_env() -> None:
             }
         },
     )
+
+
+def _make_ray_results_logger_creator(base_dir: Path, algo_name: str, env_name: str):
+    """Build an RLlib ``logger_creator`` that writes run logs under *base_dir*.
+
+    With no ``logger_creator``, ``config.build_algo()`` lets RLlib fall back to
+    its default, which drops each run's logdir (TensorBoard ``events.*``,
+    ``result.json``, ``progress.csv``, ``params.*``) into ``~/ray_results`` --
+    which resolves to the C: drive on the Windows training box. This mirrors the
+    default's folder naming but relocates the base to *base_dir* (under the
+    repo's ``artifacts/`` tree, which is on D:), so every per-run output stays on
+    the same drive as the checkpoints.
+    """
+    base_dir = Path(base_dir).expanduser()
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    def _logger_creator(config):
+        timestr = datetime.today().strftime("%Y-%m-%d_%H-%M-%S")
+        prefix = f"{algo_name.upper()}_{env_name}_{timestr}"
+        logdir = tempfile.mkdtemp(prefix=prefix, dir=str(base_dir))
+        return UnifiedLogger(config, logdir, loggers=None)
+
+    return _logger_creator
 
 
 def env_creator(env_config):
@@ -963,7 +988,18 @@ class CurriculumTrainer:
         # if a stable run's learning is measurably too slow. Grad-clip is orthogonal to
         # (and complements) the reward finite-guard/clamp in student/my_reward.py.
         config = config.training(grad_clip=1.0, grad_clip_by="global_norm")
-        return config.build_algo()
+
+        # Redirect RLlib's per-run logdir off the default ~/ray_results (C: on
+        # the Windows box) into the repo's artifacts/ tree (D:), alongside the
+        # existing artifacts/{records,curriculum,models,...}/<name>/<tag>/ output.
+        ray_results_dir = (
+            ROOT / "artifacts" / "ray_results" / args.output_name / args.output_tag
+        )
+        logger_creator = _make_ray_results_logger_creator(
+            ray_results_dir, self.algorithm_name, env_name
+        )
+        print(f"[storage] RLlib run logs -> {ray_results_dir}")
+        return config.build_algo(logger_creator=logger_creator)
 
     def _restore_weights(self, algorithm, stage: CurriculumStage,
                          stage_state: dict, state: dict):

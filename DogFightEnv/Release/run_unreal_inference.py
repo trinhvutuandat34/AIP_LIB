@@ -29,6 +29,9 @@ from student.inference_providers import (
     StudentHybridProvider,
     verify_bundle_observation,
 )
+# DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. See the
+# module docstring for the two client fragilities this guards against (COMPETITION_RULES Sec8).
+from student.submission_resilience import ResilientActionProvider, supervise_client
 
 # python run_unreal_inference.py --mode rl --bundle-dir artifacts\models\team01\v1 --team-name team01
 # python run_unreal_inference.py --mode bt --team-name team01
@@ -140,7 +143,12 @@ def main():
     observation_hook = load_observation_hook(args.observation_module) if args.observation_module else None
     effective_observation_mode = observation_hook["mode"] if observation_hook else args.observation_mode
     with activate_rule_xml(args.bt_rule_xml, ROOT):
-        action_provider = build_action_provider(args, effective_observation_mode)
+        # DQ hardening: wrap the provider so a runtime hiccup/NaN cannot crash the no-edit
+        # client, and supervise client.run() so a transient network error reconnects instead
+        # of ending the session (a disconnect = DQ risk). See student/submission_resilience.py.
+        action_provider = ResilientActionProvider(
+            build_action_provider(args, effective_observation_mode)
+        )
         command_policy = ProviderCommandPolicy(
             action_provider=action_provider,
             observation_mode=effective_observation_mode,
@@ -150,22 +158,24 @@ def main():
             action_repeat=args.action_repeat,
             debug_action_repeat=args.debug_action_repeat,
         )
-        client = UnrealAIPilotUDPClient(
-            command_policy=command_policy,
-            server_ip=args.server_ip,
-            server_port=args.server_port,
-            team_name=args.team_name,
-            ai_type=parse_ai_type(args.ai_type),
-            simulation_state=args.simulation_state,
-            heartbeat_interval_sec=args.heartbeat_sec,
-            command_delay_sec=args.command_delay_sec,
-            recv_timeout_sec=args.recv_timeout_sec,
-            enable_terminal_monitor=args.packet_monitor,
-            terminal_monitor_interval_sec=args.packet_monitor_interval_sec,
-        )
+
+        def make_client():
+            return UnrealAIPilotUDPClient(
+                command_policy=command_policy,
+                server_ip=args.server_ip,
+                server_port=args.server_port,
+                team_name=args.team_name,
+                ai_type=parse_ai_type(args.ai_type),
+                simulation_state=args.simulation_state,
+                heartbeat_interval_sec=args.heartbeat_sec,
+                command_delay_sec=args.command_delay_sec,
+                recv_timeout_sec=args.recv_timeout_sec,
+                enable_terminal_monitor=args.packet_monitor,
+                terminal_monitor_interval_sec=args.packet_monitor_interval_sec,
+            )
 
         try:
-            client.run()
+            supervise_client(make_client)
         finally:
             action_provider.close()
 

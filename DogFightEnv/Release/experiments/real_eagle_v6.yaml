@@ -1,0 +1,124 @@
+# real_eagle v6 - fix the v5 self-crash (2026-08-04).
+#
+# WHY v6 (fresh tag, not a v5 resume): v5 trained end-to-end and STABLE (0 NaN,
+# all 13 stages), but the final policy is behaviorally degenerate -- evaluated
+# standalone (pure RL) vs the BT opponent it flew ITSELF into the ground in
+# 20/20 episodes ("ownship altitude below min"), 0 wins, own health 1.0 every
+# time (never shot down), 1/20 WEZ contact. Root cause (see the reward/curriculum
+# audit 2026-08-04): NOTHING taught altitude discipline --
+#   (a) student/my_reward.py's altitude term was a FLAT -0.1 below 600 m, no
+#       gradient, identical at 599 m and 301 m; and
+#   (b) the only other anti-crash signal, the terminal ground-impact loss (-100),
+#       is discounted to ~0 over 2000-12000-step episodes at gamma=0.99
+#       (effective horizon ~100 steps << episode length).
+# v5's stability fixes (grad_clip in train_curriculum.py, reward finite-guard +
+# 150 clamp) are UNCHANGED and carried forward.
+#
+# WHAT CHANGED vs v5 (all in the editable student/experiment surface; src/dogfight
+# untouched per the CLAUDE.md no-edit boundary):
+#   1. student/my_reward.py: the flat sub-600 m penalty is replaced by a DENSE
+#      quadratic altitude-floor term (altitude_penalty_scale=1.0, soft floor
+#      1500 m -> hard floor 300 m). Paid every step, gentle above ~1000 m, biting
+#      near the ground -- an immediate climb gradient independent of gamma. Set
+#      altitude_penalty_scale=0.0 to fall back to v5 behavior.
+#   2. gamma 0.99 -> 0.997 (effective horizon ~100 -> ~330 steps) so the terminal
+#      win/loss (+/-100) signals actually propagate back into the episode.
+#   3. replay_buffer_capacity 100000 -> 300000: with num_env_runners=0 and
+#      2000-12000-step episodes the 100k buffer held only ~10-50 highly-correlated
+#      episodes; a larger buffer restores sample diversity WITHOUT adding remote
+#      workers (see runtime note -- workers OOM on this box).
+# Curriculum modules (student.my_curriculum), observation (my_observation_v2, 15
+# feat) unchanged. NOTE: the curriculum's win_rate/crash_rate advance gates are
+# still inert (those metrics are computed per-iteration in no-edit src/callbacks.py
+# and stay NaN because episodes rarely close inside one iteration) -- so v6, like
+# v5, advances every stage on max_iterations. Validate PROGRESS out-of-band with
+# scripts/eval_v5_vs_bt.py against each stage's final_bundle, not the training log.
+#
+# NOTE: keep this file pure ASCII (run_experiment.py prints notes to a cp949
+# console, which crashes on non-ASCII).
+#
+# run (preferred entry point):
+#   python scripts\run_experiment.py experiments\real_eagle_v6.yaml
+# dry-run (validate wiring without training):
+#   python scripts\run_experiment.py experiments\real_eagle_v6.yaml --dry-run
+# equivalent direct CLI (the v5 workflow), if not using run_experiment:
+#   python train_curriculum.py --algorithm sac --output-name real_eagle --output-tag v6 \
+#     --framework torch --lr 3.0e-4 --gamma 0.997 --train-batch-size 256 \
+#     --minibatch-size 256 --tau 0.005 --target-entropy auto \
+#     --replay-buffer-capacity 300000 --model-fcnet-hiddens 256,256 \
+#     --model-fcnet-activation relu --observation-mode custom \
+#     --observation-module student.my_observation_v2 --reward-module student.my_reward \
+#     --stages-module student.my_curriculum --target-behavior-dll AIP_BASE_target.dll \
+#     --num-env-runners 0 --resume
+
+name: real_eagle_v6
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: v6
+
+env:
+  observation_mode: custom
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  observation_module: student.my_observation_v2
+
+curriculum:
+  stages_module: student.my_curriculum
+
+algo:
+  name: sac
+  framework: torch
+  lr: 3.0e-4
+  # v6: 0.99 -> 0.997. Effective horizon ~1/(1-gamma) rises from ~100 to ~330
+  # steps so the terminal +/-100 win/loss can reach the decisions that cause it.
+  # grad_clip=1.0 (train_curriculum.py) still guards the larger value targets;
+  # do NOT push past 0.999 without watching for NaN.
+  gamma: 0.997
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  # v6: 100000 -> 300000. Single-process collection + long episodes made the old
+  # buffer hold only ~10-50 correlated episodes. Transitions are tiny (15-D obs),
+  # so 300k is well within RAM (this does NOT reintroduce the worker-OOM path).
+  replay_buffer_capacity: 300000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+runtime:
+  # num_env_runners=0 kept from v5/v4: the box hit msgpack-OOM / concat_episode
+  # races under remote workers (ner=2). Single-process is the reliable unattended
+  # path; the v6 replay-buffer bump is the RAM-safe substitute for sample diversity.
+  num_env_runners: 0
+  resume: true                      # fresh start (no v6 state yet); resumes if interrupted
+
+policy_probe:
+  enabled: true
+  interval: 10
+  steps: 4
+  print: true
+
+engagement_log:
+  enabled: true
+  interval: 100
+  steps: 400
+  episodes: 1
+  print: true
+
+notes: >
+  real_eagle v6 (2026-08-04). Fixes v5's 100% self-crash (stable but degenerate:
+  pure-RL policy flew into the ground 20/20 vs BT, 0 wins). Changes, all in the
+  editable student/experiment surface (src/dogfight untouched): (1) my_reward.py
+  dense quadratic altitude-floor shaping replaces the flat sub-600m penalty
+  (altitude_penalty_scale=1.0, soft 1500m -> hard 300m) -- a per-step climb
+  gradient independent of gamma; (2) gamma 0.99 -> 0.997 so terminal +/-100
+  win/loss propagate; (3) replay_buffer_capacity 100000 -> 300000 for sample
+  diversity under single-process collection. v5 stability fixes (grad_clip,
+  reward finite-guard/clamp) carried forward. Validate progress with
+  scripts/eval_v5_vs_bt.py, not the (still-inert) in-training win_rate gate.

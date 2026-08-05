@@ -103,7 +103,24 @@ MY_REWARD_CONFIG = {
     # docstring for the zoom-and-run caution before enabling it.
     "energy_scale": 0.0,
     "energy_ref_m": 1000.0,
+    # v5 flat term -- kept ONLY as the fallback when the v6 dense shaping below
+    # is disabled (altitude_penalty_scale=0.0).
     "low_altitude_penalty": 0.1,
+    # v6 dense altitude-floor shaping (2026-08-04) -- replaces the flat term
+    # above. The v5 term was a constant -low_altitude_penalty below 600 m with NO
+    # gradient, and the only other anti-crash signal (terminal loss_reward on
+    # ground impact) discounts to ~0 over 1000s-of-step episodes at gamma<=0.997
+    # -- so nothing taught altitude discipline and the v5 policy learned to fly
+    # itself into the ground (eval 2026-08-04: 20/20 self-crash vs BT, 0 wins).
+    # This term is DENSE (paid every step) and ramps quadratically from 0 at
+    # altitude_soft_floor_m to -altitude_penalty_scale at/below altitude_floor_m
+    # (the config.py min_altitude=300 crash floor), giving an immediate climb
+    # gradient the policy feels every step, independent of gamma. It is gentle at
+    # normal ACM altitudes (>~1000 m) and only bites near the ground. Set
+    # altitude_penalty_scale=0.0 to restore the v5 flat behavior.
+    "altitude_floor_m": 300.0,
+    "altitude_soft_floor_m": 1500.0,
+    "altitude_penalty_scale": 1.0,
     # Per-step total-reward clamp (finite-guard, added 2026-08-01). Wide enough
     # that terminal +/-100 and all normal shaping never touch it; only bounds a
     # pathological outlier. Set to 0.0 to disable the clamp (the NaN/Inf coercion
@@ -203,9 +220,24 @@ def compute_reward(
     r_damage = float(reward_config["damage_scale"]) * (est_target_damage - est_ownship_damage)
     components["damage"] = r_damage
 
-    r_safety = 0.0
-    if float(ownship_state[StateIndex.ALT]) < 600.0:
-        r_safety = -float(reward_config["low_altitude_penalty"])
+    # v6 dense altitude-floor shaping (see MY_REWARD_CONFIG's altitude_* keys).
+    # Quadratic ramp from soft floor -> hard floor gives a per-step climb gradient
+    # the policy feels immediately, unlike v5's flat sub-600 m constant (no
+    # gradient) whose only teeth were a terminal loss discounted to ~0 over
+    # multi-thousand-step episodes -- the direct cause of the 100% self-crash.
+    alt_m = float(ownship_state[StateIndex.ALT])
+    alt_scale = float(reward_config.get("altitude_penalty_scale", 0.0))
+    hard_floor = float(reward_config.get("altitude_floor_m", 300.0))
+    soft_floor = float(reward_config.get("altitude_soft_floor_m", 1500.0))
+    if alt_scale > 0.0 and soft_floor > hard_floor:
+        frac = (soft_floor - alt_m) / (soft_floor - hard_floor)
+        frac = min(1.0, max(0.0, frac))
+        r_safety = -alt_scale * frac * frac
+    else:
+        r_safety = (
+            -float(reward_config.get("low_altitude_penalty", 0.0))
+            if alt_m < 600.0 else 0.0
+        )
     components["safety"] = r_safety
 
     r_terminal = 0.0

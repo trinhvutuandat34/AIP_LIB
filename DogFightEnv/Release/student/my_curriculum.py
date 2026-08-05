@@ -263,6 +263,20 @@ def _habfm_stage() -> CurriculumStage:
 def get_stages() -> list[CurriculumStage]:
     base = list(_builtin_get_stages())
 
+    # Fix a latent builtin crash: stage 0 flight_survival ships
+    # randomization={"enabled": True, "radius": 0.0, ...}, so the env's
+    # add_random_init_position() calls np_random.integers(0, radius) and raises
+    # "high <= 0" on the very first reset (never hit before -- no full training
+    # run had reached it). radius=1.0 keeps the intended zero position offset
+    # (integers(0, 1) always returns 0) while being a valid bound. src/ is
+    # no-edit, so patch the base stage list here.
+    base = [
+        replace(s, randomization={**s.randomization, "radius": 1.0})
+        if s.randomization.get("enabled") and float(s.randomization.get("radius", 0)) <= 0.0
+        else s
+        for s in base
+    ]
+
     obfm_stages = [
         _obfm_stage(
             name="obfm_offensive",
