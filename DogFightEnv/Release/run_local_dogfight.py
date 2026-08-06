@@ -29,12 +29,13 @@ from student.inference_providers import (
     StudentHybridProvider,
     verify_bundle_observation,
 )
+from student.controller_providers import VPTrackingProvider
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run local dogfight simulation between two inference backends.")
-    parser.add_argument("--ownship-backend", choices=["rl", "bt", "hybrid", "fixed"], required=True)
-    parser.add_argument("--target-backend", choices=["rl", "bt", "hybrid", "fixed"], required=True)
+    parser.add_argument("--ownship-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "fixed"], required=True)
+    parser.add_argument("--target-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "fixed"], required=True)
     parser.add_argument("--ownship-bundle-dir")
     parser.add_argument("--target-bundle-dir")
     parser.add_argument("--ownship-bt-dll", default="AIP_BASE.dll")
@@ -77,6 +78,24 @@ def build_provider(
         return None
     if backend == "bt":
         return BTActionProvider(dll_name=bt_dll)
+    if backend == "vptrack":
+        # Native BT for tactics/throttle, student-space control law for terminal pointing.
+        # See student/controller_providers.py for the measured defect this bypasses.
+        return VPTrackingProvider(dll_name=bt_dll)
+    if backend == "hybrid_vptrack":
+        # Same residual hybrid as "hybrid", but the BT floor underneath is the one that can
+        # actually point. This is the Sec 3 submission architecture on a fixed floor.
+        if not bundle_dir:
+            raise ValueError(f"--{side}-bundle-dir is required when {side}-backend=hybrid_vptrack")
+        _verify_bundle_if_present(bundle_dir, observation_mode, observation_module)
+        rl_provider = RemappedRLProvider(bundle_dir=bundle_dir, algorithm_factory=build_algorithm_from_bundle, policy_id=policy_id)
+        return StudentHybridProvider(
+            primary_provider=rl_provider,
+            secondary_provider=VPTrackingProvider(dll_name=bt_dll),
+            mode=hybrid_mode,
+            alpha=alpha,
+            residual_scale=residual_scale,
+        )
     if backend == "rl":
         if not bundle_dir:
             raise ValueError(f"--{side}-bundle-dir is required when {side}-backend=rl")

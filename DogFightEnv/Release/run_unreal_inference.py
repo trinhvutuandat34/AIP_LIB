@@ -31,6 +31,7 @@ from student.inference_providers import (
 )
 # DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. See the
 # module docstring for the two client fragilities this guards against (COMPETITION_RULES Sec8).
+from student.controller_providers import VPTrackingProvider
 from student.submission_resilience import ResilientActionProvider, supervise_client
 
 # python run_unreal_inference.py --mode rl --bundle-dir artifacts\models\team01\v1 --team-name team01
@@ -38,7 +39,7 @@ from student.submission_resilience import ResilientActionProvider, supervise_cli
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run RL/BT/Hybrid inference and communicate with the Unreal AI server over UDP.")
-    parser.add_argument("--mode", choices=["rl", "bt", "hybrid"], required=True, help="Inference backend to use.")
+    parser.add_argument("--mode", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack"], required=True, help="Inference backend to use.")
     parser.add_argument("--server-ip", default="192.168.10.115", help="Unreal server IP address.")
     parser.add_argument("--server-port", type=int, default=9999, help="Unreal server UDP port.")
     parser.add_argument("--team-name", default="FDSA", help="Client team name sent to the Unreal server.")
@@ -99,6 +100,12 @@ def build_action_provider(args, effective_observation_mode: str):
     if args.mode == "bt":
         return BTActionProvider(dll_name=args.bt_dll)
 
+    # vptrack: native BT tactics/throttle + the student-space terminal-pointing law.
+    # Live-parity safe -- it reads ownship_state/target_state, which unreal/policies.py
+    # populates on the live path exactly as single_agent_env.py does locally.
+    if args.mode == "vptrack":
+        return VPTrackingProvider(dll_name=args.bt_dll)
+
     if args.bundle_dir is None:
         raise ValueError("--bundle-dir is required for rl and hybrid modes")
 
@@ -117,7 +124,11 @@ def build_action_provider(args, effective_observation_mode: str):
     if args.mode == "rl":
         return rl_provider
 
-    bt_provider = BTActionProvider(dll_name=args.bt_dll)
+    bt_provider = (
+        VPTrackingProvider(dll_name=args.bt_dll)
+        if args.mode == "hybrid_vptrack"
+        else BTActionProvider(dll_name=args.bt_dll)
+    )
     return StudentHybridProvider(
         primary_provider=rl_provider,
         secondary_provider=bt_provider,

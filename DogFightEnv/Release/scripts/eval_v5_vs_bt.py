@@ -644,7 +644,7 @@ def target_env_mode(backend: str) -> str:
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--ownship-backend", choices=["rl", "bt", "hybrid", "fixed"], required=True)
+    p.add_argument("--ownship-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "fixed"], required=True)
     p.add_argument("--target-backend",
                    choices=["rl", "bt", "hybrid", "fixed", "autopilot", "loiter"], required=True,
                    help="'autopilot' holds heading/altitude/speed for the full 200 s -- prefer it "
@@ -878,7 +878,19 @@ def main():
                     role = "offensive" if args.scenario_mode == "obfm_offensive" else "defensive"
                     scen = {"mode": "obfm", "role": role,
                             "altitude_m": OBFM_ALTITUDE_M, "speed_mps": OBFM_SPEED_MPS}
-                env.reset(seed=args.seed + episode, options={"initial_scenario": scen})
+                # Capture reset()'s info (2026-08-06). The env sets the initial-geometry keys
+                # (initial_distance_m / initial_ata_deg / initial_aa_deg) ONLY at reset --
+                # single_agent_env.py's step() never re-emits them. Discarding this return meant
+                # the row below read them off the FINAL step's info and fell through to the 0.0
+                # default: every episode in artifacts/eval/v6_rl_vs_bt.csv logged
+                # initial_distance_m = 0.0, so the newest eval could not report its own spawn
+                # geometry (v5_vs_bt.csv, written before the phased-scoring rewrite, has real
+                # values). Spawn geometry is load-bearing here -- E1 traced the bimodality to a
+                # 0.017 deg spawn perturbation, which is unreadable without it.
+                _, reset_info = env.reset(
+                    seed=args.seed + episode, options={"initial_scenario": scen}
+                )
+                reset_info = reset_info or {}
                 terminated = truncated = False
                 total_reward = 0.0
                 info: dict = {}
@@ -962,7 +974,10 @@ def main():
                     "steps": info.get("ep_step_count", ""),
                     "ep_wez_steps": info.get("ep_wez_steps", ""),
                     "ep_min_distance": round(float(info.get("ep_min_distance", 0.0)), 1),
-                    "initial_distance_m": round(float(info.get("initial_distance_m", 0.0)), 1),
+                    # From reset_info, not info: step() never re-emits the initial geometry.
+                    "initial_distance_m": round(
+                        float(reset_info.get("initial_distance_m",
+                                             info.get("initial_distance_m", 0.0))), 1),
                     # proj=True (2D azimuth) -- straight from the platform info dict.
                     "final_ata_deg_2d": round(float(info.get("final_ata_deg", 0.0)), 1),
                     "final_aa_deg_2d": round(float(info.get("final_aa_deg", 0.0)), 1),

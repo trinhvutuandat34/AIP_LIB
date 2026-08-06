@@ -48,6 +48,27 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+# Force UTF-8 on stdout/stderr (2026-08-06). This file prints non-ASCII glyphs in ordinary
+# progress output -- "✓ Stage N advancement", "→ Final bundle saved", the Korean
+# comments' em-dashes. When stdout is a UTF-8 console that is fine, but when it is REDIRECTED
+# TO A FILE Python falls back to the Windows ANSI codepage (cp1252) and every one of those
+# prints raises UnicodeEncodeError. Measured 2026-08-06 on a redirected probe run:
+#   * `print(f"\n  ✓ Stage {i} advancement: ...")` raised at stage advancement and
+#     KILLED THE RUN (exit 1) after the stage had trained successfully;
+#   * the "→ Final bundle saved" print raised inside the bundle-save try/except, which
+#     reported it as "[WARNING] Final bundle save failed" -- a print failure masquerading as
+#     a lost bundle, which is exactly the kind of message that sends a debugging session in
+#     the wrong direction.
+# Unattended runs are launched redirected (scripts/launch_v4_when_free.ps1 and every
+# `> log 2>&1` invocation), so this is the failure mode that matters. Reconfiguring here is
+# preferred over hunting individual glyphs: it cannot miss one that gets added later.
+import io
+for _stream in ("stdout", "stderr"):
+    try:
+        getattr(sys, _stream).reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, io.UnsupportedOperation):
+        pass
+
 ROOT = Path(__file__).resolve().parent   # Release/ 루트
 SRC  = ROOT / "src"
 for p in (ROOT, SRC):
@@ -67,6 +88,7 @@ from ray.tune.logger import UnifiedLogger
 from DogFightEnvWrapper import DogFightWrapper
 from student.obfm_scenario_wrapper import ObfmScenarioWrapper
 from student.habfm_scenario_wrapper import HabfmScenarioWrapper
+from student.my_callbacks import StudentDogFightCallbacks
 from dogfight.ai.checkpoint_io import (
     apply_lightweight_policy_bundle,
     save_lightweight_policy_bundle,
@@ -606,39 +628,108 @@ def _estimate_object_memory_mb(obj: Any) -> Any:
         return "n/a"
 
 
+def _cm_get(cm: dict, base: str):
+    """Look up a custom metric under BOTH RLlib naming conventions.
+
+    ROOT CAUSE of the dead telemetry (found 2026-08-06). Every lookup below used the `_mean`
+    suffix, which is the OLD API stack's convention: `episode.custom_metrics[k] = v` was
+    auto-aggregated by RLlib into `k_mean` / `k_min` / `k_max`. On Ray 2.54's NEW stack
+    `SingleAgentEpisode` has no `custom_metrics` attribute at all (verified: `hasattr` is
+    False), so `src/dogfight/ai/callbacks.py` falls to its `metrics_logger.log_value(
+    ("custom_metrics", k), reduce="mean")` branch -- which stores the key **bare**, as `k`.
+    So all 21 lookups missed and every row wrote "n/a".
+
+    That is the whole bug: the callback fires correctly and the MetricsLogger receives the
+    values (proved by DOGFIGHT_CALLBACK_TRACE -- 9 fires, real MetricsLogger, on the probe run
+    that produced 9 completed episodes). Nothing was ever wrong with the env, the callback, or
+    the info dict. v4 logged these fine because it ran before the stack switch; v5 and v6 then
+    trained 4,700 iterations each with the CSV silently writing "n/a" into every row.
+
+    Bare name first (new stack), `_mean` second (old stack), so this keeps working either way.
+    """
+    if base in cm:
+        return cm[base]
+    return cm.get(f"{base}_mean", "n/a")
+
+
+_CM_CARRY: dict = {}
+_CM_AGE = [0]
+
+
+def _is_missing(v) -> bool:
+    if v is None or v == "n/a":
+        return True
+    try:
+        return isinstance(v, float) and math.isnan(v)
+    except Exception:
+        return False
+
+
+def _carry_forward(metrics: dict) -> dict:
+    """Hold the last real value across iterations in which no episode ended.
+
+    Sampling is 100 env steps per training iteration against 2,000-12,000-step episodes, so
+    most iterations close no episode and have genuinely nothing to report. Measured on the
+    2026-08-06 probe (300-step episodes): values appeared on a strict alternating pattern,
+    present only on the exact iterations an episode ended.
+
+    Logging with `window=` on the MetricsLogger does NOT fix this -- RLlib's EnvRunner reduces
+    and clears its logger every sample call, so the window never spans iterations. Carrying
+    forward here, on the consumer side, is independent of RLlib's reduce semantics.
+
+    `metrics_age_iters` reports how many iterations old the carried value is, so a stale
+    reading is never mistaken for a fresh one -- 0 means measured this iteration.
+    """
+    if all(_is_missing(v) for v in metrics.values()):
+        if _CM_CARRY:
+            _CM_AGE[0] += 1
+            return {**_CM_CARRY, "metrics_age_iters": _CM_AGE[0]}
+        return {**metrics, "metrics_age_iters": "n/a"}
+    _CM_CARRY.clear()
+    _CM_CARRY.update(metrics)
+    _CM_AGE[0] = 0
+    return {**metrics, "metrics_age_iters": 0}
+
+
 def _extract_custom_metrics(result: dict) -> dict:
     cm = result.get("env_runners", {}).get("custom_metrics", {})
-    return {
-        "win_rate":          cm.get("win_mean",                    "n/a"),
-        "loss_rate":         cm.get("loss_mean",                   "n/a"),
-        "timeout_rate":      cm.get("timeout_mean",                "n/a"),
-        "crash_rate":        cm.get("crash_mean",                  "n/a"),
-        "ep_wez_steps":      cm.get("ep_wez_steps_mean",           "n/a"),
-        "ep_mean_distance":  cm.get("ep_mean_distance_mean",       "n/a"),
-        "ep_min_distance":   cm.get("ep_min_distance_mean",        "n/a"),
-        "ep_reward_survival":cm.get("ep_reward_survival_mean",     "n/a"),
-        "ep_reward_pursuit": cm.get("ep_reward_pursuit_mean",      "n/a"),
-        "ep_reward_damage":  cm.get("ep_reward_damage_mean",       "n/a"),
-        "ep_altitude_penalty_steps": cm.get(
-            "ep_altitude_penalty_steps_mean", "n/a"
-        ),
-        "action_sat_rate":   cm.get("action_saturation_rate_mean", "n/a"),
-        "action_roll_mean":  cm.get("action_roll_mean_mean",       "n/a"),
-        "action_pitch_mean": cm.get("action_pitch_mean_mean",      "n/a"),
-        "action_rudder_mean":cm.get("action_rudder_mean_mean",     "n/a"),
-        "action_throttle_mean": cm.get("action_throttle_mean_mean", "n/a"),
-        "action_roll_std":   cm.get("action_roll_std_mean",        "n/a"),
-        "action_pitch_std":  cm.get("action_pitch_std_mean",       "n/a"),
-        "action_rudder_std": cm.get("action_rudder_std_mean",      "n/a"),
-        "action_throttle_std": cm.get("action_throttle_std_mean",  "n/a"),
-        "initial_alpha_deg": cm.get("initial_alpha_deg_mean",      "n/a"),
-        "initial_ata_deg":   cm.get("initial_ata_deg_mean",        "n/a"),
-        "initial_aa_deg":    cm.get("initial_aa_deg_mean",         "n/a"),
-        "initial_distance_m":cm.get("initial_distance_m_mean",     "n/a"),
-        "final_ata_deg":     cm.get("final_ata_deg_mean",          "n/a"),
-        "final_aa_deg":      cm.get("final_aa_deg_mean",           "n/a"),
-        "headon_guard_fail": cm.get("headon_guard_fail_mean",      "n/a"),
-    }
+    return _carry_forward({
+        "win_rate":          _cm_get(cm, "win"),
+        "loss_rate":         _cm_get(cm, "loss"),
+        "timeout_rate":      _cm_get(cm, "timeout"),
+        "crash_rate":        _cm_get(cm, "crash"),
+        "ep_wez_steps":      _cm_get(cm, "ep_wez_steps"),
+        "ep_mean_distance":  _cm_get(cm, "ep_mean_distance"),
+        "ep_min_distance":   _cm_get(cm, "ep_min_distance"),
+        "ep_reward_survival":_cm_get(cm, "ep_reward_survival"),
+        "ep_reward_pursuit": _cm_get(cm, "ep_reward_pursuit"),
+        "ep_reward_damage":  _cm_get(cm, "ep_reward_damage"),
+        "ep_altitude_penalty_steps": _cm_get(cm, "ep_altitude_penalty_steps"),
+        "action_sat_rate":   _cm_get(cm, "action_saturation_rate"),
+        "action_roll_mean":  _cm_get(cm, "action_roll_mean"),
+        "action_pitch_mean": _cm_get(cm, "action_pitch_mean"),
+        "action_rudder_mean":_cm_get(cm, "action_rudder_mean"),
+        "action_throttle_mean": _cm_get(cm, "action_throttle_mean"),
+        "action_roll_std":   _cm_get(cm, "action_roll_std"),
+        "action_pitch_std":  _cm_get(cm, "action_pitch_std"),
+        "action_rudder_std": _cm_get(cm, "action_rudder_std"),
+        "action_throttle_std": _cm_get(cm, "action_throttle_std"),
+        "initial_alpha_deg": _cm_get(cm, "initial_alpha_deg"),
+        "initial_ata_deg":   _cm_get(cm, "initial_ata_deg"),
+        "initial_aa_deg":    _cm_get(cm, "initial_aa_deg"),
+        "initial_distance_m":_cm_get(cm, "initial_distance_m"),
+        "final_ata_deg":     _cm_get(cm, "final_ata_deg"),
+        "final_aa_deg":      _cm_get(cm, "final_aa_deg"),
+        "headon_guard_fail": _cm_get(cm, "headon_guard_fail"),
+        # Self-diagnosing counters from student/my_callbacks.py (2026-08-06). If every
+        # metric above reads n/a but cb_fired is 1.0, the callback IS running and the
+        # metrics path is at fault; if cb_fired is also n/a, the callback never fired.
+        # Without these the two failure modes are indistinguishable in the CSV -- which
+        # is how the dead-telemetry bug survived 9,400 iterations across v5 and v6.
+        "cb_fired":          _cm_get(cm, "cb_fired"),
+        "cb_empty_info":     _cm_get(cm, "cb_empty_info"),
+        "cb_no_info_at_all": _cm_get(cm, "cb_no_info_at_all"),
+    })
 
 
 def _fmt(val, fmt=".4f"):
@@ -669,6 +760,7 @@ _CSV_FIELDS = [
     "initial_alpha_deg", "initial_ata_deg", "initial_aa_deg",
     "initial_distance_m", "final_ata_deg", "final_aa_deg",
     "headon_guard_fail",
+    "cb_fired", "cb_empty_info", "cb_no_info_at_all", "metrics_age_iters",
     "policy_loss", "vf_loss", "entropy", "kl", "clip_frac", "explained_var",
     "actor_loss", "critic_loss", "alpha_loss", "alpha", "target_entropy",
     "replay_buffer_size", "replay_buffer_memory_mb", "env_steps_per_sec",
@@ -988,6 +1080,18 @@ class CurriculumTrainer:
         # if a stable run's learning is measurably too slow. Grad-clip is orthogonal to
         # (and complements) the reward finite-guard/clamp in student/my_reward.py.
         config = config.training(grad_clip=1.0, grad_clip_by="global_norm")
+
+        # --- Episode metrics (added 2026-08-06) ----------------------------------
+        # Same pattern and same reason as grad_clip above: the fix belongs to a module
+        # inside the src/dogfight/** no-edit boundary, so it is applied here on the
+        # returned config instead. rllib_utils.build_algorithm_config() sets the stock
+        # DogFightCallbacks; this swaps in the student subclass.
+        # What it fixes: crash_rate / win_rate / ep_wez_steps / ep_altitude_penalty_steps
+        # were logged 0 times across ALL 4,700 iterations of v6 and all 4,700 of v5 (v4
+        # logged them in 557/1,901 rows), so both campaigns trained with no episode-level
+        # telemetry and the curriculum's advance_conditions gates were inert -- every stage
+        # advanced on max_iterations. See student/my_callbacks.py for the two defects.
+        config = config.callbacks(StudentDogFightCallbacks)
 
         # Redirect RLlib's per-run logdir off the default ~/ray_results (C: on
         # the Windows box) into the repo's artifacts/ tree (D:), alongside the

@@ -1,0 +1,66 @@
+# real_eagle v7_probe - a telemetry probe, NOT a training run (2026-08-06).
+#
+# Purpose: prove that per-episode metrics reach the training CSV again. Across v6's 4,700
+# iterations and v5's 4,700 iterations, crash_rate / win_rate / ep_wez_steps /
+# ep_altitude_penalty_steps were logged ZERO times (v4: 557/1,901 rows), so both campaigns
+# trained blind and the curriculum's advance_conditions gates were inert -- every stage
+# advanced on max_iterations alone.
+#
+# Everything below mirrors real_eagle_v6.yaml except:
+#   * curriculum.stages_module -> student.probe_curriculum (stage 0 only, 15 iterations)
+#   * output.tag -> v7_probe, so it cannot touch v6's artifacts
+#
+# ACCEPTANCE: in artifacts/curriculum/real_eagle/v7_probe/training_log.csv, crash_rate and
+# ep_wez_steps must be non-"n/a" in >=90% of rows. The three cb_* columns say which path ran
+# if it fails: cb_fired non-"n/a" means the callback IS firing and the metrics path is at
+# fault; cb_fired "n/a" too means it never fired at all.
+#
+# run:
+#   python scripts\run_experiment.py experiments\real_eagle_v7_probe.yaml
+
+name: real_eagle_v7_probe
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: v7_probe
+
+env:
+  observation_mode: custom
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  observation_module: student.my_observation_v2
+
+curriculum:
+  stages_module: student.probe_curriculum
+
+algo:
+  name: sac
+  framework: torch
+  lr: 3.0e-4
+  gamma: 0.997
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  replay_buffer_capacity: 300000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+runtime:
+  num_env_runners: 0
+  resume: false
+
+policy_probe:
+  enabled: false
+
+engagement_log:
+  enabled: false
+
+notes: >
+  Telemetry probe only. Stage 0, 15 iterations, no policy probe, no engagement replays.
+  Validates student/my_callbacks.py end to end through the real train_curriculum.py path.
