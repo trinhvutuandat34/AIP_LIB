@@ -138,5 +138,11 @@ class ObfmScenarioWrapper(gym.Wrapper):
             )
         return self.env.reset(seed=seed, options=options)
 
+    def make_tacviewLog(self):
+        # Same gym.Wrapper forwarding gap as HabfmScenarioWrapper (see that
+        # file) -- needed here too since stacking order could put this
+        # wrapper outermost.
+        return self.unwrapped.make_tacviewLog()
+
 
 __all__ = ["ObfmScenarioWrapper", "apply_obfm_scenario"]

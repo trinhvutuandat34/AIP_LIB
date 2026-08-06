@@ -3,7 +3,11 @@
 namespace Action
 {
 	// Primary handler for the head-on merge (Gate 2's merge-check Sequence in
-	// Rule_forTraining.xml already confirmed HCA>150, both ATA<20, Distance 3000-10000m) --
+	// Rule_forTraining.xml already confirmed HCA>150, both ATA<20, Distance 500-10000m) --
+	// NOTE: that floor was 3000m when this comment was first written; lowered to 500m on
+	// 2026-07-16 because 3000m excluded the entire real Prelims starting range (2000-3000ft =
+	// ~610-914m), so this node could only ever fire for the rare Finals tie-break. Comment
+	// corrected 2026-08-05; check Rule_forTraining.xml, not this line, for the live values --
 	// this is also the Finals tie-break scenario (10,000+ft, face-to-face restart) and what the
 	// curriculum's two_circle_headon_a000..a180 alpha-sweep trains against.
 	static const double NTN_PHASE1_S = 1.5;

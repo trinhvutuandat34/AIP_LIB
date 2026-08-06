@@ -12,8 +12,15 @@ enum BFM_Mode
 	DBFM,
 	DETECTING,
 	SCISSORS,
-	NONE
-
+	NONE,
+	// Sentinel for "DECO_BFMCheck was handed a CheckBFM string it doesn't recognize". Deliberately
+	// a value BB->BFM can never hold, so an XML typo fails CLOSED. Before this existed the
+	// unrecognized branch fell back to NONE -- which is exactly what BB->BFM always is, since no
+	// situational classifier writes it (and none is planned: COMPETITION_PLAN.md's standing
+	// decision is that maneuvers get concrete per-node Decorator guards instead). Net effect was
+	// inverted: a typo'd CheckBFM matched NONE and returned SUCCESS, while a correctly-spelled one
+	// returned FAILURE. Keep this LAST so the existing values are not renumbered.
+	BFM_Unknown
 };
 
 enum ACM_Mode
@@ -29,19 +36,11 @@ enum TeamColor
 	UNKNOWN
 };
 
-enum S_BFM_Mode
-{
-	S_OBFM,
-	S_HABFM,
-	S_DBFM,
-	S_Others
-};
-
-enum WeaponMode
-{
-	Gun,
-	Missile
-};
+// Removed 2026-08-05 (dead-type prune, item #1): enum S_BFM_Mode {S_OBFM,S_HABFM,S_DBFM,S_Others}
+// -- a second, competing BFM taxonomy with zero references anywhere in the codebase and no
+// blackboard field of that type; and enum WeaponMode {Gun,Missile} -- missile-era residue, likewise
+// unreferenced (this competition is guns-only, see CLAUDE.md). Neither is on the DLL wire contract:
+// LibMain.cpp's Step() carries missile/flare intent as plain bool& parameters, not these types.
 
 // BT tactics-expansion phase tracker (AERIAL_COMBAT_BT_GUIDE_DETAILED.md). SyncActionNode
 // forbids returning RUNNING (action_node.cpp: "SyncActionNode MUST never return RUNNING"), so
@@ -64,7 +63,10 @@ enum ManeuverID
 	Maneuver_LagDisplacementRoll,
 	Maneuver_SingleSideOffset,
 	Maneuver_AnglesTactics,
-	Maneuver_EnergyTactics
+	Maneuver_EnergyTactics,
+	// Sentinel -- sizes ManeuverCooldownUntil[] below. Keep LAST; any new maneuver goes
+	// immediately above this line, never after it.
+	Maneuver_Count
 };
 
 /*
@@ -99,12 +101,8 @@ public:
 	}
 };
 
-struct MissileTarget
-{
-public:
-	int ListIndex;
-	int DISID;
-};
+// Removed 2026-08-05 (same dead-type prune as above): struct MissileTarget {ListIndex, DISID}
+// -- unreferenced, no field of that type existed, and guns-only means nothing would populate it.
 
 /*
 그지같은 구조의 트리&블랙보드 구조를 개선해보기 위하여 만든 블랙보드 객체
@@ -181,21 +179,29 @@ public:
 	float TargetSpecificEnergy;							//타겟 비행기 비에너지
 	float EnergyRatio;										//OwnSpecificEnergy / TargetSpecificEnergy
 
-	// Cooldown after Task_VerticalScissors releases (time-cap or altitude-abort) before it may
-	// claim again. Found necessary in local testing: without it, the same geometry that
-	// triggered one activation is usually still true immediately after release, so the node
-	// re-claims and repeats the climb/dive cycle back-to-back, netting a persistent descent
-	// over several cycles even though no single activation runs away indefinitely anymore.
-	double VerticalScissorsCooldownUntil;
-
-	// Same cooldown pattern for Task_Evade ("The Break"). Found in a recheck of the node, not
-	// caught when it was first written: unlike VerticalScissors, this one had NO unconditional
-	// elapsed-time release at all -- only EnemyInSight_Target going false, or Distance growing
-	// past the 5km goal, released it. EnemyInSight_Target is a ~191-degree hemisphere check with
-	// no range limit (CheckSight.cpp), so it stays true through most close engagements; without a
-	// cap, ClaimManeuverPhase's own stale-claim self-heal (Functions.cpp) just resets elapsed back
-	// to 0 every staleAfterSeconds instead of forcing a release, so the node could hold Gate 1's
-	// slot indefinitely -- short-circuiting the outer Fallback before Gate 2/4 ever get evaluated.
-	double TheBreakCooldownUntil;
+	// Per-maneuver re-entry cooldown, indexed by ManeuverID. RunningTime < entry => that maneuver
+	// may not make a FRESH claim yet (an already-active one is unaffected). -1 means "never
+	// cooled down". Set via BTFunc::ReleaseManeuverPhaseWithCooldown, read via
+	// BTFunc::IsManeuverOnCooldown -- do not poke this array directly.
+	//
+	// Consolidated 2026-08-05 from two hand-rolled scalar fields
+	// (VerticalScissorsCooldownUntil / TheBreakCooldownUntil), each of which had duplicated its
+	// own read-check and write-set at the call site; a third node needing the pattern would have
+	// added a third field. Purely mechanical -- identical values, identical semantics. The two
+	// discoveries that motivated them are worth keeping:
+	//
+	//   Task_VerticalScissors: the geometry that triggers one activation is usually still true
+	//   immediately after release, so without a cooldown the node re-claims and repeats the
+	//   climb/dive cycle back-to-back, netting a persistent descent over several cycles even
+	//   though no single activation runs away indefinitely.
+	//
+	//   Task_Evade ("The Break"): had NO unconditional elapsed-time release at all -- only
+	//   EnemyInSight_Target going false, or Distance passing the 5km goal. EnemyInSight_Target is
+	//   a ~191-degree hemisphere check with no range limit (CheckSight.cpp), so it stays true
+	//   through most close engagements; without a cap, ClaimManeuverPhase's stale-claim self-heal
+	//   (Functions.cpp) merely resets elapsed to 0 every staleAfterSeconds instead of forcing a
+	//   release, letting the node hold Gate 1's slot indefinitely and short-circuit the outer
+	//   Fallback before Gate 2/4 were ever evaluated.
+	double ManeuverCooldownUntil[Maneuver_Count];
 
 };

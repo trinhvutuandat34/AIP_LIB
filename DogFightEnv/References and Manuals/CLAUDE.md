@@ -101,11 +101,19 @@ only `Geometry/CMakeLists.txt` exists (an `OBJECT` lib for Vector3/Matrix3/Quate
 it's vestigial — the real build is 100% the `.vcxproj`.
 
 Structure:
-- `LibMain.cpp` — the entire DLL surface. All exports are `extern "C" __declspec(dllexport)`:
-  `CreateBehaviorTree`, `Step` (the per-tick decision call: takes own+other `oPlaneData`, returns
-  stick/throttle + missile/flare launch flags), `GetStick`, `GetAnnotation`, `ChangeData`,
-  `SetTarget`, `SetACM_Mode`, `SetBehaviorTreeDeltaTime`, `LLAtoCartesian`, `GetVP`, `Reset`,
-  `RemoveBT`. `dllmain.cpp` is an empty stub — don't look there for logic.
+- `LibMain.cpp` — the entire DLL surface. **Exactly 9 functions are actually exported** (verified
+  2026-08-05 via `dumpbin /EXPORTS` on a fresh Debug|x64 build): `ChangeData`,
+  `CreateBehaviorTree`, `GetStick`, `GetVP`, `LLAtoCartesian`, `RemoveBT`, `Reset`,
+  `SetBehaviorTreeDeltaTime`, `Step` (the per-tick decision call: takes own+other `oPlaneData`,
+  returns stick/throttle + missile/flare launch flags).
+  **`GetAnnotation`, `SetTarget` and `SetACM_Mode` are NOT exported** — they are declared
+  `__declspec(dllexport)` at the top of `LibMain.cpp` but **never defined anywhere in `AIP_DCS`**.
+  MSVC tolerates a declaration-only export (the build succeeds, 0 errors), it simply omits them
+  from the export table, so they do not exist at runtime. This file previously listed all 12 as if
+  live. Nothing calls them today — the Python side never binds them, and `scripts/eval_v5_vs_bt.py`
+  already notes `GetAnnotation` is "not exposed to Python" — so this is a documentation-accuracy
+  fix, not a live defect; but do not plan work that assumes any of the three can be called.
+  `dllmain.cpp` is an empty stub — don't look there for logic.
 - `BehaviorTree/` — a vendored/embedded copy of BehaviorTree.CPP v3 (`behavior_tree.cpp`,
   `bt_factory.cpp`, `controls/`, `decorators/`, `tinyxml2.*`, etc.).
 - `BehaviorTree/BT_Content/` — the actual air-combat BT node implementations, split by node type.
@@ -116,7 +124,17 @@ Structure:
     `DECO_EnergyRatioCheck`, `DECO_ClosureRateCheck` — all 9 are `registerNodeType`'d, including
     `DECO_BFMCheck` itself; it's still functionally dead because nothing assigns `BB->BFM` away
     from `NONE`, so its match condition can never be true, and it has no caller anywhere in
-    `Rule_forTraining.xml`. Of the live ones, `DECO_SpeedCheck` has no XML caller yet — compiles
+    `Rule_forTraining.xml`. **Fixed 2026-08-05 — it was dead *and* fail-OPEN**: the unrecognized-
+    string branch fell back to `NONE`, the exact value `BB->BFM` permanently holds, so a typo'd
+    `CheckBFM` MATCHED and returned SUCCESS while a correctly-spelled one returned FAILURE —
+    inverted semantics aimed squarely at whoever next tried to use the node. Now routes to a new
+    `BFM_Unknown` sentinel (last member of `BFM_Mode`, so existing values aren't renumbered), so
+    every `CheckBFM` value fails closed. The standing decision that the classifier stays dead
+    (`COMPETITION_PLAN.md`) is unchanged — this only removes the trap. **Needs a DLL rebuild to
+    take effect**; source-only as of this edit. Same pass pruned three dead types from
+    `CPPBlackBoard.h` (`S_BFM_Mode`, `WeaponMode`, `MissileTarget` — all zero-reference, all with
+    in-place removal comments) and initialized `IsAimmingMode`, the one field the blackboard
+    constructor missed. Of the live ones, `DECO_SpeedCheck` has no XML caller yet — compiles
     and works, just unused so far.
   - `Service/`: `AngleOffUpdate`, `AspectAngleUpdate`, `CheckSight`, `DirectionVectorUpdate`,
     `DistanceUpdate`, `SelectTarget`, `EnergyStateUpdate` (Batch A — computes `Es`/`EnergyRatio`

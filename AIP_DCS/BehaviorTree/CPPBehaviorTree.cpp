@@ -252,7 +252,10 @@ StickValue UCPPBehaviorTree::Step(PlaneInfo MyInfo, int NumofOtherPlane, PlaneIn
 		}
 
 
-		bool AimmingMode;
+		// Initialized 2026-08-05: was declared uninitialized, passed by reference into RunCPPBT()
+		// (which never writes it), and never read afterward -- an uninitialized read that only
+		// stayed harmless by accident. Pairs with BB->IsAimmingMode, which had the same gap.
+		bool AimmingMode = false;
 
 		StickValue R;
 

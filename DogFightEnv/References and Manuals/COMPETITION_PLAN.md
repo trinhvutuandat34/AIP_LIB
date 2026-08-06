@@ -172,6 +172,80 @@ guesswork — each is a concrete diff between `DEFAULT_ENV_CONFIG` and the rules
 | 5 | Network-instability = DQ after 2 incidents (§8) | Untested under induced stress | Dedicated robustness workstream (§8 below), independent of model quality | - [ ] |
 | 6 | **Initial spawn geometry** — main match (Prelim + Finals rounds 1–3) starts at **2000–3000 ft**, altitude/speed 15000 ft / 200 m/s (viewer presets); **10000 ft+ head-on is the round-4 tie-break ONLY** (confirmed 2026-07-11 from the official kickoff-deck scenario slides; exact distance/alt/speed "released later" per the deck) | `DEFAULT_ENV_CONFIG` used an unverified 7000 m / 250–300 m/s / ~5000 m baseline | Realign `config.py`'s `ownship`/`target` static arrays + `initial_scenario` + `target_autopilot` to the main-match geometry | - [x] Done 2026-07-10, **corrected 2026-07-11**: static spawn now 4572 m / 200 m/s / **762 m (2500 ft) separation** — an interim 3048 m/10000 ft value (from mis-reading the HABFM screenshot as the main-match spawn) was fixed once the official slides clarified HABFM = the round-4 tie-break preset, not rounds 1–3. `two_circle_headon` altitude 4572 m, speed `[175,225]`; its `alpha_deg`/`turn_diameter_ft`/`separation_jitter_ft` progression mechanics left untouched. **OBFM_RED/OBFM_BLUE exact geometry still unconfirmed** (presumably 2000–3000 ft with one side advantaged); capture from the viewer if needed. |
 
+## 4.1 Official-slide audit — consolidated issue register (2026-08-05)
+
+Built from the official kickoff-deck slides (engagement/damage rules, the AIP Behavior Tree
+tutorial, and the "Advanced 모델 예시" architecture slide) cross-checked against the code, plus a
+measurement session on a fresh Debug|x64 build. **The architecture + BT-tutorial slides are
+transcribed in [AIP_OFFICIAL_ARCHITECTURE_AND_BT_SLIDES.md](AIP_OFFICIAL_ARCHITECTURE_AND_BT_SLIDES.md)**
+(the C and D rows below cite it); the damage-rule slides are in `COMPETITION_RULES.md` §6. Evidence tags: **[M]** measured this session,
+**[D]** already documented elsewhere, **[N]** new from the slides.
+
+### A. Engagement / damage rules
+
+| # | Issue | Evidence |
+|---|---|---|
+| A1 | **Local env implements Phase 1 only** — flat `angle_deg=2.0` (→ ≤1.0°, 500–3000 ft); no phase logic in `update_damage()`. Phase 2 (2°/3500 ft/0.3, opens 100 s) and Phase 3 (3°/4000 ft/0.1, opens 150 s) absent. | [D] + **[M] fixing it changes nothing** — re-scoring every trace under the full 3-phase rule still yields exactly 0 damage. Deprioritized; not worth the `src/dogfight` boundary fight. |
+| A2 | **Damage gradient unexploited — FIXED 2026-08-05 (unvalidated).** `D = (3000−r)/2500` → coefficient **1.0 at 500 ft, 0.0 at 3000 ft**. `Task_GunTrack` had **no range term at all** (pure speed-matcher), so it held whatever range it arrived at. Measured over 2 traces: in-band median range **1825 / 1915 ft → coef 0.47 / 0.43**, closest approach across ~450 in-band steps only **1739 ft** — i.e. **2.1–2.3× of available damage discarded**, never trending toward the high-value edge. Added a bounded range bias toward **220 m (~722 ft, coef ≈0.91)**, floored at 152.4 m so it can only push *away* from the zero-damage zone. Competes with (does not replace) the speed-match term that prevents overshoot. **UNVALIDATED** — harness is bimodal and this node ticks ~100 steps/episode in OBFM, 0 in two-circle. **Exact revert: `GUNTRACK_RANGE_GAIN = 0.0f`** (verified bit-identical to the old behaviour). | [N] → **[M] fixed** |
+| A3 | **Gate 2.5's gun gate is 8× looser than Phase 1** (ATA < 8° vs LOS < 1°). | [M] mis-specified but *not currently binding* — tightening to 2° doesn't help, the BT never reaches 2° in-band anyway. |
+| A4 | **Range and angle are never simultaneously satisfied**, under *any* phase incl. the most permissive 3°/4000 ft. 400–560 in-band steps per window; best in-band ATA 4.48° / 15° / 37° / 42°. Best alignments (0–3.5°) occur at 4,800–10,700 ft. | **[M] — the core unsolved problem** |
+| A5 | **FIXED 2026-08-05.** `r < 500 ft` is a zero-damage dead zone, but Gate 2.5's floor was `Dist > 150` m = 492 ft — an 8 ft sliver where the BT believed it was in the band and damage was 0. Now `Gun_DistGt152p4` / `Distance="152.4"`. XML-only, no rebuild. **NOTE: this edited the LIVE `Rule_forTraining.xml`** (permitted — CLAUDE.md's boundary table allows content edits — but the running v6 job reads that file, so it will pick the change up at its next BT creation). | [N] → **fixed** |
+
+### B. Match rules
+
+| # | Issue | Evidence |
+|---|---|---|
+| B1 | ~~**Gate 0 surrenders ~2,000 ft of legal fighting room.**~~ **WITHDRAWN 2026-08-05 — measurement refuted it.** Across all 24 eval traces, ownship altitude **never once drops below 914 m** (minimum 2182 m; spawn is 4572 m). The trigger is dormant in the real operating envelope, so lowering it would reclaim nothing and only cut dive-recovery margin. The original entry was an armchair reading of the constant against the rulebook, not a measurement. **No change made.** | [N] → **refuted [M]** |
+| B2 | **Overstated — corrected 2026-08-05.** The claim "preempts any diving engagement below ~10,000 ft" was wrong: the trigger requires **both** `alt ≤ 3000 m` **AND** `AltSpeed ≤ −150 m/s` (a genuinely steep dive). Measured conjunction: **3.61%** of steps (4262/118024). Non-trivial — Gate 0 is top priority, so for ~3.6% of a match all tactics are abandoned to climb — but not the emergency described. **No change made**: altering an unvalidatable safety trigger to fix an unconfirmed cost repeats the failure pattern of 2026-08-05's reverted attempts. Worth its own investigation. | [N] → **corrected [M]** |
+| B3 | 200 s episode length — already corrected to 12000 steps across all stages. | resolved 2026-08-01 |
+
+### C. Behavior Tree architecture
+
+| # | Issue | Evidence |
+|---|---|---|
+| C1 | **The official reference tree gates pure pursuit on LOS ≤ 1° — the scoring criterion itself.** Ours gates on ATA < 8° (Gate 2.5), and the tail `Task_Pure` has *no angle gate at all* (`dist < 2000 m` only). The reference aims at what scores; ours aims at a proxy and hopes to converge inside it. | [N], consistent with A4 |
+| C2 | **Complexity has not bought performance.** Reference tree = 4 leaves. Ours = ~25 nodes / 6 gates / 23 Task classes → 0 WEZ steps in every configuration tested. | [M] — argues against adding tactical layers (i.e. against the fight-state-memory Tier 2) |
+| C3 | **"Task Node = VP 생성" is an architectural ceiling.** Tasks emit only an aim point; `Controller_CY` owns VP→stick. No BT-side change can fix terminal pointing except by displacing VP — the lead-feedforward experiment, already tried and reverted. | [N] — bounds what further BT work can achieve |
+| C4 | `DECO_*`/Service inheriting `SyncActionNode` is **correct, not a defect** — the C++ BT collapses Task + Service into a single Action Node ("서비스 노드와 같은 역할 구분이 사라짐"). | [N] — corrects an earlier "semantic mismatch" reading |
+| C5 | BlackBoard is the sanctioned home for memory ("기억"), but only `NeutralEngagementStartTime` is genuine cross-tick fight state. | [D] |
+
+### D. System architecture
+
+| # | Issue | Evidence |
+|---|---|---|
+| D1 | **The project is locked into keeping `Controller_CY` in the loop — and the rules do not require it.** Architecture #1 on the Advanced slide (BT tactics → RL flight control → JSBSIM) has **no controller box**, and the deck states plainly: "무슨 수를 써서라도 접속기에 붙이기만 하면 됩니다." Since the controller is the measured bottleneck, this is the single biggest unexploited option. | **[N] — highest strategic value** |
+| D2 | Pure RL (#3/#5) already failed once — v5 was 100 % self-crash, 20/20 into the ground. Must learn tactics *and* control simultaneously. | [D]; v6 retrying with altitude shaping |
+| D3 | **Residual hybrid (#4-like) — wiring CHECKED 2026-08-05, comes back clean.** All five entry points (`run_local_dogfight.py`, `run_unreal_inference.py`, `my_submission.py`, both eval scripts via `build_provider`) use `RemappedRLProvider`/`StudentHybridProvider`, never the stock classes. Both construction sites pass `primary=RL, secondary=BT`, so residual = `BT + 0.35×RL` — BT baseline, RL correction, the intended direction. Throttle residual is correctly re-centred (`+= scale*(2*rl−1)`), and `switch_by_range` uses `StateIndex.N/E/D` = NED **metres** (no LLA unit trap) and fails safe to BT. | **[M]** verified |
+| D3-a | **Bug found and fixed in the same pass — in E1a's own recycler.** `_recycle_native_bts()` looked for `ai_pilot`/`_registered_fighter_ids` *directly* on the provider; `StudentHybridProvider` has neither (its **secondary** is the BT), so every `--*-backend hybrid` run was **silently skipped**, reinstating the exact cross-episode leak the function exists to remove — with no output saying so. Fixed with a recursive `_iter_bt_providers()` walk over `primary_provider`/`secondary_provider` (cycle-guarded, None-safe; verified finding the BT directly, 1 level deep, and 2 levels deep), plus an up-front topology line so a no-op recycler is now visible instead of silent. | **[M]** |
+| D3-b | **Residual authority is one-sided wherever the BT saturates.** `BTActionProvider` clips before the hybrid sees it, and `Controller_CY` can emit rudder up to **±3** pre-clip (`-sin(UTAngle)*clamp(LOS,0,6)`, then `(MFsum/20+RudderCMD)/2`) and pitch up to **1.5**. With BT pinned at ±1, `BT + 0.35×RL` clips away any RL push in the *same* direction — RL can pull back but not push further. Not a defect, but effective residual authority is asymmetric and axis-dependent; account for it when reading a hybrid A/B, and consider logging per-axis clip-saturation fraction. | **[M]** |
+| D3-c | **Hybrid end-to-end smoke test still OWED.** Blocked 2026-08-05 by resource contention, not by code: Ray refuses to start alongside the live v6 training run (`object store memory 77.8 MB < minimum 78.6 MB`). Structural verification passed (subclass/recursion asserts) and the BT-only path regressed clean (rate 3/8, attractor 1.0388 sd 0.0027 — matches the 1.0380–1.0388 baseline), but a real hybrid episode has not run. Do this before trusting any hybrid result. | **[M]** |
+| D4 | **Throttle is a separate sanctioned RL target (#4) and is unexploited** — every Task node hardcodes throttle constants (0.65 / 0.45 / 0.3 / 1.0 …) with no learning. | [N] |
+
+### E. Cross-cutting — blocks validating everything above
+
+| # | Issue | Evidence |
+|---|---|---|
+| E1 | **The eval harness is nondeterministic — and the cause is a BIFURCATION, not noise.** Bisected 2026-08-05 with 9 runs of `--episodes 1 --seed 0` on an md5-identical DLL. Results are **strictly bimodal**: ATA-min **1.034–1.041°** (4/9, 12 steps ≤2°) or **4.398–4.406°** (5/9, 0 steps ≤2°), nothing between. Spread *within* a mode ≈0.007°; *between* modes 3.37°. Meanwhile spawn ATA varies by only **0.017°** (σ=0.005°). So a 0.017° input perturbation deterministically decides whether the tracking pass converges. Every control-gain A/B in this project's history — including both of 2026-08-05's reverted attempts — was sampling a coin flip at p≈0.44. | **[M]** |
+| E1-cause | Source is **inside `JSBSimAIPLib.dll`'s reset** (the Python reset path is clean — `super().reset(seed=seed)` seeds `np_random` and grep finds no global `np.random`/`random`/`time` use anywhere in the reset chain). That DLL is a protected binary with no source, so **perfect determinism is unachievable; do not chase it.** The correct response is statistical: use success-RATE over N≥30 episodes, never single-episode point comparisons. | **[M]** |
+| E1-leaks | **Cross-episode state leaks are real but are NOT the nondeterminism cause** (a single fresh episode is already bimodal). They matter for a different reason: they destroy **sample independence**, which is exactly what the statistical approach above needs. `BtActionProvider.reset()` is a deliberate no-op and the BT is created once per provider, so across episodes these all carry: `RunningTime` (never reset — makes `Task_EnergyTactics`'s `lateMatch = RunningTime > 180` permanently TRUE from episode 2 onward), `PreviousAltitudeForRate` (bogus ±6000 m/s `AltSpeed` on the first tick of each new episode, feeding Gate 0's runaway-descent trigger), `ErrorSum`/`SumCount`/`MF[]`/`FilterIndex`, and `ActiveManeuverID`/`NeutralEngagementStartTime`/`ManeuverCooldownUntil[]`. | **[M]** |
+| E1-gap | **The BT is 0.038° from scoring, not 4°.** In the converging mode it reaches a tight attractor of **1.038° (sd 0.0024)** against a **≤1.000°** WEZ criterion — a **3.7%** shortfall, in ~35% of episodes (N=20). This supersedes the earlier reading that the BT "cannot track"; A4's disjointness is real for the *failing* mode, but the converging mode is a near-miss. | **[M]** |
+| E1a-done | **Harness fixed for sample independence** (2026-08-05). `scripts/eval_v5_vs_bt.py` gained `_recycle_native_bts()` — `RemoveBT` + clearing `_registered_fighter_ids` between episodes, forcing a fresh blackboard *and* `StickController`. Done from the eval script because `bt_action_provider.py` is inside the `src/dogfight` no-edit boundary. Validated: a 20-episode single-process run reproduces the 9-separate-process distribution within sampling error (35% vs 44%, se≈0.11–0.17). Also added per-episode `ep_min_ata_deg` / `ep_steps_le2_deg` to the CSV — the eval previously logged only *final* ATA, which cannot classify which mode an episode landed in. | **[M]** |
+| E1c-null | **BOTH pitch-error knobs are ruled out for the 0.038° gap.** (1) `INTEGRAL_CAP` cannot matter: at the attractor the integral term is `1.038/7.5 = 0.138`, **well under the 0.25 cap**, so it is unclamped — the cap only binds above ~1.9° error. This retro-explains why the 0.25→0.6 attempt and the earlier cap sweep both read as "no effect". (2) `INTEGRAL_DIV` swept 7.5/6.0/5.0/4.5, N=16/arm: attractor 1.0388 / 1.0389 / 1.0377 / 1.0381 — a 67% gain increase moved steady-state ATA by **less than one sd**. | **[M]** |
+| E1d-**WIN** | **The `MFsum` integer-truncation fix closed 82% of the pointing gap (2026-08-06).** `GetStick`'s rudder moving-average used an `int` accumulator over `float MF[20]`: `MFsum += MF[i]` truncates on **every** iteration, so for any \|value\| < 1.0 it never left zero (verified: 0.15/0.30/0.52/0.90 → exactly 0), and `MFsum / 20` was integer division on top. At the 1.038° attractor `RudderCMD = -sin(UTAngle)·clamp(LOS,0,6)` is bounded by 1.038, so every sample sat in the dead band — **the line reduced to exactly `RudderCMD = RudderCMD/2`**, the filter contributed nothing, and rudder authority was ~**8.7% of nominal** (0.173 taper × 0.5 halving). Fixed to `float` + float divide. **Measured, N=20/arm:** attractor **1.0380 → 1.0070** (gap +0.0380 → **+0.0070**), converging rate **35% → 40%** (no destabilization), dwell ≤2° 84 → 96 steps. sd ≈0.0025 over 7–8 samples ⇒ SE ≈0.001, so a 0.031 shift is ~30 SE. **This is the first change all session to move the attractor at all** — both pitch knobs moved it < 1 sd. **The residual error is on the LATERAL axis, not pitch.** Still 0 steps ≤1.0° ⇒ still no WEZ; remaining target is 0.007°. | **[M] fixed** |
+| E1e-null | **Lateral follow-ups S1–S4 all failed to improve on E1d — the controller is at a local optimum in its scalar gains.** N=20/arm, same harness. **S1** `RollCMD < 0.1` → `abs(...)`: attractor **1.0070 → 1.2116**, ~30 sd WORSE. The sign asymmetry is *load-bearing* — it acts as a 3× boost on all large negative roll commands, so "fixing" it strips real authority. Reverted, and marked DO-NOT-FIX in code. **S2** roll-taper floor {0, 0.25, 0.50}: 1.0052 / 1.0062 / 1.0056 — all within one sd, because `clamp(LOS, FLOOR, 1.0)` with LOS ≈ 1.006 > CEIL returns CEIL for any floor; the taper is simply **inactive** at the operating point (same error class as `INTEGRAL_CAP`). **S3** rudder taper ceiling {6.0, 3.0, 1.5} = {16.8%, 33.5%, 67%} authority: 1.0064 / 1.0540 / 1.1107 — **monotonically worse with more authority**. Combined with E1d (which *doubled* authority and helped), this locates an optimum that the MFsum fix already reached. **S4** moved the `_isnan(LOS)` guard above the roll branch — latent NaN path (LOS was consumed by `if (LOS > 3)` ~45 lines before its guard; `clamp()` propagates NaN unchanged, so only Python's `nan_to_num` was catching it). Behaviour-neutral: 1.0062. **Net: five scalar knobs swept, only the MFsum *correctness bug* moved the attractor favourably. Further gain tuning on `Controller_CY` is unlikely to close the last 0.006° — this strengthens the architectural options (D1 / residual hybrid) over more hand-tuning.** | **[M]** |
+| E1c-next | **Next hypothesis (partially CONFIRMED by E1d above — the lateral axis was indeed the problem):** `PitchCMD = ERROR_Effect × Roll_Effect × Horizon_Effect` is a **product**, with `Roll_Effect = 1 − clamp(|UTAngle|/90, 0, 1)`. If the residual error at the attractor lies mostly out of the pitch plane, `Roll_Effect ≈ 0` and no pitch-error gain can move `PitchCMD` — which is exactly the flat response measured. That would relocate the problem to the **roll/yaw path** (`RollCMD`'s `clamp(LOS,0,1)` scaling, its `LOS>3` / `RollCMD<0.1` branches, and the **inert rudder moving-average filter** — `int MFsum` summing `float MF[20]`, then integer `MFsum/20` → 0 for any \|sum\|<20, so that line merely halves rudder authority). **Confirming this requires per-tick C++ logging of `UTAngle`/`RollCMD`/`Roll_Effect`; the Python trace cannot see them.** Do that before spending more effort on the pitch expression. | **[M]** hypothesis |
+
+### The through-line
+
+A4 and C1 are the same problem from two sides: the tree optimizes toward a **proxy** (ATA < 8°,
+dist < 2000 m) rather than the **scoring condition** (LOS < 1°, 500–3000 ft with a range gradient).
+C3 says the BT alone cannot close it. D1 says the rules permit replacing the component that can't.
+E1 says none of it can be verified yet.
+
+**Agreed work order (2026-08-05): E1 → D3 wiring check → D1/D3 residual hybrid**, with
+**A2 / A5 / B1 / B2** taken opportunistically as cheap XML-and-constants wins that need no
+rebuild-plus-validation cycle.
+
 ## 5. Critical risks to verify *before* investing heavily in training
 
 Both of these are cheap, local, and fast to check — and both would materially change the plan
@@ -508,10 +582,87 @@ file-level state is in `PROJECT_STRUCTURE.md`'s current-state log and `CLAUDE.md
       `FAILURE`, never `RUNNING` (verified against `action_node.cpp` — `SyncActionNode` throws on
       `RUNNING`). Multi-second phased maneuvers track elapsed time via a blackboard-timestamp
       pattern (`ClaimManeuverPhase`/`ReleaseManeuverPhase` in `Functions.h`) instead.
+- [!] **ROOT CAUSE OF THE 0-WEZ SYMPTOM, FOUND 2026-08-05 — the BT's gun gate is 8× looser than
+      the env's actual scoring criterion.** `envs/observation.py:193` scores WEZ as
+      `ata_abs <= wez_config["angle_deg"]/2.0` with `angle_deg=2.0` (`config.py:37`) — i.e. **ATA
+      ≤ 1.0°**. Gate 2.5's `Gun_OwnATA_Lt8` admits **ATA < 8°**. Range is fine (gate 150–914 m vs
+      WEZ 152.4–914.4 m); the **angle** is the whole problem. Measured, not inferred, on a fresh
+      Debug|x64 build over 20 BT-vs-BT episodes:
+      - `two_circle_headon` (10 eps): 10/10 timeout, 0 WEZ. Range-band and alignment are cleanly
+        **disjoint** — in-band steps never go below **15.0°** ATA; aligned steps (<8°) never come
+        closer than **1253 m**. Gate 2.5 therefore never ticked at all in that scenario.
+      - `obfm_offensive` (10 eps, starts ~556 m on the six at ~4.6° ATA): 10/10 timeout, 0 WEZ —
+        but here Gate 2.5 **did** fire, for exactly the 100 steps that satisfied its gate.
+        `Task_GunTrack` held the track as designed and still scored nothing, because it held at
+        ~4.5° ATA (episode min 3.4°) against a 1.0° requirement.
+      **This means the 2026-08-05 widening of `Gun_OwnATA_Lt8` from 5°→8° moved the wrong way**:
+      its stated rationale was more dwell to "grind ATA toward the 1.0-deg WEZ", but the trace
+      shows the node latches and *holds* whatever alignment it entered with rather than converging
+      to 1°, so widening only lets it settle on a definitively non-scoring line. Repro:
+      `python scripts/eval_v5_vs_bt.py --ownship-backend bt --target-backend bt --scenario-mode obfm_offensive --episodes 10 --episode-step-limit 12000 --trace-geometry`
+
+      **Two further fixes were then tried and BOTH FAILED to produce WEZ contact — record them so
+      nobody re-runs them:**
+      1. *Tighten the gate* `Gun_OwnATA_Lt8` 8° → 2° (XML-only, isolated copy under
+         `Release/bt_probe/`). Result: still 0 WEZ in both scenarios, because **the BT never
+         reaches ATA ≤ 2° at all** when close — the gate threshold was never the binding
+         constraint. Tightening only made Gate 2.5 unreachable and pushed 1600 more steps into
+         `Gate1_threat`. Not applied to the live XML.
+      2. *Fix a real integral bug in* `Controller_CY::GetLOSErrorSUM` (**applied, kept**): the
+         constructor pre-fills `ErrorSum` with 60 zeros, then the function `push_back`-ed 59 MORE
+         before switching to cyclic writes — the buffer grew to **119**, indices 60–118 froze with
+         first-second samples forever, and the sum over all 119 was divided by **60**. That is a
+         permanent ≈4.5 constant bias in the OBFM start geometry. Genuinely wrong and now fixed
+         (cyclic write from call 1, divide by true size, `ERROR_SUM_WINDOW` constant). **But it
+         did not fix 0-WEZ**: the only consumer is
+         `clamp(GetLOSErrorSUM(LOS)/7.5, 0, 0.25)`, which saturates for any error above ~1.875°,
+         so at a ~4° residual the frozen-bias version and the correct rolling mean emit the same
+         clamped 0.25. Kept as a strict correctness fix (same rationale as the int→float fix
+         above), **not** as a validated performance win — measured A/B was mixed: OBFM ATA-min
+         3.40°→4.15°, ATA-p1 7.51°→5.49°, WEZ 0→0.
+
+      **THE EVAL HARNESS IS NONDETERMINISTIC — read this before trusting ANY A/B in this file.**
+      Discovered 2026-08-05 while sweeping the integral cap. Byte-identical DLL, identical
+      `--seed 0`, identical `--episodes 4`, two consecutive runs of `eval_v5_vs_bt.py` produced
+      episode-0 ATA minima of **1.033°** and **4.403°** — a 4× spread on identical inputs, far
+      larger than any effect being measured. Repro:
+      `for i in 1 2; do python scripts/eval_v5_vs_bt.py --ownship-backend bt --target-backend fixed --ownship-bt-dll <dll> --scenario-mode obfm_offensive --episodes 4 --seed 0 --trace-geometry --trace-out t$i.csv; done`
+      then compare `min(own_ata)` across `t1.csv`/`t2.csv`.
+      **Consequence**: every control-gain A/B decision in this project's history — the 0.25→0.6
+      widening and its revert, the int→float truncation assessment, and the sweep above — was
+      measured on this harness and must be treated as **unproven**, not as evidence. This very
+      plausibly explains the confusing "fix helps / fix doesn't help / revert" history around
+      `Controller_CY`. Prime suspects: `StickController` state surviving across episodes
+      (`SumCount`/`ErrorSum`/`MF[]`/`FilterIndex` are per-instance and nothing resets them between
+      episodes — `LibMain::Reset()` clears the BT map but not these), and/or JSBSim re-init
+      nondeterminism. **Fixing harness repeatability is now the highest-value next task**: no
+      tuning work here can be validated until it is done.
+
+      **What IS robust** (held across ~12 separate runs, every configuration tried): **0 WEZ
+      contact, always** — BT-vs-BT mirror, BT-vs-BT with a tightened gate, and critically
+      **BT vs a NON-MANEUVERING target**. That last one matters: it rules out "mirror stalemate is
+      expected" (§9 below) as the explanation, because a target that never defends should be
+      trivially convertible. Something in our own tracking/geometry pipeline cannot close the last
+      ~1° — but the *shape* of that failure could not be characterised, because of the harness
+      nondeterminism above.
+
+      **Also found, NOT fixed** (same int-truncation class, in `GetStick`'s rudder path):
+      `int MFsum = 0; for(...) MFsum += MF[i]; RudderCMD = (MFsum/20 + RudderCMD)/2;` — `MF[]` is
+      `float[20]`, so each add truncates, and `MFsum/20` is integer division that yields 0 for any
+      |sum| < 20. The rudder moving-average filter is therefore inert and the line just halves
+      rudder authority. Left alone deliberately: unlike the two above it would change control
+      behavior, and there is no validated baseline to change it against yet.
 - [x] **BFM classifier (`DECO_BFMCheck`) stays dead**, per the standing decision — new maneuvers
       get concrete per-node Decorator guards, not a situational classifier. (Note: the
       HABFM/OBFM/DBFM names *do* reappear at the match-spawn layer — §4 row 6 — but that's the
       viewer positioning aircraft at t=0, unrelated to reviving the in-BT classifier.)
+      **Decision re-affirmed 2026-08-05** after a full re-read of the tree: a classifier would be a
+      second source of truth able to disagree with the per-node gates it sits above, so the
+      rationale holds. But auditing it turned up that the node was dead *and fail-OPEN* — its
+      unrecognized-string branch returned `NONE`, the permanent value of `BB->BFM`, so a **typo'd**
+      `CheckBFM` returned SUCCESS while a correctly-spelled one returned FAILURE. Fixed with a
+      `BFM_Unknown` sentinel so it fails closed; the node stays dead, the trap is gone. Source-only
+      — **requires a DLL rebuild to take effect**. See `CLAUDE.md`'s Decorator bullet for detail.
 - [x] **Aspect-angle sign trap documented**: the native BT's `MyAspectAngle_Degree` (180° = six
       o'clock) and the Python side's `GeoMathUtil._get_aspect_angle` (0° = six o'clock) use
       *opposite* conventions — the two halves of the codebase disagree. Recorded in `CLAUDE.md` so

@@ -14,7 +14,7 @@ namespace Action
 	static const double BREAK_STALE_S = 20.0;
 	static const double BREAK_LATERAL_OFFSET_M = 2000.0;
 	// Unconditional release cap + cooldown, found missing in a recheck (see
-	// TheBreakCooldownUntil's comment in CPPBlackBoard.h for the full failure mode). 5s hard-turn
+	// ManeuverCooldownUntil[]'s comment in CPPBlackBoard.h for the full failure mode). 5s hard-turn
 	// + up to 15s of extend/reassess before giving up on reaching the 5km goal this cycle.
 	static const double BREAK_TOTAL_MAX_S = 20.0;
 	static const double BREAK_COOLDOWN_S = 15.0;
@@ -44,7 +44,7 @@ namespace Action
 		// below is what actually decides when to release.
 		bool active = (*BB)->ActiveManeuverID == Maneuver_TheBreak;
 
-		if (!active && (*BB)->RunningTime < (*BB)->TheBreakCooldownUntil)
+		if (!active && BTFunc::IsManeuverOnCooldown(*BB, Maneuver_TheBreak))
 		{
 			// Still cooling down from hitting the time cap below -- fail so Task_JinkingTurn (or
 			// Gate 2/4, if the outer Gate 1 Fallback itself clears) gets sustained control instead
@@ -66,9 +66,8 @@ namespace Action
 			// Didn't reach the 5km goal separation within budget -- release unconditionally
 			// rather than relying on EnemyInSight_Target/goal-distance alone, neither of which is
 			// guaranteed to trip against a target that stays broadly nose-on and doesn't let
-			// separation cleanly grow. See TheBreakCooldownUntil's comment in CPPBlackBoard.h.
-			BTFunc::ReleaseManeuverPhase(*BB, Maneuver_TheBreak);
-			(*BB)->TheBreakCooldownUntil = (*BB)->RunningTime + BREAK_COOLDOWN_S;
+			// separation cleanly grow. See ManeuverCooldownUntil[]'s comment in CPPBlackBoard.h.
+			BTFunc::ReleaseManeuverPhaseWithCooldown(*BB, Maneuver_TheBreak, BREAK_COOLDOWN_S);
 			return NodeStatus::FAILURE;
 		}
 

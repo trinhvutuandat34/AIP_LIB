@@ -50,7 +50,7 @@ namespace Action
 
 		bool active = (*BB)->ActiveManeuverID == Maneuver_VerticalScissors;
 
-		if (!active && (*BB)->RunningTime < (*BB)->VerticalScissorsCooldownUntil)
+		if (!active && BTFunc::IsManeuverOnCooldown(*BB, Maneuver_VerticalScissors))
 		{
 			// Still cooling down from the last activation -- fail so Task_RollingScissors (or
 			// Gate 4 offense, if the outer merge gate itself clears) gets sustained control
@@ -72,8 +72,7 @@ namespace Action
 		if (altitude < VSCISSORS_ALT_ABORT_M)
 		{
 			// Unconditional abort -- fail so the Fallback rescans from Task_ClimbToSafeAltitude.
-			BTFunc::ReleaseManeuverPhase(*BB, Maneuver_VerticalScissors);
-			(*BB)->VerticalScissorsCooldownUntil = (*BB)->RunningTime + VSCISSORS_COOLDOWN_S;
+			BTFunc::ReleaseManeuverPhaseWithCooldown(*BB, Maneuver_VerticalScissors, VSCISSORS_COOLDOWN_S);
 			return NodeStatus::FAILURE;
 		}
 
@@ -86,8 +85,7 @@ namespace Action
 			// cap the dive/escape phase below had no self-terminating condition other than the
 			// altitude abort above, and drove the aircraft into an unrecoverable dive well
 			// before Task_ClimbToSafeAltitude's 914m trigger could arrest it in time.
-			BTFunc::ReleaseManeuverPhase(*BB, Maneuver_VerticalScissors);
-			(*BB)->VerticalScissorsCooldownUntil = (*BB)->RunningTime + VSCISSORS_COOLDOWN_S;
+			BTFunc::ReleaseManeuverPhaseWithCooldown(*BB, Maneuver_VerticalScissors, VSCISSORS_COOLDOWN_S);
 			return NodeStatus::FAILURE;
 		}
 

@@ -48,6 +48,24 @@ namespace BTFunc
 		}
 	}
 
+	void ReleaseManeuverPhaseWithCooldown(CPPBlackBoard* BB, ManeuverID id, double cooldownSeconds)
+	{
+		ReleaseManeuverPhase(BB, id);
+		if (id > Maneuver_None && id < Maneuver_Count)
+		{
+			BB->ManeuverCooldownUntil[id] = BB->RunningTime + cooldownSeconds;
+		}
+	}
+
+	bool IsManeuverOnCooldown(CPPBlackBoard* BB, ManeuverID id)
+	{
+		if (id <= Maneuver_None || id >= Maneuver_Count)
+		{
+			return false;
+		}
+		return BB->RunningTime < BB->ManeuverCooldownUntil[id];
+	}
+
 	Vector3 PredictedTargetTravel(CPPBlackBoard* BB)
 	{
 		float leadTime = 0.0f;

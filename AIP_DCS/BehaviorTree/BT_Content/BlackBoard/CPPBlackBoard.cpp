@@ -41,6 +41,10 @@ CPPBlackBoard::CPPBlackBoard()
 	AltSpeed = 0;
 	PreviousAltitudeForRate = -1000000.0f;
 
+	// Was the ONE field this constructor missed -- every other member is initialized here, so an
+	// uninitialized read was live (harmless only because nothing currently reads it).
+	IsAimmingMode = false;
+
 	ActiveManeuverID = Maneuver_None;
 	ActiveManeuverStartTime = 0.0;
 	NeutralEngagementStartTime = -1.0;
@@ -49,8 +53,11 @@ CPPBlackBoard::CPPBlackBoard()
 	TargetSpecificEnergy = 0;
 	EnergyRatio = 1.0f;
 
-	VerticalScissorsCooldownUntil = -1.0;
-	TheBreakCooldownUntil = -1.0;
+	// -1 == "never cooled down", matching the two scalar fields this array replaced.
+	for (int i = 0; i < Maneuver_Count; ++i)
+	{
+		ManeuverCooldownUntil[i] = -1.0;
+	}
 
 
 }

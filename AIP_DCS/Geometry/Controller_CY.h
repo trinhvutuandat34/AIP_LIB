@@ -30,6 +30,12 @@ using namespace BT_Geometry;
 
 const double DEG2RAD = 3.14159265358979323846 / 180.0;
 
+// Sample count for GetStick's rudder moving-average filter. Sizes MF[] and drives BOTH the write
+// index and the divisor. Named 2026-08-06: these were three untied literal 20s, the same pattern
+// that had already cost this file once -- see ERROR_SUM_WINDOW in Controller_CY.cpp, where three
+// copies of a bare 60 silently disagreed and froze the LOS-error integral for a whole episode.
+const int RUDDER_FILTER_WINDOW = 20;
+
 struct StickValue
 {
 	float RollCMD;
@@ -40,7 +46,7 @@ struct StickValue
 class StickController
 {
 	int SumCount;
-	float MF[20];
+	float MF[RUDDER_FILTER_WINDOW];
 	int FilterIndex;
 	std::vector<float> ErrorSum;
 

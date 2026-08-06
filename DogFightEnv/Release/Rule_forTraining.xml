@@ -51,6 +51,61 @@
             <!-- GATE 0 - Survival. Absolute top priority, untouched from the original 8-node tree. -->
             <Task_ClimbToSafeAltitude name="Gate0_ClimbToSafeAltitude" BB="{BB}"/>
 
+            <!-- GATE 2.5 - Gun-solution hold. MOVED HERE 2026-08-06 (was between Gate 2 and
+                 Gate 3). Kept the "2.5" name so the diff against the old tree stays readable.
+
+                 WHY THE MOVE. The old placement's own comment said it "sits below Gate 1
+                 (threat) and Gate 2 (merge) so survival and the merge still preempt". Measured
+                 2026-08-06, that preemption is not occasional; it is total:
+
+                   * BT vs BT and BT vs a straight-and-level autopilot target, N=20 each, full
+                     200 s: ZERO WEZ contact and zero damage in either direction. 80 episodes
+                     across three configurations, nothing scored.
+                   * A Python mirror of StickController::GetStick fed with the BT's REAL VP
+                     (agreement 0.997 correlation vs the actual RollCMD) shows that during close
+                     tracking the commanded aimpoint sits 83-87 deg AWAY from the target, and
+                     Roll_Effect = 0.0000, so PitchCMD, which is a PRODUCT with Roll_Effect,
+                     is identically zero exactly when we are trying to track.
+                   * An 85-deg-off aimpoint is the signature of the ownship-relative nodes:
+                     Task_Notch writes MyLocation + perp*3000 (exactly perpendicular),
+                     Task_Evade / Task_EnergyTactics / Task_JinkingTurn write
+                     MyLocation + awayFromTarget. Those are Gate 1 and Gate 2 nodes.
+
+                 So the tree reaches gun geometry (range is achieved ~3 % of steps, min ATA
+                 4.4 deg) and then hands the tick to a defensive node before Gate 2.5 is ever
+                 evaluated. Gate 2.5 is not failing its own decorators; it is not being reached.
+
+                 The reference BT architecture in the AI Combat SDK guide orders its selector
+                 HardDeck -> GunEngagement -> ThreatResponse -> offense, i.e. the SHOT above the
+                 THREAT reaction, and states the principle directly ("offense beats defense;
+                 BreakTurn only when necessary", "removing unnecessary defensive branches made
+                 the tree stronger"). That guide is a DIFFERENT competition with a 12 deg WEZ
+                 cone, so its thresholds must NOT be copied here where the cone is 1 deg, but
+                 the ordering principle applies, and a 1 deg cone makes it matter more, not
+                 less: we can least afford a defensive branch spending our tracking ticks.
+
+                 Survival (Gate 0) still preempts everything, which is the one ordering the
+                 reference also keeps absolute.
+
+                 REVERT: move this whole Sequence back between Gate 2 and Gate 3 (a marker
+                 comment is left at the old location), or restore
+                 Rule_forTraining.xml.bak_gateorder_20260806.
+                 UNVALIDATED at the time of writing; the BT vs autopilot baseline (0/20 WEZ
+                 contact) is the control to re-run against. -->
+            <Sequence name="Gate2p5_GunSolutionHold">
+              <DECO_DistanceCheck name="Gun_DistGt152p4" UpDown="Greater" Distance="152.4" BB="{BB}"/>
+              <DECO_DistanceCheck name="Gun_DistLt914" UpDown="Less" Distance="914" BB="{BB}"/>
+              <!-- WIDENED 5 -> 8 deg (2026-08-05): pseudo-hysteresis dwell, no rebuild. True
+                   enter/exit hysteresis needs a RUNNING latch (SyncActionNode forbids RUNNING ->
+                   C++ change); widening the single hold gate is the rebuild-free approximation,
+                   holds the track through a defender's jink out to 8 deg instead of dropping at
+                   5, giving the pure-pursuit loop more dwell to grind ATA toward the 1.0-deg WEZ.
+                   Shares 8 deg with Gate 1's carve-out (complementary). Range stays 150-914 m
+                   (physical gun range; WEZ max 914.4 m). Revert = 8 back to 5. -->
+              <DECO_LOSCheck name="Gun_OwnATA_Lt8" UpDown="Less" InputLOS="8" Which="Own" BB="{BB}"/>
+              <Task_GunTrack name="Gun_Track" BB="{BB}"/>
+            </Sequence>
+
             <!-- GATE 1 - Immediate threat reaction. Each node self-gates its own trigger
                  (EnemyInSight_Target / Distance / Los_Degree_Target) internally on a fresh claim;
                  no XML-level decorators here by design (plan §1). Notch (narrowest: near-beam)
@@ -146,38 +201,8 @@
 
             </Fallback>
 
-            <!-- GATE 2.5 - Gun-solution hold (added 2026-08-01). When already inside the gun
-                 band AND well aligned (own ATA under 5 deg; range 150 to 914 m, i.e. the
-                 500 to 3000 ft Phase 1 WEZ), STOP maneuvering and TRACK via Task_GunTrack, so a
-                 solution already in hand is not thrown away by Gate 4's positional maneuvers
-                 pulling off it. Task_GunTrack = pure-pursuit aim (like Task_Pure) but with a
-                 SPEED-MATCHING throttle: Task_Pure's fixed 0.7 keeps closing when already
-                 overtaking and sails through the band, which is the mechanism behind the
-                 documented eval symptom "reaches ATA 0.1 to 1.0 deg and range 270 to 511 m yet
-                 logs 0 WEZ steps" (alignment and range each achieved, but not held at the same
-                 instant). Sits below Gate 1 (threat) and Gate 2 (merge) so survival and the
-                 merge still preempt; above Gate 3/Gate 4 so tracking beats energy tactics and
-                 positional offense once the shot exists.
-                 REQUIRES A DLL REBUILD: Task_GunTrack is a new C++ node
-                 (AIP_DCS/BehaviorTree/BT_Content/Task/Task_GunTrack.*); rebuild AIP_DCS
-                 (Debug|x64) and redeploy AIP_BASE.dll/AIP_BASE_target.dll before this branch
-                 loads. The decorators (DECO_DistanceCheck/DECO_LOSCheck) are already registered.
-                 UNTESTED on this box (no local sim); after the rebuild, validate with a BT vs RL
-                 local run and confirm ep_wez_steps rises before trusting it. To revert: delete
-                 this one Sequence (and optionally the Task_GunTrack node + its registration). -->
-            <Sequence name="Gate2p5_GunSolutionHold">
-              <DECO_DistanceCheck name="Gun_DistGt150" UpDown="Greater" Distance="150" BB="{BB}"/>
-              <DECO_DistanceCheck name="Gun_DistLt914" UpDown="Less" Distance="914" BB="{BB}"/>
-              <!-- WIDENED 5 -> 8 deg (2026-08-05): pseudo-hysteresis dwell, no rebuild. True
-                   enter/exit hysteresis needs a RUNNING latch (SyncActionNode forbids RUNNING ->
-                   C++ change); widening the single hold gate is the rebuild-free approximation,
-                   holds the track through a defender's jink out to 8 deg instead of dropping at
-                   5, giving the pure-pursuit loop more dwell to grind ATA toward the 1.0-deg WEZ.
-                   Shares 8 deg with Gate 1's carve-out (complementary). Range stays 150-914 m
-                   (physical gun range; WEZ max 914.4 m). Revert = 8 back to 5. -->
-              <DECO_LOSCheck name="Gun_OwnATA_Lt8" UpDown="Less" InputLOS="8" Which="Own" BB="{BB}"/>
-              <Task_GunTrack name="Gun_Track" BB="{BB}"/>
-            </Sequence>
+            <!-- GATE 2.5 MOVED 2026-08-06: it now sits directly under Gate 0, above Gate 1.
+                 See the block there for the measurement that motivated the move. -->
 
             <!-- GATE 3 - Energy-ratio guard, scoped narrowly in front of the offensive branches
                  only (scope decision: leave the existing safety/defensive priority order above

@@ -46,11 +46,20 @@ from run_local_dogfight import build_provider, backend_to_env_mode
 ALPHA_SCHEDULE_DEG = (0, 20, 40, 60, 80, 100, 120, 140, 160, 180)
 
 # info-dict keys captured per episode (all set by single_agent_env.py's step()).
+#
+# ANGLE CONVENTION (2026-08-06): the two angle columns are suffixed `_2d` because the platform
+# computes them with proj=True -- horizontal azimuth, elevation discarded, signed. The WEZ damage
+# gate tests a CONE (proj=False: arccos of the body-frame LOS, unsigned), so these two are a
+# DIFFERENT QUANTITY from the gate and can disagree with it by tens of degrees. Reading the old
+# unsuffixed `final_ata_deg` as "how close to a firing solution" silently understates the miss.
+# This harness has no per-step tracking, so it cannot emit the 3D counterpart -- if you need
+# angles you can compare against the gate (or phase-aware WEZ scoring), use the maintained
+# superset harness scripts/eval_v5_vs_bt.py instead, which reports both conventions explicitly.
 CSV_FIELDS = [
     "episode", "alpha_deg", "outcome", "end_condition",
     "ownship_health", "target_health", "total_reward", "steps",
     "ep_wez_steps", "ep_min_distance", "initial_distance_m",
-    "final_ata_deg", "final_aa_deg",
+    "final_ata_deg_2d", "final_aa_deg_2d",
 ]
 
 
@@ -171,8 +180,9 @@ def main():
                     "ep_wez_steps": info.get("ep_wez_steps", ""),
                     "ep_min_distance": round(float(info.get("ep_min_distance", 0.0)), 1),
                     "initial_distance_m": round(float(info.get("initial_distance_m", 0.0)), 1),
-                    "final_ata_deg": round(float(info.get("final_ata_deg", 0.0)), 1),
-                    "final_aa_deg": round(float(info.get("final_aa_deg", 0.0)), 1),
+                    # info's values are proj=True (2D azimuth) -- see the CSV_FIELDS note.
+                    "final_ata_deg_2d": round(float(info.get("final_ata_deg", 0.0)), 1),
+                    "final_aa_deg_2d": round(float(info.get("final_aa_deg", 0.0)), 1),
                 })
                 fh.flush()
                 print(f"[ep {episode:>3}/{args.episodes}] alpha={alpha_deg:>3} -> {outcome:<8} "

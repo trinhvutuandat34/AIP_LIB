@@ -172,11 +172,52 @@ def _obfm_stage(
 
 
 def _build_two_circle_v4(start_index: int) -> list[CurriculumStage]:
-    """5-alpha ladder (down from the builtin's 10) with a widened shaping
-    gradient so spawn separation falls inside pursuit_range_m -- geometry_guard
-    intentionally omitted, see the module docstring's KNOWN GAP note."""
+    """9-alpha ladder (builtin ships 10, v4 cut it to 5, 2026-08-05 re-added 4 low
+    alphas) with a widened shaping gradient so spawn separation falls inside
+    pursuit_range_m -- geometry_guard intentionally omitted, see the module
+    docstring's KNOWN GAP note.
+
+    LOW-ALPHA STAGES (3/5/8/12 deg), added 2026-08-05, closing BFM_REFERENCE.md
+    Sec10's open question "does the spawn generator vary lateral offset, or only
+    alpha_deg?". Answer: it CANNOT vary it independently. single_agent_env.py's
+    _apply_two_circle_headon_initial_scenario() gives both aircraft the SAME
+    init_e (=center_e) and exactly antiparallel headings (side*alpha vs
+    180+side*alpha), so the perpendicular distance between the two flight paths
+    collapses to a value fully determined by alpha:
+
+        lateral_offset = separation_m * sin(alpha)
+        separation_m   = (2*turn_diameter_ft*sin(alpha) + jitter_ft) * 0.3048
+
+    There is no per-aircraft East knob, and src/dogfight is a hard no-edit
+    boundary, so lateral offset can only be reached THROUGH alpha. That matters
+    because doctrine's decision threshold is lateral spacing, not alpha:
+    BFM_REFERENCE.md Sec7 quotes "lateral spacing greater than 500 feet will give
+    the edge to the fighter that turned two-circle" -- i.e. ~152 m. The old
+    (0,45,90,135,180) ladder sampled lateral offset at 0 m, then 2476-3122 m,
+    then 4572-5486 m: it jumped from a perfect zero-offset head-on straight to
+    16-20x past the threshold, so the one-circle/two-circle discrimination was
+    never actually presented as a decision. (The builtin's 10-alpha ladder does
+    not fix this either -- its alpha=20 stage is already 740-1053 m.)
+
+    These four alphas bracket the 152 m threshold at realistic ranges:
+
+        alpha   spawn range      lateral offset
+          3 deg  1106-2020 m       58-106 m   (one-circle favored)
+          5 deg  1233-2148 m      107-187 m   (STRADDLES 152 m)
+          8 deg  1423-2338 m      198-325 m   (just above)
+         12 deg  1675-2589 m      348-538 m   (two-circle favored)
+
+    Index cost: the ladder grows 5 -> 9, pushing full_dogfight 12 -> 16. Safe for
+    an in-flight resume as long as the run has not passed the first two_circle
+    index -- train_curriculum.py's _init_or_load_state() setdefaults any index
+    missing from curriculum_state.json (count-agnostic, so +4 is no different
+    from +1), but it canNOT fix an index whose MEANING changed under a stage
+    already marked completed. Verified against the live v6 run at add time:
+    stopped at index 2, everything from 7 up still "pending", so nothing
+    reindexed here had run yet.
+    """
     stages = []
-    for offset, alpha_deg in enumerate((0, 45, 90, 135, 180)):
+    for offset, alpha_deg in enumerate((0, 3, 5, 8, 12, 45, 90, 135, 180)):
         stages.append(
             CurriculumStage(
                 index=start_index + offset,
@@ -202,6 +243,17 @@ def _build_two_circle_v4(start_index: int) -> list[CurriculumStage]:
                     "initial_scenario": {
                         "mode": "two_circle_headon",
                         "alpha_deg": float(alpha_deg),
+                        # Set EXPLICITLY rather than inherited. These two values are
+                        # the only other inputs to the lateral-offset formula in the
+                        # docstring above, and DEFAULT_ENV_CONFIG's own
+                        # initial_scenario dict is merged in AHEAD of this override --
+                        # the same leak that silently trained obfm_offensive at 7000 m
+                        # instead of 4572 m for weeks (see _obfm_stage's comment). These
+                        # restate today's config.py defaults exactly, so no existing
+                        # stage's geometry changes; they just stop a future default
+                        # edit from silently moving every alpha's lateral offset.
+                        "turn_diameter_ft": 6000.0,
+                        "separation_jitter_ft": [3000.0, 6000.0],
                     },
                 },
             )
@@ -274,6 +326,40 @@ def get_stages() -> list[CurriculumStage]:
         replace(s, randomization={**s.randomization, "radius": 1.0})
         if s.randomization.get("enabled") and float(s.randomization.get("radius", 0)) <= 0.0
         else s
+        for s in base
+    ]
+
+    # Fix the autopilot target's altitude SIGN. FighterSim.step_autopilot() documents
+    # altitude_cmd as "meter (NED, Down direction +)" and computes
+    # `-altitude_cmd * METER_TO_FEET`, so commanding 7000 m of ALTITUDE requires passing
+    # -7000. src/dogfight/config.py's default is +7000.0, which resolves to -22966 ft: an
+    # order to fly far BELOW sea level.
+    #
+    # Measured 2026-08-06 (A/B in scripts/eval_v5_vs_bt.py, bt ownship vs autopilot target,
+    # OBFM geometry, identical seed):
+    #     altitude_cmd=+7000 -> target descends ~120 m/s from 4572 m, hits the 300 m floor,
+    #                           episode ends at ~24 s on "target altitude below min"
+    #     altitude_cmd=-7000 -> target climbs to the setpoint and holds the full 200 s
+    #
+    # So stage 3, whose own description is "pursue a moving target with fixed heading,
+    # ALTITUDE, and speed", has been training against a target power-diving into the ground.
+    # That is the shape of the documented v4 stage-3 outcome (100% crash rate, min-distance
+    # 4.8 km "approach failure") which had been read as RL instability / idle-throttle stall.
+    # Applies to any autopilot-target stage, not just index 3, so a reordered curriculum keeps
+    # the fix. Only altitude_cmd is overridden -- curriculum.py::_deep_update merges nested
+    # dicts recursively, so heading_cmd/speed_cmd keep whatever the stage or base config set.
+    # src/ is no-edit, so patch the base stage list here (same idiom as the radius fix above).
+    base = [
+        replace(s, env_overrides={
+            **s.env_overrides,
+            "target_autopilot": {
+                **s.env_overrides.get("target_autopilot", {}),
+                "altitude_cmd": -abs(float(
+                    s.env_overrides.get("target_autopilot", {}).get("altitude_cmd", 7000.0)
+                )),
+            },
+        })
+        if s.target_mode == "autopilot" else s
         for s in base
     ]
 

@@ -40,6 +40,7 @@ import numpy as np
 
 from dogfight.ai.action_provider import ActionContext, ActionProvider, ActionResult, clip_action
 from dogfight.ai.checkpoint_io import load_lightweight_policy_bundle
+from dogfight.ai.hybrid_action_provider import HybridActionProvider
 from dogfight.ai.rl_action_provider import RLActionProvider
 
 
@@ -111,11 +112,18 @@ def switch_by_range(
     return "secondary" if distance <= close_range_m else "primary"
 
 
-class StudentHybridProvider(ActionProvider):
+class StudentHybridProvider(HybridActionProvider):
     """Hybrid RL+BT composition with throttle-aware residual and a working switch mode.
 
     Expects `primary_provider` to be a RemappedRLProvider (throttle already in [0,1],
     neutral 0.5) and `secondary_provider` to be a BTActionProvider (throttle in [0,1]).
+
+    SUBCLASSES the stock HybridActionProvider (reuse, not modification) for the same reason
+    RemappedRLProvider subclasses RLActionProvider -- see this module's docstring. Was a
+    standalone re-implementation of ActionProvider until 2026-08-05, which duplicated __init__,
+    reset(), close() and the entire switch branch verbatim; only compute_action actually needed
+    to differ. Inheriting also means `primary_provider`/`secondary_provider` stay discoverable by
+    anything that walks a provider graph generically (e.g. the eval harness's BT recycler).
     """
 
     def __init__(
@@ -129,18 +137,18 @@ class StudentHybridProvider(ActionProvider):
         close_range_m: float = DEFAULT_SWITCH_CLOSE_RANGE_M,
         confidence: float = 0.95,
     ):
-        self.primary_provider = primary_provider
-        self.secondary_provider = secondary_provider
-        self.mode = mode
-        self.alpha = alpha
-        self.residual_scale = residual_scale
-        self.selector = selector
+        super().__init__(
+            primary_provider=primary_provider,
+            secondary_provider=secondary_provider,
+            mode=mode,
+            alpha=alpha,
+            residual_scale=residual_scale,
+            selector=selector,
+            confidence=confidence,
+        )
+        # Not on the stock class: the stock switch branch defaults to "primary" (100% RL) when no
+        # selector is passed, and no call site ever passed one.
         self.close_range_m = close_range_m
-        self.confidence = confidence
-
-    def reset(self, context: ActionContext | None = None) -> None:
-        self.primary_provider.reset(context)
-        self.secondary_provider.reset(context)
 
     def compute_action(self, context: ActionContext) -> ActionResult:
         primary_result = self.primary_provider.compute_action(context)
@@ -189,9 +197,8 @@ class StudentHybridProvider(ActionProvider):
             },
         )
 
-    def close(self) -> None:
-        self.primary_provider.close()
-        self.secondary_provider.close()
+    # reset() and close() are inherited verbatim from HybridActionProvider (they already forward
+    # to both children); the identical overrides that used to sit here were removed 2026-08-05.
 
 
 def verify_bundle_observation(

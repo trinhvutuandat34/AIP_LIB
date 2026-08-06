@@ -87,7 +87,34 @@ to reduce draws ("어떻게든 여러분의 전투기가 공격을 하고 무승
 Cone radii scale roughly `1 : 2.72 : 5.34`, cone volumes `1 : 6.36 : 21.37`. **If the enemy
 sits inside a *narrower* phase's cone even during a later time window, the narrower phase's
 (higher) damage coefficient applies** — e.g. at t=160s (nominally Phase 3), landing a
-Phase-1-quality shot still pays Phase-1 damage, not the discounted Phase-3 rate.
+Phase-1-quality shot still pays Phase-1 damage, not the discounted Phase-3 rate
+(*"하위 Phase에 적이 위치하는 경우 하위 phase의 대미지 적용"*).
+
+**Exact per-phase damage formulas** (transcribed 2026-08-06 from the `통합 픽셀 데미지 맵`
+slide — each phase has its OWN divisor; these were previously absent from this file and are what
+any local phased-scoring estimate must use). `r` = forward range in **feet**, `θ` = LOS angle in
+degrees. Evaluated in priority order, first match wins (*내부 Phase가 외부 Phase를 덮어씀*):
+
+```
+1) Phase 1 (최우선)  500 <= r <= 3000  AND  |θ| < 1°   ->  Damage = 1.0 × (3000 − r) / 2500
+2) Phase 2 (그 다음)  500 <= r <= 3500  AND  |θ| < 2°   ->  Damage = 0.3 × (3500 − r) / 3000
+3) Phase 3 (그 다음)  500 <= r <= 4000  AND  |θ| < 3°   ->  Damage = 0.1 × (4000 − r) / 3500
+4) 그 외            r < 500  OR  |θ| >= 3°            ->  Damage = 0
+```
+
+Pixel/greyscale rendering on the slide: `Gray = round(255 × Damage)` → 0/26/77/255 for
+Damage 0 / 0.10 / 0.30 / 1.00.
+
+> **Two consequences this project measured (2026-08-05/06), both in `COMPETITION_PLAN.md` §4.1:**
+> 1. **Damage is maximal at 500 ft and exactly ZERO at 3000 ft** (row A2). `Task_GunTrack` was
+>    parking at ~1830 ft → coefficient 0.47, discarding ~2.1–2.3× of the available damage per
+>    scoring step. It had no range term at all until this was fixed.
+> 2. **`r < 500 ft` is a zero-damage dead zone** (row A5) — Gate 2.5's floor was 150 m = 492 ft,
+>    an 8 ft sliver where the BT believed it was in the band and scored nothing. Now 152.4 m.
+>
+> Scoring the BT's existing traces under this full 3-phase model still yielded **exactly 0
+> damage**, because range and alignment are never simultaneously satisfied (row A4) — so
+> implementing Phase 2/3 locally would not change the local result, and is deprioritized.
 
 ### 6.3 Cross-check against the training code — this matters for your strategy
 

@@ -28,6 +28,17 @@ namespace BTFunc
 	// maneuver starts a fresh phase timer instead of resuming the old one.
 	void ReleaseManeuverPhase(CPPBlackBoard* BB, ManeuverID id);
 
+	// ReleaseManeuverPhase + arm this maneuver's re-entry cooldown in one call, for the
+	// "time-cap / abort exit, don't let it immediately re-claim" pattern (Task_Evade,
+	// Task_VerticalScissors). Pairs with IsManeuverOnCooldown below -- callers should not read or
+	// write BB->ManeuverCooldownUntil[] directly.
+	void ReleaseManeuverPhaseWithCooldown(CPPBlackBoard* BB, ManeuverID id, double cooldownSeconds);
+
+	// True while `id` is still within its armed cooldown window. Intended to gate a FRESH claim
+	// only -- an already-active maneuver should keep running, so the usual call site is
+	// `if (!active && IsManeuverOnCooldown(BB, id)) return FAILURE;`.
+	bool IsManeuverOnCooldown(CPPBlackBoard* BB, ManeuverID id);
+
 	// Target's predicted travel over the estimated closing time (Distance / MySpeed, capped at
 	// 4s -- past a few seconds the target's current heading stops being a good predictor: it may
 	// turn, and an uncapped lead can throw the aim off further than pure pursuit would at long

@@ -130,5 +130,12 @@ class HabfmScenarioWrapper(gym.Wrapper):
             )
         return self.env.reset(seed=seed, options=options)
 
+    def make_tacviewLog(self):
+        # This Gymnasium version's gym.Wrapper has no __getattr__ forwarding
+        # (see train_curriculum.py's env_creator() comment), so callers that
+        # hold this wrapper as "the env" (e.g. EngagementReplayLogger) can't
+        # reach the base DogFightEnv's make_tacviewLog() without this.
+        return self.unwrapped.make_tacviewLog()
+
 
 __all__ = ["HabfmScenarioWrapper", "apply_habfm_scenario"]

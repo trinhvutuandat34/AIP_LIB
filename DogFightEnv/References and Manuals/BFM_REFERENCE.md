@@ -163,14 +163,32 @@ This is the richest, most directly-relevant section — and the one with a concr
   Diagnosing which archetype you're facing, from behavior observed over 1-2 passes, changes which
   plan to run.
 
-**→ Project mapping**: the curriculum's `two_circle_headon_a{000,045,090,135,180}` stages vary
-`alpha_deg` — a heading-crossing-angle-like spawn parameter — per `student/my_curriculum.py`. **Open
-question, not yet checked this session**: does the scenario/spawn generator also vary *lateral
-offset* at the merge? Per this doctrine, lateral spacing (not HCA alone) is what actually determines
-whether a one-circle or two-circle outcome is even achievable — if the spawn logic only varies
-heading angle, the curriculum may not be presenting the full geometric variable that real doctrine
-says matters most. Worth checking the scenario-generation code (`env_overrides.initial_scenario`
-handling) directly before concluding either way.
+**→ Project mapping**: the curriculum's `two_circle_headon_a*` stages vary `alpha_deg` — a
+heading-crossing-angle-like spawn parameter — per `student/my_curriculum.py`.
+
+**ANSWERED 2026-08-05** (this was an open question through §10 below; that entry is now closed).
+The spawn generator **cannot** vary lateral offset independently.
+`single_agent_env.py::_apply_two_circle_headon_initial_scenario()` gives both aircraft the *same*
+`init_e` (`=center_e`) and exactly antiparallel headings (`side*alpha` vs `180+side*alpha`), so the
+perpendicular distance between the two flight paths collapses to a value fully determined by alpha:
+
+```
+lateral_offset = separation_m * sin(alpha)
+separation_m   = (2*turn_diameter_ft*sin(alpha) + jitter_ft) * 0.3048
+```
+
+There is no per-aircraft East knob, and `src/dogfight/**` is a hard no-edit boundary — so lateral
+offset is reachable *only* through alpha. That matters, because the old
+`a{000,045,090,135,180}` ladder sampled it at **0 m → 2475-3122 m → 4572-5486 m**: a jump from a
+perfect zero-offset head-on straight to 16-20× past this section's own ~152 m (500 ft) decision
+threshold. The one-circle/two-circle discrimination doctrine calls decisive was therefore **never
+presented as a decision at any stage**. (The builtin 10-alpha ladder doesn't fix it either — its
+`alpha=20` stage is already 740-1053 m.)
+
+**Fixed** by adding four low-alpha stages that bracket the threshold at realistic ranges — 3° →
+58-106 m, 5° → 107-187 m (straddles 152 m), 8° → 198-325 m, 12° → 348-538 m. Pure student-space
+(no `src/` edit, no DLL rebuild); ladder grows 5→9 so `full_dogfight` moves 12→16. Numbers verified
+by executing `get_stages()`, not derived on paper alone.
 
 **The bigger architectural point** (see §9 below): none of this multi-pass, trend-watching,
 plan-switching, opponent-archetype-diagnosing behavior exists in the BT tree as implemented. Gate 2
@@ -234,10 +252,15 @@ force a reversal" the way the doctrine describes real pilots doing.
 
 ## 10. Open questions worth investigating (not yet checked this session)
 
-1. **Does the scenario/spawn generator vary lateral offset at the two-circle merge**, or only
-   `alpha_deg` (heading angle)? Per §7, lateral spacing is what doctrine says actually determines
-   one-circle vs. two-circle outcome — check `env_overrides.initial_scenario` handling for the
-   `two_circle_headon` mode.
+1. ~~**Does the scenario/spawn generator vary lateral offset at the two-circle merge**, or only
+   `alpha_deg` (heading angle)?~~ **CLOSED 2026-08-05 — see §7.** It cannot vary it independently:
+   both aircraft share one `init_e` and fly exactly antiparallel, so
+   `lateral_offset = separation_m * sin(alpha)` is pinned to alpha. The old ladder skipped the
+   entire decisive band (0 m, then 2475 m+, against a ~152 m threshold); fixed with four low-alpha
+   stages (3/5/8/12°). **Still open, follow-on**: the *BT* has no lateral-offset input at all — no
+   `CPPBlackBoard` field carries turning room, so `Task_NoseToNoseTurn` vs `Task_NoseToTailTurn` is
+   still selected on HCA/ATA/range only. That's a C++ Service change, and the natural substrate for
+   the persistent fight-state memory §9 describes.
 2. **Does the JSBSim F-16 FDM reproduce the real 330-440 KCAS corner-plateau turn-rate shape**
    (§3), or a different curve? Relevant to whether BT/RL throttle-for-radius behavior is tuned
    against realistic aircraft performance or an FDM-specific one.

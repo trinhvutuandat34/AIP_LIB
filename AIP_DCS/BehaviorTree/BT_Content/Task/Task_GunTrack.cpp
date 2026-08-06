@@ -12,6 +12,31 @@ namespace Action
 	static const float GUNTRACK_MIN_THROTTLE = 0.20f;   // keep control authority; never full idle
 	static const float GUNTRACK_MAX_THROTTLE = 0.95f;
 
+	// RANGE-VALUE BIAS (added 2026-08-05). Until now this node had NO range term at all -- it was a
+	// pure speed-matcher, so it held whatever range it happened to arrive at and treated every point
+	// in the gun band as equally good. The competition damage rule says that is false by ~25x:
+	//
+	//     d_wez = (3000 - r_ft) / 2500      -> coefficient 1.00 at 500 ft, 0.00 at 3000 ft
+	//
+	// Measured (BT vs non-maneuvering target, 2 traces): while in-band the median range was
+	// 1825 / 1915 ft -> damage coefficient 0.47 / 0.43, and the CLOSEST approach across ~450
+	// in-band steps was 1739 ft. So roughly 2.1-2.3x of the available damage per scoring step was
+	// being discarded, and the node never even trended toward the high-value edge.
+	//
+	// Target 220 m (~722 ft) -> coefficient ~0.91. Deliberately NOT the 500 ft edge: below
+	// 152.4 m (500 ft) damage returns to ZERO, so overshooting the floor is worse than sitting
+	// slightly long. The bias competes with the speed-match term rather than replacing it (that
+	// term is what stops the overshoot this node exists to prevent), and both stay inside the
+	// existing MIN/MAX clamps.
+	//
+	// UNVALIDATED. The eval harness is bimodal (see COMPETITION_PLAN.md E1) and this node ticks
+	// only ~100 steps/episode in OBFM and zero in two-circle, so no A/B could establish an effect
+	// today. TO REVERT EXACTLY: set GUNTRACK_RANGE_GAIN to 0.0f -- the term vanishes and behavior
+	// is bit-identical to the pre-2026-08-05 speed-matcher.
+	static const float GUNTRACK_TARGET_RANGE_M = 220.0f;
+	static const float GUNTRACK_RANGE_GAIN = 0.0006f;   // per metre of range error; 0.0f == disabled
+	static const float GUNTRACK_RANGE_FLOOR_M = 152.4f; // 500 ft: below this the damage rule pays 0
+
 	PortsList Task_GunTrack::providedPorts()
 	{
 		return {
@@ -47,6 +72,15 @@ namespace Action
 		// would need Vector3 math that is unnecessary for the astern hold this gates to.
 		float overtake_ms = (*BB)->MySpeed_MS - (*BB)->TargetSpeed_MS;
 		float throttle = GUNTRACK_BASE_THROTTLE - GUNTRACK_THROTTLE_PER_MS * overtake_ms;
+
+		// Range-value bias: add power while long of the high-damage band, ease off once at or
+		// inside it. Clamped at the 500 ft floor so the term can only ever push AWAY from the
+		// zero-damage zone, never deeper into it. See the constants above for the measured
+		// justification and the exact revert.
+		float rangeForBias = (*BB)->Distance;
+		if (rangeForBias < GUNTRACK_RANGE_FLOOR_M) rangeForBias = GUNTRACK_RANGE_FLOOR_M;
+		throttle += GUNTRACK_RANGE_GAIN * (rangeForBias - GUNTRACK_TARGET_RANGE_M);
+
 		if (throttle < GUNTRACK_MIN_THROTTLE) throttle = GUNTRACK_MIN_THROTTLE;
 		if (throttle > GUNTRACK_MAX_THROTTLE) throttle = GUNTRACK_MAX_THROTTLE;
 		(*BB)->Throttle = throttle;
