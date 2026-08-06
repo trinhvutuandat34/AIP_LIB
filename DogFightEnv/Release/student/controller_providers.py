@@ -76,8 +76,27 @@ RADTODEG = 180.0 / np.pi
 #
 # Overridable from the environment for sweeps ONLY -- these are not a runtime configuration
 # surface, and the submission path never sets them (student/my_submission.py).
-ENGAGE_RANGE_M = float(os.environ.get("DOGFIGHT_VPTRACK_RANGE_M", "1200.0"))
-ENGAGE_LOS_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_LOS_DEG", "20.0"))
+# RETUNED 2026-08-06 to 2500 m / 45 deg, swept on the official match geometry (N=30 per
+# config, competition scoring = damage differential at timeout, COMPETITION_RULES.md line 65):
+#
+#     config        win%(rule)   kills  wez  damage  median min-ATA  losses
+#     BT baseline    1/30  3.3%      0     1    0.05     1.419 deg      0
+#     1200m/20deg    5/30 16.7%      1     3    1.31     1.272 deg      0   <- previous default
+#     2500m/20deg   22/30 73.3%      1    19    4.51     0.022 deg      0
+#     2500m/30deg   22/30 73.3%      1    21    6.21     0.127 deg      0
+#     2500m/45deg   22/30 73.3%      8    19   14.29     0.097 deg      0   <- chosen
+#     3000m/30deg   21/30 70.0%      3    20    9.10     0.085 deg      0
+#     2800m/45deg   19/30 63.3%      8    18   12.55     0.068 deg      0
+#     4000m/45deg   19/30 63.3%      8    18   13.14     0.068 deg      0
+#     2500m/60deg   16/30 53.3%      9    14   15.35     0.023 deg      0
+#
+# Range is the dominant factor and 2500 m is a plateau (20/30/45 deg all tie at 22/30), not a
+# noise spike; 45 deg is chosen off the tiebreakers -- 8 kills and 14.29 damage at the same win
+# rate. Beyond 2500 m it regresses. Caveat kept visible: this is the best of 7 configs at
+# SE ~8%, so some of the margin over 3000m/30 is selection luck; the 1200 -> 2500 step is far
+# larger than that and is the real finding.
+ENGAGE_RANGE_M = float(os.environ.get("DOGFIGHT_VPTRACK_RANGE_M", "2500.0"))
+ENGAGE_LOS_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_LOS_DEG", "45.0"))
 
 # ---- Gains ----------------------------------------------------------------------------
 K_ROLL = 1.0

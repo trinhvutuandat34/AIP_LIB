@@ -650,8 +650,14 @@ def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--ownship-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated", "fixed"], required=True)
     p.add_argument("--target-backend",
-                   choices=["rl", "bt", "hybrid", "fixed", "autopilot", "loiter"], required=True,
-                   help="'autopilot' holds heading/altitude/speed for the full 200 s -- prefer it "
+                   choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated",
+                            "fixed", "autopilot", "loiter"], required=True,
+                   help="'vptrack' is the strongest opponent we have and the ONLY one that can "
+                        "actually point -- use it for self-play, the closest available proxy for "
+                        "the organizers' cutoff model. Every result against 'bt' is against an "
+                        "opponent that never shoots (0.00 damage taken across 60+ episodes), so "
+                        "it says nothing about robustness. "
+                        "'autopilot' holds heading/altitude/speed for the full 200 s -- prefer it "
                         "over 'fixed', which sinks into the altitude floor at ~42 s and truncates "
                         "the match before the WEZ cone widens.")
     p.add_argument("--target-autopilot", nargs=3, type=float,
@@ -927,6 +933,21 @@ def main():
                     seed=args.seed + episode, options={"initial_scenario": scen}
                 )
                 reset_info = reset_info or {}
+                # Fallback for scenario modes single_agent_env.py does not know about
+                # (obfm/habfm/match_*, all staged by student-space wrappers via
+                # change_init_position). Its _update_initial_geometry_metrics() only fills
+                # initial_* for its own native modes, so those runs logged
+                # initial_distance_m = 0.0 -- and for match_* the separation is the SWEPT
+                # variable, so losing it makes the sweep unreadable. Measured here from the
+                # post-reset state instead, using the same geo helper the step loop uses.
+                if not reset_info.get("initial_distance_m"):
+                    try:
+                        _b0 = env.unwrapped
+                        reset_info["initial_distance_m"] = float(
+                            _b0._geo_info._get_distance(_b0._ownship_state, _b0._target_state)
+                        )
+                    except Exception:
+                        pass
                 terminated = truncated = False
                 total_reward = 0.0
                 info: dict = {}
