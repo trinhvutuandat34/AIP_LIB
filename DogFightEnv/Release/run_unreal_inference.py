@@ -5,6 +5,22 @@ import json
 from pathlib import Path
 import sys
 
+# Force UTF-8 on stdout/stderr (2026-08-06). THIS FILE IS THE COMPETITION ENTRY POINT and it
+# prints Korean status text on every start-up path. When stdout is a UTF-8 console that is fine,
+# but when it is REDIRECTED TO A FILE -- which is how an unattended competition run is launched --
+# Python falls back to the Windows ANSI codepage (cp1252) and the very first status print raises
+# UnicodeEncodeError, killing the process BEFORE supervise_client's reconnect loop is ever armed.
+# A submission that dies at start-up never connects, and not connecting is a DQ path
+# (COMPETITION_RULES Sec 8). Demonstrated 2026-08-06 by running build_action_provider() with
+# output redirected: UnicodeEncodeError on the mode-selection print.
+import io as _io
+for _stream in ("stdout", "stderr"):
+    try:
+        getattr(sys, _stream).reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, _io.UnsupportedOperation):
+        pass
+
+
 ROOT = Path(__file__).resolve().parent   # Release/ 루트
 SRC = ROOT / "src"
 RELEASE_ROOT = ROOT

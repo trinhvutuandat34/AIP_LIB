@@ -51,6 +51,22 @@ from __future__ import annotations
 
 import json
 import sys
+
+# Force UTF-8 on stdout/stderr (2026-08-06). THIS FILE IS THE COMPETITION ENTRY POINT and it
+# prints Korean status text on every start-up path. When stdout is a UTF-8 console that is fine,
+# but when it is REDIRECTED TO A FILE -- which is how an unattended competition run is launched --
+# Python falls back to the Windows ANSI codepage (cp1252) and the very first status print raises
+# UnicodeEncodeError, killing the process BEFORE supervise_client's reconnect loop is ever armed.
+# A submission that dies at start-up never connects, and not connecting is a DQ path
+# (COMPETITION_RULES Sec 8). Demonstrated 2026-08-06 by running build_action_provider() with
+# output redirected: UnicodeEncodeError on the mode-selection print.
+import io as _io
+for _stream in ("stdout", "stderr"):
+    try:
+        getattr(sys, _stream).reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, _io.UnsupportedOperation):
+        pass
+
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,14 +102,39 @@ SERVER_IP = "221.151.77.208"   # TODO: 운영 공지로 최신 서버 IP 확정 
                                 # 10.185.16.247(사설/연습망으로 추정)과 다름; 최신 공지 전까지 확정 아님
 SERVER_PORT = 9999
 
-# 사용할 백엔드 모드 선택: "rl" | "bt" | "hybrid"
+# 사용할 백엔드 모드 선택: "rl" | "bt" | "vptrack" | "hybrid" | "hybrid_vptrack" | "hybrid_gated"
+#
 # TEMP SAFE DEFAULT (2026-08-05): forced to "bt" until a bundle is validated (via
 # eval_matchup.py, beats pure BT) -- BUNDLE_DIR below still points at the v4 stage_3 bundle,
 # documented (below) as a 100%-crash policy. The health gate only catches NaN/Inf weights, not
 # this (finite-but-degenerate), so "hybrid" would blend that crash behavior into the BT floor
 # every match. Team-confirmed target strategy is still Hybrid(residual) -- flip back once
 # BUNDLE_DIR points at a bundle that actually beats BT-alone.
-MODE = "bt"   # was "hybrid" -- see note above
+#
+# UPGRADED 2026-08-06: "bt" -> "vptrack". This does NOT weaken the safety argument above --
+# it strengthens it. "vptrack" loads NO RL bundle at all (see build_action_provider), so every
+# concern in the paragraph above about a finite-but-degenerate policy is structurally absent,
+# exactly as with "bt". What changes is only the flight-control law: the native BT still owns
+# all tactics and throttle, and the student-space controller replaces Controller_CY's VP->stick
+# law during terminal tracking only.
+#
+# Measured N=30, OBFM_offensive (the confirmed main-match preset), identical seeds, vs the
+# same BT opponent:
+#                        wins     WEZ-contact eps   damage dealt/taken   median min-ATA
+#     MODE="bt"           0/30          0/30           0.00 / 0.000        4.08-4.45 deg
+#     MODE="vptrack"     12/30         30/30          15.59 / 0.000        0.024 deg
+# Zero self-crashes, ownship health 1.0 in every episode, and 49.6 us per decision (0.03% of
+# the 166.7 ms six-frame compute budget). See COMPETITION_PLAN.md 4.1 D1-DONE / D3-FLOOR.
+#
+# KNOWN LIMIT (4.1 D1-LIMIT): on the neutral two_circle_headon merge -- the round-4 tie-break
+# analogue, NOT rounds 1-3 -- vptrack scores 1/30, because it only takes the stick inside a
+# <=1200 m / <=20 deg terminal envelope and the native BT still loses the neutral merge that
+# would put it there. It converts an offensive position into a kill; it does not create one.
+#
+# Hybrid is NOT selected: every residual configuration measured is <= vptrack alone with the
+# current (0-win) v6 policy. "hybrid_gated" is the upgrade path the moment a bundle exists
+# that is worth composing -- it is safe at full residual scale where plain residual is not.
+MODE = "vptrack"   # was "bt" (2026-08-05), was "hybrid" -- see notes above
 
 # RL 모드 설정
 # =========================================================================
