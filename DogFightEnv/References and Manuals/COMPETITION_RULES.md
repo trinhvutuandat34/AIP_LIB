@@ -65,6 +65,36 @@ independently confirms the `MyTrainEnv` vs `Release/` split already noted in
 - **Engagement duration: 200 seconds.** Whoever has dealt more damage / has more health when time runs out wins.
 - **Minimum altitude: 1000 ft (≈300 m).** Dropping below this is processed as a crash/loss.
 
+### 5.1 Starting geometry — CONFIRMED from the official scenario slides (2026-08-06)
+
+Two slides, "개요: 교전 시나리오 룰(예선)" and "…(본선)", pin the starting setup:
+
+| Stage | Setup |
+|---|---|
+| **Prelim (예선)** | **1 round (단판)**, aircraft at **2000ft ~ 3000ft** separation, "AlphaDogFight 의 교전 방식을 채용". Exact 시작거리/고도/속력 "차후 공개". |
+| **Finals rounds 1–3** | The **same** 2000–3000 ft setup. |
+| **Finals round 4+** | Tie-break, entered only if 3 rounds are level: **10000ft 이상**, and the only one described as head-on — "서로 마주본 상태에서 정면 교전 수행". |
+
+**The rounds-1–3 setup is a BEAM merge, not a head-on.** Both diagrams draw the two
+aircraft pointing in **opposite directions** with the separation arrow **between** them:
+headings antiparallel, LOS running across them, i.e. ~90° off each aircraft's own nose.
+Only the round-4 slide says "정면". This matters because it invalidates two of the three
+scenarios this project had been evaluating against:
+
+- `obfm_offensive` / `obfm_defensive` stage a **six-o'clock advantage the rules never grant**.
+- `two_circle_headon` is neutral but spawns at **1,497–5,379 m** against a real **610–914 m**.
+
+Modelled in `student/match_scenario_wrapper.py` as `match_base` / `match_tiebreak`; prefer
+those for any result meant to predict match performance. `los_deg` is left a parameter because
+the slide art also admits a 180° (tail-to-tail) reading — measured, not assumed.
+
+**Cutoff (§3) — updated from the same slide.** Too many teams applied (`예상보다 너무 많은
+참여팀이 지원`), and the mechanism is still under discussion between two proposals:
+**제1안** only teams that beat an operating-committee model advance; **제2안** the model is
+distributed to every team and each decides for itself whether to enter. Both hinge on a
+reference model of "적당한 성능". **Under 제1안 a draw does not advance** — which is the
+modal outcome against a capable opponent (see COMPETITION_PLAN.md §4.1 D1-SELFPLAY).
+
 ## 6. Damage model — two versions, don't confuse them
 
 ### 6.1 Base rule (the original AIP/AlphaDogFight damage model)
