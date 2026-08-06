@@ -73,6 +73,7 @@ from student.inference_providers import (
 )
 # DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. Guards the two
 # no-edit-client fragilities that risk a competition-day disconnect/DQ (COMPETITION_RULES Sec8).
+from student.controller_providers import EnvelopeGatedHybridProvider, VPTrackingProvider
 from student.submission_resilience import ResilientActionProvider, supervise_client
 
 
@@ -161,6 +162,14 @@ def build_action_provider():
         print(f"[{TEAM_NAME}] BT 백엔드 사용: {BT_DLL}")
         return BTActionProvider(dll_name=BT_DLL)
 
+    # vptrack: 네이티브 BT가 전술/스로틀을 담당하고, 종말 조준(터미널 트래킹)만
+    # student 쪽 제어 법칙이 가져간다. 2026-08-06 측정(N=30, OBFM, 동일 시드):
+    # 승률 0/30 -> 12/30, WEZ 접촉 0/30 -> 30/30, 자기추락 0. RL 번들이 전혀 필요 없으므로
+    # 번들 상태와 무관하게 안전하다 -- 즉 MODE="bt"보다 강한 새로운 안전 바닥이다.
+    if MODE == "vptrack":
+        print(f"[{TEAM_NAME}] VP 트래킹 백엔드 사용 (RL 없음): {BT_DLL}")
+        return VPTrackingProvider(dll_name=BT_DLL)
+
     bundle_path = ROOT / BUNDLE_DIR
     if not bundle_path.exists():
         raise FileNotFoundError(
@@ -190,10 +199,26 @@ def build_action_provider():
         print(f"[{TEAM_NAME}] RL 전용 모드")
         return rl_provider
 
-    # hybrid
-    bt_provider = BTActionProvider(dll_name=BT_DLL)
-    print(f"[{TEAM_NAME}] Hybrid 모드: {HYBRID_MODE} (scale={RESIDUAL_SCALE}, alpha={ALPHA})")
-    return StudentHybridProvider(
+    # hybrid / hybrid_vptrack / hybrid_gated
+    #
+    # RESIDUAL_SCALE 경고 (2026-08-06 측정, N=30, OBFM): 고정된 제어 바닥 위에서
+    # scale 0.35는 승률을 12/30 -> 0/30으로 무너뜨린다. 채점 게이트가 <=1.0도인데
+    # 바닥은 0.024도로 수렴하므로, 0.35 보정은 지키려는 정밀도보다 훨씬 크다.
+    # 측정된 절벽: 0.02 -> 12/30, 0.10 -> 13/30, 0.35 -> 0/30. 0.10 이하를 쓸 것.
+    if MODE == "hybrid_gated":
+        # 접근 단계에서만 잔차를 적용하고, 발사 해법(터미널 트래킹) 중에는 바닥을
+        # 그대로 통과시킨다 -- 잔차가 조준 해법을 망칠 수 없는 구조.
+        secondary = VPTrackingProvider(dll_name=BT_DLL)
+        hybrid_cls = EnvelopeGatedHybridProvider
+    elif MODE == "hybrid_vptrack":
+        secondary = VPTrackingProvider(dll_name=BT_DLL)
+        hybrid_cls = StudentHybridProvider
+    else:
+        secondary = BTActionProvider(dll_name=BT_DLL)
+        hybrid_cls = StudentHybridProvider
+    bt_provider = secondary
+    print(f"[{TEAM_NAME}] Hybrid 모드: {MODE}/{HYBRID_MODE} (scale={RESIDUAL_SCALE}, alpha={ALPHA})")
+    return hybrid_cls(
         primary_provider=rl_provider,
         secondary_provider=bt_provider,
         mode=HYBRID_MODE,
