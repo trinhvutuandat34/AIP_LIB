@@ -124,6 +124,43 @@ training-fidelity gap, not a competition-legality one. Full detail:
 (`project_bulk_revert_regression_2026_07_15`, `project_v4_recovery_2026_07_15`,
 `project_bt_xml_reconstruction_2026_07_15`).
 
+**Update 2026-08-06 — v6 failed; the controller bypass (D1) scored instead. First wins.**
+
+`v6` completed at 15:07 and was evaluated at 16:40: **18/20 crash, 2/20 timeout, 0 wins, 0 WEZ
+steps, 0 damage** (`artifacts/eval/v6_rl_vs_bt.csv`). The dense altitude-floor term did not fix
+v5's self-crash. That is six curriculum campaigns with zero wins, and it closes the pure-RL line
+of attack for this cycle.
+
+The same day, two things were established that change the plan:
+
+- **The hybrid floor is sound.** BT+RL vs BT, re-run at N=30 with the current post-`MFsum` DLL
+  and the v6 bundle (`artifacts/eval/hybrid_v6_postmfsum.csv`): **30/30 timeout, 0 crashes**,
+  both aircraft at health 1.0. §3's architecture does what it was designed to do — RL cannot
+  drag the aircraft into the ground. It scores nothing (0 WEZ), but 6/30 episodes do reach
+  ≤1.0°, just never in-band. This also discharges the owed **D3-c** hybrid end-to-end smoke
+  test, which had been blocked by v6 occupying the box.
+- **`Controller_CY` was the binding constraint, and replacing it works** (§4.1 **D1-DONE**).
+  A student-space VP→stick law took the BT floor from **0/30 wins and 0/30 WEZ-contact episodes
+  to 12/30 and 30/30** on identical seeds. These are the project's first wins.
+  **But scope it honestly (§4.1 D1-LIMIT):** that 40% is **OBFM_offensive**, a geometry that
+  starts the ownship advantaged. On the neutral `two_circle_headon` merge the same backend
+  scores **1/30**. The bypass *converts* an offensive position into a kill; it does not *create*
+  one, because it only takes the stick inside a ≤1200 m / ≤20° terminal envelope and the native
+  BT still loses the neutral merge that would put it there. **Winning the merge is now the
+  single remaining gap between here and a competitive submission** — and it is exactly the phase
+  §3's RL residual acts on.
+
+Also fixed today, all found while validating the above: **v5 and v6 both trained blind** — the
+per-episode metrics were logged 0 times in 9,400 iterations, and every stage in both campaigns
+advanced on `max_iterations` rather than its own gate (§4.1 **E2**, now fixed and verified —
+stage 0 advanced on `crash_rate=0.0000`, the first live advance condition since v4); unattended
+runs were dying at stage advancement on a `UnicodeEncodeError` from an ordinary progress print
+(**E3**); and eval CSVs had been logging `initial_distance_m = 0.0` for every v6 row (**E4**).
+
+**Submission direction is unchanged and now better supported:** hybrid residual (§3), with the
+residual re-based on the fixed floor (`hybrid_vptrack`). Pure BT stays warm as the fallback, and
+that fallback is now materially stronger than it was this morning.
+
 ## 2. Team profile & vision (confirmed 2026-07-07)
 
 | Question | Answer | Implication |
@@ -214,6 +251,8 @@ transcribed in [AIP_OFFICIAL_ARCHITECTURE_AND_BT_SLIDES.md](AIP_OFFICIAL_ARCHITE
 | # | Issue | Evidence |
 |---|---|---|
 | D1 | **The project is locked into keeping `Controller_CY` in the loop — and the rules do not require it.** Architecture #1 on the Advanced slide (BT tactics → RL flight control → JSBSIM) has **no controller box**, and the deck states plainly: "무슨 수를 써서라도 접속기에 붙이기만 하면 됩니다." Since the controller is the measured bottleneck, this is the single biggest unexploited option. | **[N] — highest strategic value** |
+| D1-**DONE** | **BYPASSED 2026-08-06 — first WEZ contact and first wins in the project's history.** `student/controller_providers.py::VPTrackingProvider` keeps the native BT for tactics, throttle and blackboard state but computes roll/pitch/rudder itself inside a terminal envelope (≤1200 m, ≤20°). **N=30 OBFM, same harness/seeds/opponent as the BT baseline:** wins **0/30 → 12/30 (40.0% ± 8.9%)**; WEZ-contact episodes **0/30 → 30/30**; episodes reaching ≤1.0° **0/30 → 30/30**; damage dealt/taken **0.0/0.0 → 15.594/0.000**; ownship crashes **0**, health 1.0 in every episode; best ATA **4.08–4.45° → 0.0046–0.362°**. **Mechanism (why E1e's five sweeps were all null):** both control authorities vanish together near `UTAngle`=180°, exactly where the stuck mode sits (measured 152–172°) — `Roll_Effect = 1 − clamp(\|UTAngle\|/90,0,1)` is *identically 0* for \|UTAngle\|≥90 and `PitchCMD` is a **product**, so pitch is multiplicatively annihilated; and in that same branch `RollCMD = sin(UTAngle)` **decays to 0 as UTAngle→180**. No gain multiplies a zero into something. The replacement commands roll proportional to the angle itself (maximal at 180°, where the old law gave ~0) and pitch with no multiplicative kill. Traced mean pitch-plane fraction **0.0 → 0.638**. Wired as `vptrack`/`hybrid_vptrack` in both eval scripts, `run_local_dogfight.py` and `run_unreal_inference.py`; live-parity safe (`ownship_state`/`target_state` are populated identically by `unreal/policies.py`). | **[M] fixed** |
+| D1-**LIMIT** | **The bypass converts offensive position into kills; it does NOT create offensive position — measured the same day, do not over-read D1-DONE.** The 40% win rate is **OBFM_offensive only**, a geometry that *starts* the ownship advantaged. Re-run at N=30 on **`two_circle_headon`** — the neutral head-on merge, and the geometry closest to the round-4 tie-break — it scores **1/30 wins (3.3% ± 3.3), 1/30 WEZ-contact episodes, median min-ATA 9.41°**. Still strictly better than every alternative in that geometry (`hybrid` 0/30 WEZ; v6 pure RL 0/30 and 18/20 self-crash) and still **0 crashes / 0 damage taken**, but it is not a 40% backend in a neutral fight. **Mechanism:** `VPTrackingProvider` only overrides inside the ≤1200 m / ≤20° terminal envelope; outside it the native BT flies, and the BT does not win a neutral merge — so from two-circle the fight rarely *enters* the envelope. This is the clean division of labour the remaining work should exploit: **something has to win the merge (tactics), and vptrack finishes it (terminal pointing)**. It is the strongest argument yet for §3's residual hybrid, whose RL correction acts precisely during the maneuvering phase the BT loses. | **[M]** |
 | D2 | Pure RL (#3/#5) already failed once — v5 was 100 % self-crash, 20/20 into the ground. Must learn tactics *and* control simultaneously. | [D]; v6 retrying with altitude shaping |
 | D3 | **Residual hybrid (#4-like) — wiring CHECKED 2026-08-05, comes back clean.** All five entry points (`run_local_dogfight.py`, `run_unreal_inference.py`, `my_submission.py`, both eval scripts via `build_provider`) use `RemappedRLProvider`/`StudentHybridProvider`, never the stock classes. Both construction sites pass `primary=RL, secondary=BT`, so residual = `BT + 0.35×RL` — BT baseline, RL correction, the intended direction. Throttle residual is correctly re-centred (`+= scale*(2*rl−1)`), and `switch_by_range` uses `StateIndex.N/E/D` = NED **metres** (no LLA unit trap) and fails safe to BT. | **[M]** verified |
 | D3-a | **Bug found and fixed in the same pass — in E1a's own recycler.** `_recycle_native_bts()` looked for `ai_pilot`/`_registered_fighter_ids` *directly* on the provider; `StudentHybridProvider` has neither (its **secondary** is the BT), so every `--*-backend hybrid` run was **silently skipped**, reinstating the exact cross-episode leak the function exists to remove — with no output saying so. Fixed with a recursive `_iter_bt_providers()` walk over `primary_provider`/`secondary_provider` (cycle-guarded, None-safe; verified finding the BT directly, 1 level deep, and 2 levels deep), plus an up-front topology line so a no-op recycler is now visible instead of silent. | **[M]** |
@@ -235,6 +274,11 @@ transcribed in [AIP_OFFICIAL_ARCHITECTURE_AND_BT_SLIDES.md](AIP_OFFICIAL_ARCHITE
 | E1e-null | **Lateral follow-ups S1–S4 all failed to improve on E1d — the controller is at a local optimum in its scalar gains.** N=20/arm, same harness. **S1** `RollCMD < 0.1` → `abs(...)`: attractor **1.0070 → 1.2116**, ~30 sd WORSE. The sign asymmetry is *load-bearing* — it acts as a 3× boost on all large negative roll commands, so "fixing" it strips real authority. Reverted, and marked DO-NOT-FIX in code. **S2** roll-taper floor {0, 0.25, 0.50}: 1.0052 / 1.0062 / 1.0056 — all within one sd, because `clamp(LOS, FLOOR, 1.0)` with LOS ≈ 1.006 > CEIL returns CEIL for any floor; the taper is simply **inactive** at the operating point (same error class as `INTEGRAL_CAP`). **S3** rudder taper ceiling {6.0, 3.0, 1.5} = {16.8%, 33.5%, 67%} authority: 1.0064 / 1.0540 / 1.1107 — **monotonically worse with more authority**. Combined with E1d (which *doubled* authority and helped), this locates an optimum that the MFsum fix already reached. **S4** moved the `_isnan(LOS)` guard above the roll branch — latent NaN path (LOS was consumed by `if (LOS > 3)` ~45 lines before its guard; `clamp()` propagates NaN unchanged, so only Python's `nan_to_num` was catching it). Behaviour-neutral: 1.0062. **Net: five scalar knobs swept, only the MFsum *correctness bug* moved the attractor favourably. Further gain tuning on `Controller_CY` is unlikely to close the last 0.006° — this strengthens the architectural options (D1 / residual hybrid) over more hand-tuning.** | **[M]** |
 | E1c-next | **Next hypothesis (partially CONFIRMED by E1d above — the lateral axis was indeed the problem):** `PitchCMD = ERROR_Effect × Roll_Effect × Horizon_Effect` is a **product**, with `Roll_Effect = 1 − clamp(|UTAngle|/90, 0, 1)`. If the residual error at the attractor lies mostly out of the pitch plane, `Roll_Effect ≈ 0` and no pitch-error gain can move `PitchCMD` — which is exactly the flat response measured. That would relocate the problem to the **roll/yaw path** (`RollCMD`'s `clamp(LOS,0,1)` scaling, its `LOS>3` / `RollCMD<0.1` branches, and the **inert rudder moving-average filter** — `int MFsum` summing `float MF[20]`, then integer `MFsum/20` → 0 for any \|sum\|<20, so that line merely halves rudder authority). **Confirming this requires per-tick C++ logging of `UTAngle`/`RollCMD`/`Roll_Effect`; the Python trace cannot see them.** Do that before spending more effort on the pitch expression. | **[M]** hypothesis |
 
+| E1d-**CORRECTION** | **The "0.038° / 0.007° from scoring" framing was too optimistic — corrected 2026-08-06.** E1d's attractor figure and `s4_final.csv`'s `ep_min_distance` of 551–558 m are two **separate per-episode aggregates**; nothing says they occur on the same step, and an earlier reading here treated them as simultaneous. Traced directly (`artifacts/eval/scratch_20260806/b1_obfm_trace.csv`, N=8 OBFM): the BT holds **413 steps per episode with range inside the 152.4–914.4 m band** — so **range was never the binding constraint** — but the best ATA across all 413 in-band steps is **4.096°**, with `roll_effect` **exactly 0.0** and the VP **86.4–86.8°** off target at every one of the best steps. In two-circle the 18 sub-1° steps that do occur sit at **1399–2266 m**, all beyond the far edge, and are mostly the head-on spawn decaying. **Zero sub-1° steps in-band, in either geometry.** The honest pre-fix gap was **4.1° → 1.0°**, not 0.005°. A4's "range and angle never simultaneously satisfied" therefore stood until D1-DONE. | **[M] corrected** |
+| E2 | **Training telemetry was dead for two entire campaigns — FIXED 2026-08-06.** `crash_rate`, `win_rate`, `ep_wez_steps` and `ep_altitude_penalty_steps` were logged **0 times across all 4,700 iterations of v6 and all 4,700 of v5** (v4: 557/1,901 rows). So v6's headline change — the dense altitude-floor term added specifically to fix v5's 100% self-crash — had **no observable signal at all**, and all 26 stages across both campaigns advanced on `max_iterations` because the gate metrics were permanently NaN. **Root cause:** `_extract_custom_metrics` looked every metric up under the `_mean` suffix, the **old** RLlib API stack's naming (`episode.custom_metrics[k]` → `k_mean`/`k_min`/`k_max`). On Ray 2.54's new stack `SingleAgentEpisode` has no `custom_metrics` attribute at all, so the platform callback uses `metrics_logger.log_value(("custom_metrics", k))`, which stores the key **bare** — all 21 lookups missed. Fixed with a suffix-tolerant `_cm_get`. **Second defect:** RLlib's EnvRunner reduces and *clears* its MetricsLogger every sample call, so a value appears only on the exact iterations an episode closes (~1 in 20–120 at 100 env steps/iter) — `window=` does not help; persistence had to move consumer-side (`_carry_forward` + a `metrics_age_iters` column so a carried value is never mistaken for a fresh one). **Verified:** 90% row coverage on a probe run, and stage 0 advanced on **`crash_rate=0.0000`** — the first advance condition to fire since v4. Two earlier hypotheses (empty terminal info; `window=` persistence) were **both measured false** and are left retracted in `student/my_callbacks.py`. | **[M] fixed** |
+| E3 | **Unattended runs die at stage advancement on a print — FIXED 2026-08-06.** `train_curriculum.py` prints non-ASCII glyphs (`✓ Stage N advancement`, `→ Final bundle saved`). With stdout **redirected to a file** — which is how every unattended run is launched (`scripts/launch_v4_when_free.ps1`, any `> log 2>&1`) — Python falls back to cp1252 and raises `UnicodeEncodeError`. Measured on a redirected probe: it **killed the run (exit 1) at stage advancement**, after the stage had trained successfully; and the same failure inside the bundle-save `try/except` surfaced as `[WARNING] Final bundle save failed` — a *print* failure masquerading as a lost bundle. `sys.stdout`/`stderr` are now reconfigured to UTF-8 at import, which cannot miss a glyph added later. | **[M] fixed** |
+| E4 | **Eval CSVs logged `initial_distance_m = 0.0` for every v6 row — FIXED 2026-08-06.** `scripts/eval_v5_vs_bt.py` discarded `env.reset()`'s return, so the field was read from the *final* step's info; the env only emits it at reset. v5's CSV has real values, v6's are all zero, so the newest eval could not report its own spawn geometry — load-bearing here, since E1 traced the bimodality to a 0.017° spawn perturbation. Verified restored: 1496.8 / 2633.4 m for alpha 0/20, matching v5 exactly. | **[M] fixed** |
+
 ### The through-line
 
 A4 and C1 are the same problem from two sides: the tree optimizes toward a **proxy** (ATA < 8°,
@@ -245,6 +289,20 @@ E1 says none of it can be verified yet.
 **Agreed work order (2026-08-05): E1 → D3 wiring check → D1/D3 residual hybrid**, with
 **A2 / A5 / B1 / B2** taken opportunistically as cheap XML-and-constants wins that need no
 rebuild-plus-validation cycle.
+
+**Update 2026-08-06 — the through-line above is now broken in the right place, and the work
+order is spent.** D1 was executed (D1-DONE) and it resolved A4/C1/C3 in one move: the tree no
+longer has to converge inside a proxy, because the component that could not point has been
+replaced. 12/30 wins, 30/30 WEZ contact, from 0/30 on both counts. E1's bifurcation is *not*
+fixed — the JSBSim reset nondeterminism is still there and single-episode comparisons are still
+invalid — but it no longer blocks validation, because the effect size (0 → 40% win rate) is
+~4.5 SE and does not need a coin-flip-free harness to be legible. **Revised order: (1) hybrid
+residual re-based on the new floor (D3/§3's submission architecture, `hybrid_vptrack`);
+(2) the DQ-avoidance workstream in §8, which has never been started and is now the largest
+un-mitigated risk to a podium result; (3) a v7 campaign only if (1) shows the residual adds
+something the fixed floor does not — with telemetry (E2) now live, a v7 would be the first
+campaign that can actually be steered.** A2's range bias remains **unvalidated and probably
+inert** — every 2026-08-06 probe pins `ep_min_distance` at 551–561 m against its 220 m target.
 
 ## 5. Critical risks to verify *before* investing heavily in training
 
