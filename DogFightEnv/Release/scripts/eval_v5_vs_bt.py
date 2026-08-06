@@ -94,6 +94,10 @@ from dogfight.ai.student_hooks import load_observation_hook
 from run_local_dogfight import build_provider, backend_to_env_mode
 from student.inference_providers import require_healthy_bundle
 from student.obfm_scenario_wrapper import ObfmScenarioWrapper, OBFM_ALTITUDE_M, OBFM_SPEED_MPS
+from student.match_scenario_wrapper import (
+    MatchScenarioWrapper, MATCH_ALTITUDE_M, MATCH_SPEED_MPS,
+    MATCH_SEPARATION_MIN_M, MATCH_SEPARATION_MAX_M, MATCH_LOS_DEG,
+)
 from student.reward_lib import WEZ_PHASES, match_wez_phase, wez_damage_estimate
 from dogfight.sim.state_schema import StateIndex
 
@@ -677,11 +681,23 @@ def parse_args():
     p.add_argument("--min-altitude", type=float, default=300.0)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--scenario-mode",
-                   choices=["two_circle_headon", "obfm_offensive", "obfm_defensive"],
+                   choices=["two_circle_headon", "obfm_offensive", "obfm_defensive",
+                            "match_base", "match_tiebreak"],
                    default="two_circle_headon",
                    help="Initial geometry. two_circle_headon varies over the alpha schedule; "
                         "obfm_* uses the fixed ~556 m six-o'clock advantage geometry "
-                        "(via ObfmScenarioWrapper; heading randomized per episode).")
+                        "(via ObfmScenarioWrapper; heading randomized per episode). "
+                        "match_base is THE COMPETITION SCENARIO (prelim + finals rounds "
+                        "1-3): antiparallel BEAM merge, LOS ~90 deg both sides, at "
+                        "2000-3000 ft. match_tiebreak is the round-4 head-on at 10000ft+. "
+                        "Prefer these over the other three for any result meant to predict "
+                        "match performance -- obfm_* stages a six-o'clock advantage the "
+                        "rules never grant.")
+    p.add_argument("--match-los-deg", type=float, default=None,
+                   help="Override each aircraft's LOS-off-nose for match_* modes. The "
+                        "rounds-1-3 slide art supports two readings: 90 (antiparallel and "
+                        "abeam -- a beam merge, the default) or 180 (antiparallel and "
+                        "nose-away, tail-to-tail). Measure both rather than assuming.")
     p.add_argument("--out-csv", default="artifacts/eval/matchup.csv")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--trace-geometry", action="store_true",
@@ -787,6 +803,10 @@ def main():
         # for two_circle_headon, so only wrap when actually needed.
         if args.scenario_mode.startswith("obfm"):
             env = ObfmScenarioWrapper(env)
+        # Same reason as the OBFM wrapper above: "headon_short" is not native to
+        # single_agent_env.py, it is staged via change_init_position() at reset.
+        if args.scenario_mode.startswith("match_"):
+            env = MatchScenarioWrapper(env)
 
         # Wall-time covered by one env step, for the phased damage integration. Read off the
         # env rather than assumed: step_ratio is resolved from config (explicit, or legacy
@@ -874,6 +894,22 @@ def main():
                     _recycle_native_bts()
                 if args.scenario_mode == "two_circle_headon":
                     scen = {"mode": "two_circle_headon", "alpha_deg": float(alpha_deg)}
+                elif args.scenario_mode.startswith("match_"):
+                    # alpha_deg from the schedule is NOT a geometry knob here (LOS is fixed
+                    # by the mode); it is reused as a deterministic sweep across the
+                    # 2000-3000 ft band so the N episodes cover the published range evenly
+                    # instead of clustering wherever the RNG happens to land.
+                    _frac = (float(alpha_deg) % 180.0) / 180.0
+                    scen = {"mode": args.scenario_mode,
+                            "altitude_m": MATCH_ALTITUDE_M,
+                            "speed_mps": MATCH_SPEED_MPS}
+                    if args.scenario_mode == "match_base":
+                        scen["separation_m"] = (
+                            MATCH_SEPARATION_MIN_M
+                            + _frac * (MATCH_SEPARATION_MAX_M - MATCH_SEPARATION_MIN_M)
+                        )
+                    if args.match_los_deg is not None:
+                        scen["los_deg"] = float(args.match_los_deg)
                 else:
                     role = "offensive" if args.scenario_mode == "obfm_offensive" else "defensive"
                     scen = {"mode": "obfm", "role": role,

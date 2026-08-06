@@ -49,6 +49,8 @@ by subclassing, the same idiom as `student/inference_providers.py`.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from dogfight.ai.action_provider import ActionContext, ActionResult, clip_action
@@ -62,8 +64,20 @@ RADTODEG = 180.0 / np.pi
 # Chosen to cover the measured in-band tracking window (the 413 steps sit at 152-914 m) with
 # margin, while leaving the approach entirely to the BT. Widening these hands the BT's tactics
 # to this controller -- which it does NOT implement -- so widen only with a measured reason.
-ENGAGE_RANGE_M = 1200.0
-ENGAGE_LOS_DEG = 20.0
+#
+# THERE IS NOW A MEASURED REASON TO SWEEP THEM (2026-08-06). These bounds were sized against
+# OBFM, where the ownship starts at the target's six and the fight is already inside them.
+# On the OFFICIAL match geometry (match_scenario_wrapper: antiparallel beam merge at
+# 2000-3000 ft) the aircraft cross and separate, the fight develops as a turning contest
+# BEYOND 1200 m, and the controller barely engages: median min-ATA 1.272 deg vs the BT's
+# 1.419 deg, both stranded above the 1.0 deg gate, 1/30 wins. Compare OBFM, same backend:
+# 0.024 deg and 12/30. Widening trades pointing precision for engagement time in a regime
+# the controller has no energy management for, so it is an empirical question either way.
+#
+# Overridable from the environment for sweeps ONLY -- these are not a runtime configuration
+# surface, and the submission path never sets them (student/my_submission.py).
+ENGAGE_RANGE_M = float(os.environ.get("DOGFIGHT_VPTRACK_RANGE_M", "1200.0"))
+ENGAGE_LOS_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_LOS_DEG", "20.0"))
 
 # ---- Gains ----------------------------------------------------------------------------
 K_ROLL = 1.0
