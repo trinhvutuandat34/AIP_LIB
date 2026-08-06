@@ -29,13 +29,13 @@ from student.inference_providers import (
     StudentHybridProvider,
     verify_bundle_observation,
 )
-from student.controller_providers import VPTrackingProvider
+from student.controller_providers import EnvelopeGatedHybridProvider, VPTrackingProvider
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run local dogfight simulation between two inference backends.")
-    parser.add_argument("--ownship-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "fixed"], required=True)
-    parser.add_argument("--target-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "fixed"], required=True)
+    parser.add_argument("--ownship-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated", "fixed"], required=True)
+    parser.add_argument("--target-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated", "fixed"], required=True)
     parser.add_argument("--ownship-bundle-dir")
     parser.add_argument("--target-bundle-dir")
     parser.add_argument("--ownship-bt-dll", default="AIP_BASE.dll")
@@ -82,14 +82,19 @@ def build_provider(
         # Native BT for tactics/throttle, student-space control law for terminal pointing.
         # See student/controller_providers.py for the measured defect this bypasses.
         return VPTrackingProvider(dll_name=bt_dll)
-    if backend == "hybrid_vptrack":
-        # Same residual hybrid as "hybrid", but the BT floor underneath is the one that can
-        # actually point. This is the Sec 3 submission architecture on a fixed floor.
+    if backend in ("hybrid_vptrack", "hybrid_gated"):
+        # hybrid_vptrack: plain residual on the fixed floor. MEASURED 2026-08-06 to be strictly
+        #   WORSE than the floor alone (0/30 wins vs 12/30) -- the residual's magnitude dwarfs
+        #   the sub-degree precision the terminal solution needs. Kept only as the A/B control.
+        # hybrid_gated: residual during the approach, floor untouched during terminal tracking.
         if not bundle_dir:
-            raise ValueError(f"--{side}-bundle-dir is required when {side}-backend=hybrid_vptrack")
+            raise ValueError(f"--{side}-bundle-dir is required when {side}-backend={backend}")
         _verify_bundle_if_present(bundle_dir, observation_mode, observation_module)
         rl_provider = RemappedRLProvider(bundle_dir=bundle_dir, algorithm_factory=build_algorithm_from_bundle, policy_id=policy_id)
-        return StudentHybridProvider(
+        hybrid_cls = (
+            EnvelopeGatedHybridProvider if backend == "hybrid_gated" else StudentHybridProvider
+        )
+        return hybrid_cls(
             primary_provider=rl_provider,
             secondary_provider=VPTrackingProvider(dll_name=bt_dll),
             mode=hybrid_mode,

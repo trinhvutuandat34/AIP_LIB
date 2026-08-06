@@ -65,8 +65,8 @@ CSV_FIELDS = [
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--ownship-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "fixed"], required=True)
-    p.add_argument("--target-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "fixed"], required=True)
+    p.add_argument("--ownship-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated", "fixed"], required=True)
+    p.add_argument("--target-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated", "fixed"], required=True)
     p.add_argument("--ownship-bundle-dir")
     p.add_argument("--target-bundle-dir")
     p.add_argument("--ownship-bt-dll", default="AIP_BASE.dll")

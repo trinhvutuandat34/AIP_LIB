@@ -54,6 +54,7 @@ import numpy as np
 from dogfight.ai.action_provider import ActionContext, ActionResult, clip_action
 from dogfight.ai.bt_action_provider import BTActionProvider
 from dogfight.sim.state_schema import StateIndex
+from student.inference_providers import StudentHybridProvider
 
 RADTODEG = 180.0 / np.pi
 
@@ -245,5 +246,73 @@ class VPTrackingProvider(BTActionProvider):
             action=action,
             source="vptrack",
             confidence=result.confidence,
+            info=info,
+        )
+
+
+class EnvelopeGatedHybridProvider(StudentHybridProvider):
+    """Residual RL during the approach; undiluted terminal tracking during the shot.
+
+    WHY (measured 2026-08-06, N=30 OBFM, same harness/seeds):
+
+        vptrack alone                        12/30 wins, 30/30 WEZ eps, median min-ATA 0.024 deg
+        StudentHybridProvider on that floor   0/30 wins,  5/30 WEZ eps, median min-ATA 2.260 deg
+
+    The plain residual does not merely fail to help -- it takes a backend that wins 40% of
+    episodes to zero. The reason is a scale mismatch, not a bug: the scoring gate is <=1.0 deg
+    and `VPTrackingProvider` converges to 0.024 deg, so a 0.35-weighted correction from the
+    (untrained, 0-win) v6 policy is orders of magnitude larger than the precision it is
+    perturbing. Adding noise to a solved terminal solution can only destroy it.
+
+    But the residual is not worthless -- it acts on the phase the fixed floor CANNOT solve.
+    `VPTrackingProvider` only takes the stick inside its terminal envelope, and outside it the
+    native BT flies and loses the neutral merge (vptrack scores 1/30 on two_circle_headon vs
+    12/30 on OBFM, which starts advantaged). Winning the merge is the remaining gap.
+
+    So gate the residual on the same envelope, which the floor already reports per step via
+    `info["ctrl_source"]`:
+
+        ctrl_source == "vptrack"  ->  terminal tracking: pass the floor through UNTOUCHED
+        ctrl_source == "bt"       ->  approach/maneuvering: apply the residual as usual
+
+    This keeps Sec 3's architecture intact (RL corrects the BT, BT is the safety net) while
+    making the correction structurally incapable of spoiling a firing solution. Throttle is
+    left on the residual path in both phases -- it is a separate sanctioned RL target (Sec 4.1
+    D4), it is not part of the pointing solution, and every Task node currently hardcodes it.
+    """
+
+    def compute_action(self, context: ActionContext) -> ActionResult:
+        secondary_result = self.secondary_provider.compute_action(context)
+
+        if secondary_result.info.get("ctrl_source") != "vptrack":
+            # Approach phase -- the floor is just the BT here, so behave exactly as the plain
+            # residual hybrid. Recomputing through super() would tick the secondary provider a
+            # SECOND time this step (double-stepping the native BT and its blackboard), so the
+            # composition is done here against the result already in hand.
+            primary_result = self.primary_provider.compute_action(context)
+            primary = np.asarray(primary_result.action, dtype=np.float32)
+            action = np.asarray(secondary_result.action, dtype=np.float32).copy()
+            action[:3] += self.residual_scale * primary[:3]
+            action[3] += self.residual_scale * (2.0 * primary[3] - 1.0)
+            return ActionResult(
+                action=clip_action(action),
+                source="hybrid_gated",
+                confidence=self.confidence,
+                info={
+                    "mode": "residual",
+                    "phase": "approach",
+                    "residual_scale": self.residual_scale,
+                    "ctrl_source": secondary_result.info.get("ctrl_source"),
+                },
+            )
+
+        # Terminal tracking -- hand the floor through untouched. The RL policy is deliberately
+        # NOT queried here: it costs an inference call whose output would be discarded.
+        info = dict(secondary_result.info)
+        info.update({"mode": "residual", "phase": "terminal", "residual_applied": False})
+        return ActionResult(
+            action=clip_action(secondary_result.action),
+            source="hybrid_gated",
+            confidence=self.confidence,
             info=info,
         )

@@ -644,7 +644,7 @@ def target_env_mode(backend: str) -> str:
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--ownship-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "fixed"], required=True)
+    p.add_argument("--ownship-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated", "fixed"], required=True)
     p.add_argument("--target-backend",
                    choices=["rl", "bt", "hybrid", "fixed", "autopilot", "loiter"], required=True,
                    help="'autopilot' holds heading/altitude/speed for the full 200 s -- prefer it "
