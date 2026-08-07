@@ -111,6 +111,36 @@ ERROR_EFFECT_CAP = 1.5
 K_RUDDER = 1.0
 RUDDER_TAPER_CEIL = 6.0
 
+# ---- Range / throttle control -- MEASURED NULL, DEFAULT OFF (2026-08-06) ----------------
+# The WEZ band is 152.4-914.4 m with damage coefficient (3000 - r_ft)/2500: ~0.09 at the far
+# edge, ~0.91 at 220 m, and exactly 0 below 152.4 m (a hard dead zone). So this drives to a
+# SETPOINT, not monotonically closer. 220 m matches the target A2 chose for Task_GunTrack's
+# range bias, so the C++ and this agree instead of fighting each other.
+#
+# HYPOTHESIS (wrong): of the 8 draws the retuned controller left against the BT, 3 reached the
+# angle gate and still scored nothing, so giving the controller throttle -- the one axis it had
+# never touched -- should convert them by fixing range.
+#
+# MEASURED, N=30 per arm, same seeds:
+#     vs BT        73.3% -> 70.0%  (8 -> 9 kills, damage 14.29 -> 15.96)
+#     self-play    23.3% -> 26.7%  (6 -> 3 kills, damage taken 11.86 -> 13.61)
+# Both differences are well inside 1 SE (+/-8%), i.e. no effect either way.
+#
+# WHY IT CANNOT HELP, from the same runs: median ep_min_distance is already **92.8 m vs the BT
+# and 20.2 m in self-play** -- BELOW the 152.4 m zero-damage floor. The aircraft are not failing
+# to close; they close far too much. Those 3 draws were never a range problem: angle and range
+# are simply not coincident (the angle arrives when the range is wrong, and vice versa). That is
+# a timing problem and belongs to the same positional gap as the other 5.
+#
+# Kept, off by default, because it is correct code for a hypothesis worth re-testing once the
+# positional problem is addressed -- at which point range control may start to matter. Enable
+# with DOGFIGHT_VPTRACK_THROTTLE=1.
+THROTTLE_CONTROL = os.environ.get("DOGFIGHT_VPTRACK_THROTTLE", "0") not in ("0", "false", "False")
+TARGET_RANGE_M = float(os.environ.get("DOGFIGHT_VPTRACK_TARGET_M", "220.0"))
+RANGE_P = 1.0 / 400.0     # full authority at 400 m of range error
+CLOSURE_D = 1.0 / 40.0    # damping on per-step closure, so it settles instead of oscillating
+THROTTLE_AUTHORITY = float(os.environ.get("DOGFIGHT_VPTRACK_THR_AUTH", "0.7"))
+
 # Aim at the target LOS, not the BT's VP. The VP is 86.4-86.8 deg off target during gun-hold,
 # which is the whole problem. Flip to True to A/B the VP-following path.
 AIM_AT_VP = False
@@ -158,7 +188,9 @@ class VPTrackingProvider(BTActionProvider):
         self.engage_los_deg = float(kwargs.pop("engage_los_deg", ENGAGE_LOS_DEG))
         self.aim_at_vp = bool(kwargs.pop("aim_at_vp", AIM_AT_VP))
         super().__init__(*args, **kwargs)
+        self.throttle_control = bool(kwargs.pop("throttle_control", THROTTLE_CONTROL))
         self._los_error_sum = 0.0
+        self._prev_range_m: float | None = None
         self._override_steps = 0
         self._total_steps = 0
 
@@ -167,14 +199,46 @@ class VPTrackingProvider(BTActionProvider):
         # resets for multienv). The integral is OURS and is per-episode: carrying it across
         # episodes is exactly the cross-episode leak class that Sec 4.1 E1-leaks documents for
         # ErrorSum/SumCount, and it would destroy the sample independence the N>=30 statistics
-        # depend on.
+        # depend on. Same argument for the range memory below.
         self._los_error_sum = 0.0
+        self._prev_range_m = None
         return super().reset(context)
 
+    def _range_throttle(self, rng: float, bt_throttle: float) -> float:
+        """Close to the high-damage edge of the WEZ band, without overshooting through it.
+
+        WHY (measured 2026-08-06). Of the 8 draws left by the retuned controller against the
+        BT, **3 reached the angle gate and still scored nothing** (min-ATA 0.13 / 0.41 /
+        0.74 deg, 0 WEZ steps) -- angle satisfied, range not, at the same instant. Throttle
+        was the one axis this controller never touched: it passed the BT's value straight
+        through, and every Task node hardcodes a constant (Sec 4.1 D4).
+
+        The band is 152.4-914.4 m with damage coefficient (3000 - r_ft)/2500, so value rises
+        steeply as range closes: ~0.09 at the far edge, ~0.91 at 220 m, and **0.0 below
+        152.4 m** -- a hard dead zone, which is why this drives to a setpoint rather than
+        closing monotonically. 220 m is the same target A2 chose for `Task_GunTrack`'s range
+        bias, so the two agree rather than fighting.
+
+        Proportional on range error with a damping term on closure so it settles instead of
+        oscillating through the dead zone. Closure is measured per-step (no dt needed -- it
+        only has to be proportional to the rate).
+        """
+        err = rng - TARGET_RANGE_M                      # >0: too far, close in
+        closure = 0.0 if self._prev_range_m is None else (self._prev_range_m - rng)
+        self._prev_range_m = rng
+        cmd = 0.5 + RANGE_P * err - CLOSURE_D * closure
+        # Blend toward the BT's own throttle so the tree still has a say in energy state.
+        cmd = THROTTLE_AUTHORITY * cmd + (1.0 - THROTTLE_AUTHORITY) * float(bt_throttle)
+        return _clamp(cmd, 0.0, 1.0)
+
     def _tracking_stick(
-        self, own: np.ndarray, tgt: np.ndarray, vp_neu: np.ndarray | None
-    ) -> tuple[float, float, float] | None:
-        """Return (roll, pitch, rudder), or None to defer to the BT."""
+        self, own: np.ndarray, tgt: np.ndarray, vp_neu: np.ndarray | None,
+        bt_throttle: float = 0.5,
+    ) -> tuple[float, float, float, float | None] | None:
+        """Return (roll, pitch, rudder, throttle|None), or None to defer entirely to the BT.
+
+        A None throttle means "keep the BT's" -- the behaviour before throttle control existed.
+        """
         fwd, up, right = body_axes(own)
 
         # N-E-Up: D is negated, matching the eval replica and GetStick's own frame.
@@ -238,7 +302,8 @@ class VPTrackingProvider(BTActionProvider):
             -1.0,
             1.0,
         )
-        return roll_cmd, pitch_cmd, rudder_cmd
+        throttle_cmd = self._range_throttle(rng, bt_throttle) if self.throttle_control else None
+        return roll_cmd, pitch_cmd, rudder_cmd, throttle_cmd
 
     def compute_action(self, context: ActionContext) -> ActionResult:
         # Always tick the BT first: it owns throttle, and its blackboard/gates/maneuver phases
@@ -252,7 +317,9 @@ class VPTrackingProvider(BTActionProvider):
 
         self._total_steps += 1
         try:
-            stick = self._tracking_stick(own, tgt, result.info.get("vp"))
+            stick = self._tracking_stick(
+                own, tgt, result.info.get("vp"), float(result.action[3])
+            )
         except Exception:
             # Never let a controller error kill a match -- same failure posture as
             # student/submission_resilience.py. Fall through to the BT.
@@ -263,8 +330,11 @@ class VPTrackingProvider(BTActionProvider):
             return result
 
         self._override_steps += 1
-        roll_cmd, pitch_cmd, rudder_cmd = stick
-        action = clip_action([roll_cmd, pitch_cmd, rudder_cmd, float(result.action[3])])
+        roll_cmd, pitch_cmd, rudder_cmd, throttle_cmd = stick
+        action = clip_action([
+            roll_cmd, pitch_cmd, rudder_cmd,
+            float(result.action[3]) if throttle_cmd is None else throttle_cmd,
+        ])
 
         if context.sim is not None and hasattr(context.sim, "action"):
             context.sim.action[:] = action
