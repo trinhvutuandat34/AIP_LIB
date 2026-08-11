@@ -88,6 +88,7 @@ from ray.tune.logger import UnifiedLogger
 from DogFightEnvWrapper import DogFightWrapper
 from student.obfm_scenario_wrapper import ObfmScenarioWrapper
 from student.habfm_scenario_wrapper import HabfmScenarioWrapper
+from student.match_scenario_wrapper import MatchScenarioWrapper
 from student.my_callbacks import StudentDogFightCallbacks
 from student.g_limiter import GLimitWrapper
 from dogfight.ai.checkpoint_io import (
@@ -205,6 +206,16 @@ def env_creator(env_config):
     # ~91deg LOS both sides) -- single_agent_env.py never had a "habfm" mode branch
     # at all (not a revert casualty, just never built). Transparent no-op otherwise.
     env = HabfmScenarioWrapper(env)
+    # MatchScenarioWrapper applies the OFFICIAL match geometry -- initial_scenario.mode
+    # "match_base" (prelim + rounds 1-3: antiparallel beam merge, 2000-3000 ft) and
+    # "match_tiebreak" (round 4+). It existed since 2026-08-07 but was wired only into the eval
+    # scripts, never here, so a curriculum stage asking for match_base would have gone straight
+    # to single_agent_env.py, which has no branch for either mode, and trained the DEFAULT spawn
+    # while its name and logs claimed the match geometry. That is the same silent-no-op class as
+    # the G limiter shipping inert and _recycle_native_bts() skipping hybrid. Wiring it here
+    # first, so the stages can be added against a wrapper that is actually in the loop.
+    # Transparent no-op for every other initial_scenario.mode.
+    env = MatchScenarioWrapper(env)
     # G limiter on the ACTION path (2026-08-07). The sim enforces no structural limit and hands
     # out up to 14.86 G against a 9 G airframe (scripts/g_limit_check.py). Without this a policy
     # trains against physics the competition server may not allow, and the divergence surfaces on
@@ -837,11 +848,13 @@ class CurriculumTrainer:
         if args.observation_module:
             env_preview_config["observation_module"] = args.observation_module
         env_preview = env_creator(env_preview_config)
-        # env_creator() returns HabfmScenarioWrapper(ObfmScenarioWrapper(DogFightWrapper(...))) --
-        # .unwrapped drills through both scenario wrappers to the actual DogFightWrapper, which is
-        # the one that has .config. Neither wrapper defines __getattr__ forwarding (this Gymnasium
-        # version's gym.Wrapper doesn't either), so env_preview.config itself would raise
-        # AttributeError on the outer wrapper.
+        # env_creator() returns a wrapper stack -- currently
+        # GLimitWrapper(MatchScenarioWrapper(HabfmScenarioWrapper(ObfmScenarioWrapper(
+        # DogFightWrapper(...))))). .unwrapped drills through all of them to the actual
+        # DogFightWrapper, which is the one that has .config, so this stays correct as wrappers
+        # are added. None of them defines __getattr__ forwarding (this Gymnasium version's
+        # gym.Wrapper doesn't either), so env_preview.config itself would raise AttributeError
+        # on the outer wrapper.
         preview_config = env_preview.unwrapped.config
         self.base_env_config = {
             **env_preview_config,
