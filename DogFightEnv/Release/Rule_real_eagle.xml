@@ -165,6 +165,29 @@
                    close-range head-on alignment later in an already-established fight) while
                    safely covering the real ~610m minimum. See Gate 1's comment above for the
                    paired fix that was required for this to actually be reachable. -->
+              <!--; real_eagle 2026-08-06: BEAM MERGE ; measured ROOT CAUSE, and a measured NULL.
+                   ROOT CAUSE (traced): the official match starts antiparallel and abeam at
+                   2000-3000 ft, and NO Gate 0-2.5 branch matches it. Gate1 needs HCA < 150
+                   (actual 180), Gate2_HeadOnMerge needs own AND target ATA < 20 (actual ~91),
+                   Gate2p5 needs ATA < 8, Gate2_OffCenterMerge needs 3000-5000 m (actual 610).
+                   So the tree falls through to its lowest-priority default, which saturates roll
+                   toward an aimpoint 86 deg off the target and 118 deg off its own nose: a
+                   max-rate turn AWAY. Both aircraft mirror it to within 0.3 deg, so range grows
+                   610 m ; 3278 m in 11 s, ATA opens 91 ; 128 deg, and the match becomes a
+                   2841 m orbit that times out 0-0. THIS IS WHY EVERY POSITIONAL FIX FAILED:
+                   the tree has already decided to leave the fight.
+                   NULL FIX: a Gate2_BeamMerge Sequence (HCA > 120, own ATA 45-150, dist < 2500)
+                   driving Task_LeadTurn, placed above Gate2_HeadOnMerge. N=30 on match_base:
+                   22/30, 8 kills, 0 losses, damage 14.37 vs 14.29, min-ATA 0.097 ; IDENTICAL to
+                   baseline on every column. Verified the branch really was in the active tree
+                   (bt_rule_manager logged the activation) and that Gate 2 is reachable: forcing
+                   the conditions near-unconditional DOES change the trajectory, but only
+                   slightly (min-ATA 1.130 ; 1.077). So Task_LeadTurn at this geometry emits
+                   essentially the same aimpoint as the default fallthrough ; it is the wrong
+                   MANEUVER, not the wrong gate. Reverted.
+                   NEXT: same branch, swapping Task_LeadTurn for Task_NoseToTailTurn or
+                   Task_OneCircleFight (one-line changes), or a new C++ node that actually turns
+                   toward an abeam bandit. The gate bounds above are measured and reusable. -->
               <Sequence name="Gate2_HeadOnMerge">
                 <DECO_AngleOffCheck name="Gate2_HCA_Gt150" UpDown="Greater" InputAO="150" BB="{BB}"/>
                 <DECO_LOSCheck name="Gate2_OwnATA_Lt20" UpDown="Less" InputLOS="20" Which="Own" BB="{BB}"/>
