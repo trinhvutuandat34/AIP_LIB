@@ -91,7 +91,7 @@ def _vptrack_kwargs(range_m, los_deg, throttle, defensive=None, corner=None) -> 
     return kw
 
 
-def build_provider(
+def _build_provider_raw(
     side: str,
     backend: str,
     bundle_dir: str | None,
@@ -107,7 +107,6 @@ def build_provider(
     vptrack_throttle: bool | None = None,
     vptrack_defensive: bool | None = None,
     vptrack_corner: bool | None = None,
-    g_limit: float | None = G_LIMIT,
 ):
     if backend == "fixed":
         return None
@@ -159,15 +158,23 @@ def build_provider(
     raise ValueError(f"Unsupported backend: {backend}")
 
 
-def build_provider_g_limited(*args, **kwargs):
-    """build_provider(), with the load-factor limiter applied unless g_limit is None.
+def build_provider(*args, **kwargs):
+    """Build a provider with the 10 G load-factor limiter applied.
 
-    The sim enforces no structural limit and will hand out 14.86 G against a 9 G airframe
-    (scripts/g_limit_check.py); a policy or controller that exploits that locally behaves
+    THE LIMITER IS APPLIED HERE, at the single construction boundary, deliberately. It was first
+    written as a separate opt-in factory and every call site kept using the raw builder, so the
+    limiter shipped INERT -- present in the tree, wired into nothing. Defaulting it on at the one
+    place providers are made means eval, run_local_dogfight and the live submission all inherit
+    it without each having to remember.
+
+    Why it is needed: the sim enforces no structural limit and hands out up to 14.86 G against a
+    9 G airframe (scripts/g_limit_check.py). Anything that exploits that locally behaves
     differently against a server that clamps. See student/g_limiter.py.
+
+    Pass g_limit=None to opt out (e.g. to reproduce a pre-limiter measurement).
     """
     limit = kwargs.pop("g_limit", G_LIMIT)
-    provider = build_provider(*args, **kwargs)
+    provider = _build_provider_raw(*args, **kwargs)
     if provider is None or limit is None:
         return provider
     return GLimitedProvider(provider, limit_g=float(limit))

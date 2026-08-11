@@ -89,7 +89,12 @@ from student.inference_providers import (
 )
 # DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. Guards the two
 # no-edit-client fragilities that risk a competition-day disconnect/DQ (COMPETITION_RULES Sec8).
-from student.controller_providers import EnvelopeGatedHybridProvider, VPTrackingProvider
+from student.controller_providers import (
+    EnvelopeGatedHybridProvider,
+    GLimitedProvider,
+    VPTrackingProvider,
+)
+from student.g_limiter import G_LIMIT
 from student.submission_resilience import ResilientActionProvider, supervise_client
 
 
@@ -198,7 +203,18 @@ STRICT_BUNDLE_HEALTH = False
 # 실행 로직 (수정 불필요)
 # =============================================================================
 
+
 def build_action_provider():
+    """실제 제출 경로. 아래 _build_action_provider_raw()의 결과를 10 G 리미터로 감싼다.
+
+    시뮬레이터에는 구조 한계가 없다: 전개된 측정(scripts/g_limit_check.py)에서 full pitch가
+    550 kt에서 14.86 G까지 나온다(F-16 정격 9 G). 로컬에서 15 G를 활용하도록 학습/튜닝된
+    기체는 G를 제한하는 실제 서버에서 다르게 움직이며, 그 차이는 로컬 평가가 아니라 경기
+    당일에 드러난다. student/g_limiter.py 참고.
+    """
+    return GLimitedProvider(_build_action_provider_raw(), limit_g=G_LIMIT)
+
+def _build_action_provider_raw():
     if MODE == "bt":
         print(f"[{TEAM_NAME}] BT 백엔드 사용: {BT_DLL}")
         return BTActionProvider(dll_name=BT_DLL)

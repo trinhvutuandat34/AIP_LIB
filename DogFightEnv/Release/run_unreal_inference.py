@@ -47,7 +47,8 @@ from student.inference_providers import (
 )
 # DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. See the
 # module docstring for the two client fragilities this guards against (COMPETITION_RULES Sec8).
-from student.controller_providers import VPTrackingProvider
+from student.controller_providers import GLimitedProvider, VPTrackingProvider
+from student.g_limiter import G_LIMIT
 from student.submission_resilience import ResilientActionProvider, supervise_client
 
 # python run_unreal_inference.py --mode rl --bundle-dir artifacts\models\team01\v1 --team-name team01
@@ -113,6 +114,17 @@ def parse_args():
 
 
 def build_action_provider(args, effective_observation_mode: str):
+    """Live inference provider, wrapped in the 10 G limiter (see student/g_limiter.py).
+
+    The sim enforces no structural limit and hands out up to 14.86 G against a 9 G airframe, so
+    anything tuned against that locally diverges from a server that clamps.
+    """
+    return GLimitedProvider(
+        _build_action_provider_raw(args, effective_observation_mode), limit_g=G_LIMIT
+    )
+
+
+def _build_action_provider_raw(args, effective_observation_mode: str):
     if args.mode == "bt":
         return BTActionProvider(dll_name=args.bt_dll)
 
