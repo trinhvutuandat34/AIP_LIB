@@ -165,6 +165,40 @@
                    close-range head-on alignment later in an already-established fight) while
                    safely covering the real ~610m minimum. See Gate 1's comment above for the
                    paired fix that was required for this to actually be reachable. -->
+              <!--; real_eagle 2026-08-06: BEAM MERGE branch ; ADOPTED on mechanism, neutral on
+                   both available benchmarks. Read this before removing it.
+                   PROBLEM IT FIXES (traced): the official match starts antiparallel and abeam at
+                   2000-3000 ft and NO Gate 0-2.5 branch matched that geometry ; Gate1 needs
+                   HCA < 150 (actual 180), Gate2_HeadOnMerge needs BOTH ATAs < 20 (actual ~91),
+                   Gate2p5 needs ATA < 8, Gate2_OffCenterMerge needs 3000-5000 m (actual 610). The
+                   tree fell through to its lowest-priority default, which saturates roll toward an
+                   aimpoint 86 deg off the target and 118 deg off its own nose: a max-rate turn
+                   AWAY. Both aircraft mirrored it to within 0.3 deg, so range grew 610 m ; 3278 m
+                   in 11 s and the match became a 2841 m orbit that timed out 0-0.
+                   MEASURED EFFECT, BT-only both sides, same seed, first 10 s:
+                       shipped        609.8 ; 3084.8 m,  ATA 91.3 ; 118.0 deg  (separating)
+                       this branch    609.8 ; 2298.2 m,  ATA 91.3 ;  79.2 deg  (closing)
+                   i.e. it turns toward the bandit instead of away, which is the behaviour the
+                   tree was missing at the one geometry every prelim round starts from.
+                   WHY IT IS ADOPTED WITHOUT A WIN-RATE GAIN. Neither benchmark can show one:
+                   vs our own BT is saturated (73.3%, 0 losses ; nothing left to convert), and
+                   self-play is symmetric (both aircraft read THIS file, so the edge cancels ;
+                   measured 7W/15D/8L vs 7W/16D/7L baseline, unchanged). The only case where a
+                   better merge pays is an opponent that does NOT have it ; i.e. the actual
+                   competition ; and that is exactly what we cannot test, because the rule XML is
+                   global to both DLLs. Adopted on the mechanism, which is measured, rather than
+                   on a win rate, which is unmeasurable here.
+                   Maneuver chosen by A/B (N=30 each, vs BT): NoseToTail 22/30, LeadTurn 22/30,
+                   OneCircle 21/30, NoseToNose 21/30 ; all within noise, NoseToTail kept because
+                   it produced the cleanest ATA reversal in the trace above.
+                   REVERT: delete this Sequence. -->
+              <Sequence name="Gate2_BeamMerge">
+                <DECO_AngleOffCheck name="Gate2_Beam_HCA_Gt120" UpDown="Greater" InputAO="120" BB="{BB}"/>
+                <DECO_LOSCheck name="Gate2_Beam_OwnATA_Gt45" UpDown="Greater" InputLOS="45" Which="Own" BB="{BB}"/>
+                <DECO_LOSCheck name="Gate2_Beam_OwnATA_Lt150" UpDown="Less" InputLOS="150" Which="Own" BB="{BB}"/>
+                <DECO_DistanceCheck name="Gate2_Beam_DistLt2500" UpDown="Less" Distance="2500" BB="{BB}"/>
+                <Task_NoseToTailTurn name="Gate2_Beam_NoseToTail" BB="{BB}"/>
+              </Sequence>
               <Sequence name="Gate2_HeadOnMerge">
                 <DECO_AngleOffCheck name="Gate2_HCA_Gt150" UpDown="Greater" InputAO="150" BB="{BB}"/>
                 <DECO_LOSCheck name="Gate2_OwnATA_Lt20" UpDown="Less" InputLOS="20" Which="Own" BB="{BB}"/>
