@@ -333,6 +333,23 @@ def verify_ladder() -> None:
           and names.index("match_base") == names.index("match_base_close") + 1
           and names.index("match_base") < names.index("full_dogfight"))
 
+    # Every gated stage must be able to REACH its own advance_window. 4.1 F6 made that window
+    # mean episodes rather than rows, and at ~27 iterations/episode a stage budgeted at the old
+    # max_iterations=200 could only close ~7.4 -- so its gate was never evaluated and it exited
+    # on max_iterations with the condition untested, silently. That hit 10 of the 15 gated
+    # stages, including all three match_base ones. This is the check that would have caught it.
+    ITERATIONS_PER_EPISODE = 27
+    unreachable = [
+        (s.name, s.max_iterations, s.max_iterations / ITERATIONS_PER_EPISODE, s.advance_window)
+        for s in stages
+        if s.advance_conditions
+        and s.max_iterations < s.advance_window * ITERATIONS_PER_EPISODE
+    ]
+    for name, mx, eps, win in unreachable:
+        print(f"      {name}: max_iterations={mx} -> ~{eps:.1f} episodes, needs {win}")
+    check(f"every gated stage can reach its advance_window "
+          f"({len(unreachable)} unreachable)", not unreachable)
+
     sib = next(s for s in stages if s.name == "habfm_beam_merge")
     for s in (x for x in stages if x.name.startswith("match_base")):
         sc = s.env_overrides["initial_scenario"]

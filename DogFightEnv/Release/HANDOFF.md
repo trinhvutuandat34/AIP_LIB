@@ -12,8 +12,8 @@ lives in `References and Manuals/` (COMPETITION_PLAN.md, PROJECT_ANALYSIS.md, et
 ## Where the project actually is
 
 **The submission is a BT + hand-written controller. There is no usable RL policy.**
-Seven curriculum campaigns (v1-v6 complete, v7 running) have produced **zero wins and zero
-competition-usable bundles**. What scores is `MODE="vptrack"` -- the native BT keeps tactics,
+Seven curriculum campaigns (v1-v6 complete, v7 stopped and void) have produced **zero wins and
+zero competition-usable bundles**. What scores is `MODE="vptrack"` -- the native BT keeps tactics,
 throttle and blackboard state, and `student/controller_providers.py::VPTrackingProvider` takes
 roll/pitch/rudder inside a terminal envelope, replacing `Controller_CY`'s VP->stick law.
 
@@ -25,9 +25,14 @@ Measured, N=30, identical seeds, vs the same BT opponent:
 | `MODE="vptrack"` | 12/30 | 30/30 | 15.59 / 0.000 |
 
 On the official beam-merge geometry (`match_base`) the retuned envelope scores **22/30 (73.3 %)**
-with 8 kills and zero losses. **But read the calibration**: against a *peer* running the same
-backend it is **7W/16D/7L (23.3 %)**, and draws do not qualify under the 제1안 cutoff. Every
-BT-relative number in the docs is an upper bound -- our own BT never shoots.
+with 8 kills and zero losses. **But read the calibration** (re-measured 2026-08-11, N=30 each,
+4.1 F11): against a *peer* running the same backend it is **9W/16D/5L (30.0 %)** with damage
+**13.07 dealt / 12.43 taken**, and draws do not qualify under the 제1안 cutoff.
+
+**"Zero damage taken" is a property of the opponent, not our defence.** Damage taken: vs our own
+BT **0.000**, vs a peer on the old tuning **0.000**, vs a peer on the same config **12.43**. Only
+the symmetric fight puts a gun on us, and there we take 95 % of what we deal. Every BT-relative
+number in these docs is an upper bound -- our own BT never shoots.
 
 --------------------------------------------------------------------------------
 ## Current state of the moving parts
@@ -53,9 +58,12 @@ v7** -- start a fresh `v8` tag so no stage carries a checkpoint earned under the
 
 What changed, and what it costs:
 - Advancement now consumes **one row per closed episode**, so `advance_window=10` means an average
-  over 10 real episodes. Measured cost: **~27 iterations per episode ⇒ ~268 iterations ≈ 49 min
-  per stage**, ~14 h for all 17 -- inside the ~18 h the v7 header budgets. Sampling was
-  deliberately left unchanged (F6-COST).
+  over 10 real episodes. Measured cost: **~27 iterations per episode ⇒ ~270 iterations ≈ 49 min
+  per stage**. Sampling was deliberately left unchanged (F6-COST).
+- **Stage budgets raised 200 → 400 on ten stages** so those gates can actually be reached. A stage
+  budgeted at 200 closes only ~7.4 episodes and can never evaluate a 10-episode window -- it exits
+  on `max_iterations` with the condition untested, silently. That hit ten of the fifteen gated
+  stages, including all three `match_base` ones. Campaign is now **7,300 iterations ≈ 22 h**.
 - Carried metrics are **reset at every stage boundary**, so a stage starts reporting `n/a` until
   it measures something itself.
 - `reward_mean` / `ep_len_mean` are carried with the custom metrics under one shared
@@ -138,8 +146,7 @@ report kills/damage alongside win rate (a config once held 73.1 % while damage c
    ```
    Then check the first stage behaves: rows with `metrics_age_iters == 0` should appear about
    every 27 iterations, no stage should advance until ten of them exist, and a stage's first rows
-   should read `n/a` rather than the previous stage's numbers. Expect **~49 min per stage, ~13 h
-   total**. **Never point a v7 tag at this curriculum** -- the match_base ladder changed the
+   should read `n/a` rather than the previous stage's numbers. Expect **~49 min per stage, ~22 h total**. **Never point a v7 tag at this curriculum** -- the match_base ladder changed the
    meaning of every stage index after the first two-circle stage.
 2. **Ask the organizers whether each side gets its own rule XML.** If yes, `Gate2_BeamMerge` and
    every future BT change becomes locally measurable; if no, they can only be adopted on mechanism

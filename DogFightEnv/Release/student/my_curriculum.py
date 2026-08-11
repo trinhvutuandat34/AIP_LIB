@@ -131,6 +131,28 @@ _OBFM_DEFENSIVE_REWARD = {
 # drills) or the in-progress stage 4 -- see this session's memory.
 _ENERGY_SCALE = 0.05
 
+# ---------------------------------------------------------------------------------------------
+# Stage budgets vs the advance gate (2026-08-11).
+#
+# COMPETITION_PLAN.md 4.1 F6 changed advance_window from meaning "ten ROWS" to meaning "ten
+# EPISODES" -- because carry-forward repeats the last measured episode on every iteration that
+# closes none, so a row window was mostly copies of one episode (v7 stage 0 advanced reading
+# crash_rate=0.2000 when its true per-episode rate was 0.8571).
+#
+# That correction has a budget consequence which is easy to miss and silent when missed: a stage
+# must now RUN long enough to close advance_window episodes, or its gate is never evaluated at
+# all and it exits on max_iterations with the condition untested. Measured from v7's telemetry --
+# 101.8 env steps per training iteration, episodes closing every ~27 iterations in BOTH stage 0
+# (ep_len_mean 2734) and stage 2 (2292-2607) -- ten episodes costs ~270 iterations.
+#
+# Every stage still budgeted at the old 200 was therefore un-gateable: flight_survival,
+# habfm_beam_merge, the five two_circle stages and all three match_base stages -- 10 of the 15
+# gated stages. Raised to 400 (~14.8 episodes), a real margin over the 10 needed rather than the
+# razor-thin 11.1 that 300 would give, and equal to wez_approach's existing budget.
+# scripts/verify_report_fixes.py asserts the reachability property so this cannot regress quietly.
+_ITERATIONS_PER_EPISODE = 27
+_GATED_STAGE_MAX_ITERATIONS = 400
+
 # v4 two-circle rebuild: down-weight pursuit/position when advantage_scale is
 # raised, per reward_lib.positional_advantage()'s own docstring warning against
 # stacking all three positional terms at full weight simultaneously.
@@ -253,7 +275,7 @@ def _build_two_circle_v4(start_index: int) -> list[CurriculumStage]:
                 # already used 12000; training the tie-break rehearsal at 300s teaches
                 # pacing/energy management against the wrong match clock. Fixed 2026-08-01.
                 episode_step_limit=12000,
-                max_iterations=200,
+                max_iterations=_GATED_STAGE_MAX_ITERATIONS,  # 4.1 F6: 200 could not reach advance_window
                 checkpoint_interval=10,
                 reward_overrides=dict(_TWO_CIRCLE_V4_REWARD_OVERRIDES),
                 randomization={"enabled": False},
@@ -342,7 +364,7 @@ def _build_match_base_ladder(start_index: int) -> list[CurriculumStage]:
                 target_mode="behavior_tree",
                 # 12000 = 200s @ 60Hz -- COMPETITION_RULES.md Sec5 match length.
                 episode_step_limit=12000,
-                max_iterations=200,
+                max_iterations=_GATED_STAGE_MAX_ITERATIONS,  # 4.1 F6: 200 could not reach advance_window
                 checkpoint_interval=10,
                 reward_overrides=dict(_MATCH_REWARD),
                 randomization={"enabled": False},
@@ -385,7 +407,7 @@ def _habfm_stage() -> CurriculumStage:
         ),
         target_mode="behavior_tree",
         episode_step_limit=12000,   # 200s @ 60Hz -- COMPETITION_RULES.md match length
-        max_iterations=200,
+        max_iterations=_GATED_STAGE_MAX_ITERATIONS,  # 4.1 F6: 200 could not reach advance_window
         checkpoint_interval=10,
         reward_overrides=_HABFM_REWARD,
         randomization={"enabled": False},
@@ -459,6 +481,22 @@ def get_stages() -> list[CurriculumStage]:
             },
         })
         if s.target_mode == "autopilot" else s
+        for s in base
+    ]
+
+    # 4.1 F6 budget fix (2026-08-11), same patch-the-base idiom as above because src/ is no-edit.
+    # A gated stage must run long enough to close advance_window EPISODES or its condition is
+    # never evaluated -- it just exits on max_iterations, silently, with the gate untested. At the
+    # measured ~27 iterations/episode, ten episodes needs ~270 iterations, and the builtin
+    # flight_survival ships with 200. Raise any builtin gated stage that cannot reach its own
+    # window; stages already budgeted above the threshold (target_pursuit 300, wez_approach 400,
+    # autopilot_pursuit 500) are left exactly as they are.
+    base = [
+        replace(s, max_iterations=_GATED_STAGE_MAX_ITERATIONS)
+        if (s.advance_conditions
+            and s.max_iterations < s.advance_window * _ITERATIONS_PER_EPISODE
+            and s.max_iterations < _GATED_STAGE_MAX_ITERATIONS)
+        else s
         for s in base
     ]
 

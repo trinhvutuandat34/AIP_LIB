@@ -58,11 +58,21 @@
 #       command than at full. It will bound this policy exactly as it bounds the BT. No reward or
 #       hyperparameter change reaches it.
 #
+#  5. STAGE BUDGETS RAISED SO THE GATES CAN ACTUALLY FIRE (4.1 F6-COST). Making advance_window
+#     mean ten EPISODES has a budget consequence: a stage must run long enough to close ten, or
+#     its gate is never evaluated and it exits on max_iterations with the condition untested --
+#     silently, and indistinguishably from v5/v6's behaviour. At ~27 iterations/episode that is
+#     ~270 iterations, and TEN of the fifteen gated stages were still budgeted at 200 (~7.4
+#     episodes), including all three match_base stages. Those ten are now 400 (~14.8 episodes).
+#     scripts/verify_report_fixes.py asserts the reachability property so it cannot regress.
+#
 # COST, measured from v7 rather than assumed (4.1 F6-COST): 101.8 env steps/iteration at
 # ~10.9 s/iter against 2,734-step episodes = ~27 iterations per episode, so an honest 10-episode
-# gate is ~268 iterations ~= 49 min per stage, ~13 h for 16 stages. Sampling was deliberately NOT
-# changed to speed this up: raising steps/iteration does not reduce the ~27k env steps a 10-episode
-# gate needs and would alter SAC's update-to-data ratio, and shortening episodes would change what
+# gate is ~270 iterations ~= 49 min per stage. With the budgets above that is 7,300 iterations
+# total, ~22 h -- up from the 16 h the un-gateable 200-iteration version would have taken, and the
+# extra 6 h is what buys gates that mean something. Sampling was deliberately NOT changed to speed
+# this up: raising steps/iteration does not reduce the ~27k env steps a 10-episode gate needs and
+# would alter SAC's update-to-data ratio, and shortening episodes would change what
 # flight_survival means. Hyperparameters stay identical to v6/v7 so v8 remains comparable.
 #
 # run:
@@ -136,6 +146,5 @@ notes: >
   rate was 0.8571; stage 1 advanced on zero episodes of its own), and the first to train the
   official beam merge -- a match_base ladder replaces two-circle alphas 45/90/135/180, 16 stages
   total. reward_mean no longer nan on most rows, and stage training_records actually save.
-  Hyperparameters unchanged from v6/v7 so the campaigns stay comparable. Expect ~49 min per stage
-  (~13 h): an honest 10-episode gate costs ~268 iterations at this sampling rate. Stage 0's
+  Hyperparameters unchanged from v6/v7 so the campaigns stay comparable. Expect ~49 min per stage (~22 h total): an honest 10-episode gate costs ~268 iterations at this sampling rate. Stage 0's
   self-crash from v7 is NOT fixed here -- v8 will report it instead of advancing past it.
