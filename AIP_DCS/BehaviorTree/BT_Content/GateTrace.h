@@ -160,10 +160,28 @@ namespace GateTrace
 			{
 				inv << "--- tree node inventory (" << tree.nodes.size() << " nodes) ---\n";
 				for (const auto& n : tree.nodes)
-					if (n)
-						inv << "  " << n->registrationName() << "  name=\"" << n->name()
-						    << "\"  children="
-						    << (n->type() == BT::NodeType::ACTION ? 0 : -1) << "\n";
+				{
+					if (!n)
+						continue;
+					// A CONTROL node with 0 children returns SUCCESS immediately in
+					// BehaviorTree.CPP -- which is exactly the Gate2p5_GunSolutionHold symptom
+					// (succeeds every tick, guards never evaluated, its Task never runs).
+					// Printing the real child count is what distinguishes "built but unwired"
+					// from "wired and my probe cannot see the transitions".
+					std::string kids = "-";
+					if (auto* ctrl = dynamic_cast<const BT::ControlNode*>(n.get()))
+					{
+						kids = std::to_string(ctrl->childrenCount());
+						if (ctrl->childrenCount() == 0)
+							kids += "  <== EMPTY CONTROL NODE, returns SUCCESS immediately";
+					}
+					else if (auto* dec = dynamic_cast<const BT::DecoratorNode*>(n.get()))
+					{
+						kids = dec->child() ? "1" : "0  <== DECORATOR WITH NO CHILD";
+					}
+					inv << "  " << n->registrationName() << "  name=\"" << n->name()
+					    << "\"  children=" << kids << "\n";
+				}
 			}
 		}
 
