@@ -49,6 +49,7 @@ not a performance tax on ordinary maneuvering.
 """
 from __future__ import annotations
 
+import gymnasium as gym
 import numpy as np
 
 from dogfight.sim.state_schema import StateIndex
@@ -121,3 +122,43 @@ class GLimiter:
     @property
     def clamp_fraction(self) -> float:
         return self.clamped_steps / self.total_steps if self.total_steps else 0.0
+
+
+class GLimitWrapper(gym.Wrapper):
+    """Applies the load-factor limit to the ENV ACTION path, which is what RL training uses.
+
+    GLimitedProvider covers the provider boundary -- eval, run_local_dogfight, live submission.
+    RL TRAINING has no provider: the policy's action is passed straight into env.step(), so it
+    bypassed the limiter entirely and a training policy could still learn to exploit 15 G. This
+    closes that, so what a policy learns against is what it will meet.
+
+    Deliberately a no-op where a provider is driving: single_agent_env only consults the action
+    argument when no ownship provider is set, so in eval this wrapper sees an action that is
+    never used, and the provider's own limiter does the work. No double-limiting.
+    """
+
+    def __init__(self, env, limit_g: float = G_LIMIT):
+        super().__init__(env)
+        self._limiter = GLimiter(limit_g=limit_g)
+
+    def reset(self, *, seed=None, options=None):
+        self._limiter.reset()
+        return self.env.reset(seed=seed, options=options)
+
+    def step(self, action):
+        base = self.unwrapped
+        own = getattr(base, "_ownship_state", None)
+        if own is not None and action is not None:
+            action = np.asarray(action, dtype=np.float32).copy()
+            action[1] = self._limiter.limit_pitch(float(action[1]), own)
+        return self.env.step(action)
+
+    def make_tacviewLog(self):
+        # This Gymnasium version's gym.Wrapper has no __getattr__ forwarding, so callers holding
+        # this wrapper as "the env" cannot reach the base env's method without this -- same note
+        # as the scenario wrappers.
+        return self.unwrapped.make_tacviewLog()
+
+    @property
+    def g_clamp_fraction(self) -> float:
+        return self._limiter.clamp_fraction

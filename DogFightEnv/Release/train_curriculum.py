@@ -89,6 +89,7 @@ from DogFightEnvWrapper import DogFightWrapper
 from student.obfm_scenario_wrapper import ObfmScenarioWrapper
 from student.habfm_scenario_wrapper import HabfmScenarioWrapper
 from student.my_callbacks import StudentDogFightCallbacks
+from student.g_limiter import GLimitWrapper
 from dogfight.ai.checkpoint_io import (
     apply_lightweight_policy_bundle,
     save_lightweight_policy_bundle,
@@ -204,6 +205,14 @@ def env_creator(env_config):
     # ~91deg LOS both sides) -- single_agent_env.py never had a "habfm" mode branch
     # at all (not a revert casualty, just never built). Transparent no-op otherwise.
     env = HabfmScenarioWrapper(env)
+    # G limiter on the ACTION path (2026-08-07). The sim enforces no structural limit and hands
+    # out up to 14.86 G against a 9 G airframe (scripts/g_limit_check.py). Without this a policy
+    # trains against physics the competition server may not allow, and the divergence surfaces on
+    # match day rather than in local evaluation -- the same failure shape as the throttle
+    # [-1,1] vs [0,1] remap. GLimitedProvider covers the provider paths (eval, live submission);
+    # training has no provider and passes the policy action straight to step(), so it needs this.
+    # Outermost so it limits the final action regardless of what the scenario wrappers do.
+    env = GLimitWrapper(env)
     return env
 
 
