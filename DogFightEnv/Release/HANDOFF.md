@@ -116,11 +116,15 @@ report kills/damage alongside win rate (a config once held 73.1 % while damage c
   flying with a corrupted throttle channel.
 
 ## Open follow-ups, in priority order
-1. **Launch v8** on the fixed gate and the new curriculum (16 stages), then check the first stage
-   behaves: rows with `metrics_age_iters == 0` should appear about every 27 iterations, and the
-   stage should not advance until ten of them exist. Copy `experiments/real_eagle_v7.yaml` to
-   `real_eagle_v8.yaml`, change `output.tag` to `v8`, and drop its GEOMETRY WARNING block -- it no
-   longer applies. **Start a fresh tag; do not `--resume` v7** (stage indices changed meaning).
+1. **Launch v8.** The config exists -- `experiments/real_eagle_v8.yaml`, dry-run clean, 16 stages:
+   ```powershell
+   python scripts\run_experiment.py experiments\real_eagle_v8.yaml
+   ```
+   Then check the first stage behaves: rows with `metrics_age_iters == 0` should appear about
+   every 27 iterations, no stage should advance until ten of them exist, and a stage's first rows
+   should read `n/a` rather than the previous stage's numbers. Expect **~49 min per stage, ~13 h
+   total**. **Never point a v7 tag at this curriculum** -- the match_base ladder changed the
+   meaning of every stage index after the first two-circle stage.
 2. **Ask the organizers whether each side gets its own rule XML.** If yes, `Gate2_BeamMerge` and
    every future BT change becomes locally measurable; if no, they can only be adopted on mechanism
    (4.1 **F1-BLIND**).
