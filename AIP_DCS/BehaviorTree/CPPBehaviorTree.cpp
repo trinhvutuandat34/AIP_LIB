@@ -3,6 +3,10 @@
 
 #include "CPPBehaviorTree.h"
 #include <windows.h>
+// Gate-selection trace (2026-08-11). Inert unless AIP_BT_GATE_TRACE is set -- one cached-bool
+// test per tick. See BT_Content/GateTrace.h for why outcome-level A/B could not answer this
+// (COMPETITION_PLAN.md 4.1 F20) and what the columns settle (F17's EnemyInSight_Target premise).
+#include "./BT_Content/GateTrace.h"
 
 // Resolves to the directory this DLL physically lives in (DogFightEnv/Release), independent of
 // the calling process's current working directory. JSBSim's own init appears to chdir() away
@@ -285,8 +289,18 @@ Vector3 UCPPBehaviorTree::GetVP()
  void UCPPBehaviorTree::RunCPPBT(Vector3& VP, float& Throttle, bool& AimmingMode)
 {
 
+	// Subscribe once, before the first tick. Node statuses are reset to IDLE when a tick
+	// completes, so they must be captured DURING it, not read afterwards.
+	GateTrace::Attach(GateTraceState, tree);
+
 	BB->RunningTime += BB->DeltaSecond;	//시뮬레이선 타임에 따른 델타 타임 설정
 	tree.tickRoot(); //트리 작동
+
+	// Record which branch actually won this tick. Must sit immediately after tickRoot(), while
+	// the node statuses still describe THIS tick. Inert unless AIP_BT_GATE_TRACE is set.
+	// GateTraceState is a MEMBER, not a static: both aircraft tick on the same thread, so a
+	// static (even thread_local) would share the tick counter and change-detection between them.
+	GateTrace::Record(GateTraceState, tree, BB, ID, ForceID);
 
 	VP = BB->VP_Cartesian;	// VP 값
 
