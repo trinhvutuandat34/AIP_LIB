@@ -101,6 +101,30 @@ ENGAGE_LOS_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_LOS_DEG", "45.0"))
 # ---- Gains ----------------------------------------------------------------------------
 K_ROLL = 1.0
 K_PITCH = 1.0
+# Floor under the pitch alignment gate: pitch = -K * err_gain * max(cos(phi), PITCH_FLOOR).
+#
+# HYPOTHESIS (MINE, AND REFUTED). scripts/g_limit_check.py measured full pitch delivering 3.97 G
+# at 250 kt rising to 14.86 G at 550 kt, so ~6.7 G is available at the 340 kt this aircraft
+# fights at -- while scripts/turn_rate_sweep.py measures it pulling 1.48 G in real matches, a
+# FIFTH of what is there. I read that as having reintroduced Controller_CY's multiplicative kill
+# in milder form, and expected a floor > 0 to help.
+#
+# MEASURED, N=30 per arm -- HARMFUL, and monotonically so from zero:
+#     vs BT       floor 0.00  73.3%, 8 kills, 19 wez eps, damage 14.29/0.00
+#                 floor 0.25  73.3%, 8 kills, 15 wez eps, damage 13.83/0.17
+#     self-play   control     23.3%, 6 kills, 14 wez eps, damage 11.85/11.86
+#                 floor 0.35  13.3%, 0 kills,  7 wez eps, damage  1.19/3.58
+#
+# WHY THE GATE IS LOAD-BEARING, and how it differs from the defect it resembles. In
+# Controller_CY, Roll_Effect -> 0 at UTAngle ~180 AND RollCMD = sin(UTAngle) -> 0 at the same
+# time: both authorities died together, so nothing could escape -- that is the trap. Here,
+# align -> 0 at phi = 180 is exactly where ROLL IS MAXIMAL (K_ROLL * phi/pi). They are
+# complementary: roll hard when pulling would not help, pull when it would. Pulling at
+# cos(phi) < 0 pulls AWAY from the solution, which is what the numbers show.
+#
+# The low average G is therefore correct behaviour, not a defect: this controller pulls hard
+# only when pulling helps. Keep at 0.0.
+PITCH_FLOOR = float(os.environ.get("DOGFIGHT_VPTRACK_PITCH_FLOOR", "0.0"))
 PROPORTIONAL_DIV = 6.0    # same as Controller_CY's, so error->command scaling is comparable
 INTEGRAL_DIV = 7.5        # E1c measured these two as non-binding at the attractor; kept only
 INTEGRAL_CAP = 0.25       # so the pitch magnitude stays on the scale the airframe is tuned for
@@ -262,6 +286,7 @@ class VPTrackingProvider(BTActionProvider):
         self.defensive_break = bool(kwargs.pop("defensive_break", DEFENSIVE_BREAK))
         self.corner_hold = bool(kwargs.pop("corner_hold", CORNER_HOLD))
         self.corner_kt = float(kwargs.pop("corner_kt", CORNER_KT))
+        self.pitch_floor = float(kwargs.pop("pitch_floor", PITCH_FLOOR))
         self.threat_ata_deg = float(kwargs.pop("threat_ata_deg", THREAT_ATA_DEG))
         super().__init__(*args, **kwargs)
         self._los_error_sum = 0.0
@@ -391,7 +416,7 @@ class VPTrackingProvider(BTActionProvider):
             0.0,
             ERROR_EFFECT_CAP,
         )
-        align = max(float(np.cos(phi)), 0.0)
+        align = max(float(np.cos(phi)), self.pitch_floor)
         pitch_cmd = _clamp(-K_PITCH * err_gain * align, -1.0, 1.0)
 
         # RUDDER. Same form as the post-MFsum-fix Controller_CY: -sin(angle) * tapered LOS.
