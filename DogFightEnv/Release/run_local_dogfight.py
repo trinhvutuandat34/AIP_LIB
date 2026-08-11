@@ -29,7 +29,12 @@ from student.inference_providers import (
     StudentHybridProvider,
     verify_bundle_observation,
 )
-from student.controller_providers import EnvelopeGatedHybridProvider, VPTrackingProvider
+from student.controller_providers import (
+    EnvelopeGatedHybridProvider,
+    GLimitedProvider,
+    VPTrackingProvider,
+)
+from student.g_limiter import G_LIMIT
 
 
 def parse_args():
@@ -102,6 +107,7 @@ def build_provider(
     vptrack_throttle: bool | None = None,
     vptrack_defensive: bool | None = None,
     vptrack_corner: bool | None = None,
+    g_limit: float | None = G_LIMIT,
 ):
     if backend == "fixed":
         return None
@@ -151,6 +157,20 @@ def build_provider(
             residual_scale=residual_scale,
         )
     raise ValueError(f"Unsupported backend: {backend}")
+
+
+def build_provider_g_limited(*args, **kwargs):
+    """build_provider(), with the load-factor limiter applied unless g_limit is None.
+
+    The sim enforces no structural limit and will hand out 14.86 G against a 9 G airframe
+    (scripts/g_limit_check.py); a policy or controller that exploits that locally behaves
+    differently against a server that clamps. See student/g_limiter.py.
+    """
+    limit = kwargs.pop("g_limit", G_LIMIT)
+    provider = build_provider(*args, **kwargs)
+    if provider is None or limit is None:
+        return provider
+    return GLimitedProvider(provider, limit_g=float(limit))
 
 
 def backend_to_env_mode(backend: str) -> str:

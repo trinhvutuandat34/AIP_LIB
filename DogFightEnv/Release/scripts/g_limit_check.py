@@ -64,7 +64,7 @@ def vel_neu(state):
                      -float(state[StateIndex.VZ])])
 
 
-def run(env, entry_kt, pitch_cmd, dt, steps):
+def run(env, entry_kt, pitch_cmd, dt, steps, limiter=None):
     base = env.unwrapped
     base.change_init_position("ownship", init_n=0.0, init_e=0.0, init_d=-ALT_M,
                               init_roll=0.0, init_pitch=0.0, init_heading=0.0,
@@ -77,7 +77,10 @@ def run(env, entry_kt, pitch_cmd, dt, steps):
     prev_v, peak_n, peak_at_kt, alt0 = None, 0.0, entry_kt, None
     alt_end = None
     for _ in range(steps):
-        _o, _r, term, trunc, _i = env.step(np.array([0.0, pitch_cmd, 0.0, 1.0], dtype=np.float32))
+        cmd = pitch_cmd
+        if limiter is not None:
+            cmd = limiter.limit_pitch(pitch_cmd, base._ownship_state)
+        _o, _r, term, trunc, _i = env.step(np.array([0.0, cmd, 0.0, 1.0], dtype=np.float32))
         st = base._ownship_state
         v = vel_neu(st)
         alt = -float(st[StateIndex.D])
@@ -107,11 +110,21 @@ def main():
     print("step %.5f s, holding full pitch for %.1f s (%d steps), wings level" % (dt, HOLD_S, steps))
     print("")
 
+    use_limiter = "--limited" in sys.argv
+    limiter = None
+    if use_limiter:
+        from student.g_limiter import GLimiter, G_LIMIT
+        limiter = GLimiter(limit_g=G_LIMIT)
+        print("  G LIMITER ACTIVE at %.1f G" % G_LIMIT)
+        print("")
+
     rows = []
     for sign, label in ((-1.0, "pitch -1"), (+1.0, "pitch +1")):
         print("  === %s ===" % label)
         for kt in ENTRY_KT:
-            n, at_kt, dalt = run(env, kt, sign, dt, steps)
+            if limiter is not None:
+                limiter.reset()
+            n, at_kt, dalt = run(env, kt, sign, dt, steps, limiter)
             rows.append({"pitch_cmd": sign, "entry_kt": kt, "peak_g": round(n, 2),
                          "peak_at_kt": round(at_kt, 1), "alt_change_m": round(dalt, 1)})
             print("    entry %5.0f kt -> peak %5.2f G at %5.0f kt, altitude %+7.1f m"

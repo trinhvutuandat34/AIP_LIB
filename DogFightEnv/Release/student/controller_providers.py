@@ -53,10 +53,16 @@ import os
 
 import numpy as np
 
-from dogfight.ai.action_provider import ActionContext, ActionResult, clip_action
+from dogfight.ai.action_provider import (
+    ActionContext,
+    ActionProvider,
+    ActionResult,
+    clip_action,
+)
 from dogfight.ai.bt_action_provider import BTActionProvider
 from dogfight.sim.state_schema import StateIndex
 from student.inference_providers import StudentHybridProvider
+from student.g_limiter import GLimiter, G_LIMIT as G_LIMIT_DEFAULT
 
 RADTODEG = 180.0 / np.pi
 
@@ -568,3 +574,63 @@ class EnvelopeGatedHybridProvider(StudentHybridProvider):
             confidence=self.confidence,
             info=info,
         )
+
+
+class GLimitedProvider(ActionProvider):
+    """Wraps ANY provider and holds the load factor under a limit.
+
+    Universal by design: the BT, this controller, a hybrid and an RL policy all emit through the
+    same 4-vector, so limiting at the provider boundary covers every backend without touching
+    src/dogfight or duplicating the logic per backend.
+
+    See student/g_limiter.py for why the sim needs this at all -- it enforces no structural limit
+    and hands out up to 14.86 G against a 9 G airframe rating.
+
+    NOTE ON COVERAGE. This wraps the PROVIDER path, which is what eval and the live submission
+    use. RL TRAINING drives the env's action argument directly with no provider, so a policy in
+    training is NOT limited by this and can still learn to exploit 15 G. Limiting that path needs
+    an env wrapper in the same student space; flagged rather than silently assumed.
+    """
+
+    def __init__(self, inner: ActionProvider, limit_g: float = G_LIMIT_DEFAULT):
+        self._inner = inner
+        self._limiter = GLimiter(limit_g=limit_g)
+
+    def reset(self, context: ActionContext | None = None) -> None:
+        self._limiter.reset()
+        return self._inner.reset(context)
+
+    def compute_action(self, context: ActionContext) -> ActionResult:
+        result = self._inner.compute_action(context)
+        own = context.ownship_state
+        if own is None:
+            return result
+        action = np.asarray(result.action, dtype=np.float32).copy()
+        action[1] = self._limiter.limit_pitch(float(action[1]), own)
+        if context.sim is not None and hasattr(context.sim, "action"):
+            context.sim.action[:] = action
+        info = dict(result.info)
+        info.update({"g_measured": self._limiter.last_n,
+                     "g_clamp_fraction": self._limiter.clamp_fraction})
+        return ActionResult(action=action, source=result.source,
+                            confidence=result.confidence, info=info)
+
+    def close(self) -> None:
+        return self._inner.close()
+
+    # Let the eval harness's BT recycler and health checks see through the wrapper.
+    @property
+    def ai_pilot(self):
+        return getattr(self._inner, "ai_pilot")
+
+    @property
+    def _registered_fighter_ids(self):
+        return getattr(self._inner, "_registered_fighter_ids")
+
+    @property
+    def primary_provider(self):
+        return getattr(self._inner, "primary_provider", None)
+
+    @property
+    def secondary_provider(self):
+        return getattr(self._inner, "secondary_provider", None)
