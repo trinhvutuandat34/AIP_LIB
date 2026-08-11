@@ -706,7 +706,11 @@ def _carry_forward(metrics: dict) -> dict:
         if _CM_CARRY:
             _CM_AGE[0] += 1
             return {**_CM_CARRY, "metrics_age_iters": _CM_AGE[0]}
-        return {**metrics, "metrics_age_iters": "n/a"}
+        # Nothing measured yet in this stage. Every value is missing by the test above, so
+        # normalise them all to "n/a": RLlib reports episode_return_mean as float nan rather
+        # than an absent key, which would otherwise write "nan" into the CSV right next to the
+        # "n/a" the custom metrics write for the very same condition (N3).
+        return {**{k: "n/a" for k in metrics}, "metrics_age_iters": "n/a"}
     _CM_CARRY.clear()
     _CM_CARRY.update(metrics)
     _CM_AGE[0] = 0
@@ -714,8 +718,17 @@ def _carry_forward(metrics: dict) -> dict:
 
 
 def _extract_custom_metrics(result: dict) -> dict:
-    cm = result.get("env_runners", {}).get("custom_metrics", {})
+    env_m = result.get("env_runners", {})
+    cm = env_m.get("custom_metrics", {})
     return _carry_forward({
+        # N3 (2026-08-11): reward_mean / ep_len_mean are published by the SAME event as the
+        # custom metrics -- an episode closing -- so they belong inside the same carry and share
+        # its metrics_age_iters. Read straight off env_runners (as they were until now) they came
+        # back `nan` on 163 of v7's 194 rows, numeric on exactly the 7 iterations that closed an
+        # episode, leaving the primary optimizer-health signal unreadable on 84% of iterations.
+        # E2's carry-forward had only ever covered the custom-metric path.
+        "reward_mean":       env_m.get("episode_return_mean", "n/a"),
+        "ep_len_mean":       env_m.get("episode_len_mean",    "n/a"),
         "win_rate":          _cm_get(cm, "win"),
         "loss_rate":         _cm_get(cm, "loss"),
         "timeout_rate":      _cm_get(cm, "timeout"),
@@ -1386,7 +1399,8 @@ class CurriculumTrainer:
         it: int,
         algorithm: Any,
     ) -> dict:
-        env_m   = result.get("env_runners", {})
+        # reward_mean / ep_len_mean now come from _extract_custom_metrics, which carries them
+        # forward alongside the custom metrics under one shared metrics_age_iters (N3).
         custom  = _extract_custom_metrics(result)
         learner = _extract_learner_stats(result)
         _fill_algorithm_runtime_stats(learner, algorithm)
@@ -1394,8 +1408,6 @@ class CurriculumTrainer:
             "stage":             stage_idx,
             "iter_in_stage":     it,
             "total_iter":        self._total_iter,
-            "reward_mean":       env_m.get("episode_return_mean", "n/a"),
-            "ep_len_mean":       env_m.get("episode_len_mean",    "n/a"),
             **custom,
             **learner,
         }
