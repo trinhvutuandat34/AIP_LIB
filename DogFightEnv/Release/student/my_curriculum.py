@@ -82,6 +82,13 @@ for path in (ROOT, SRC):
 from dogfight.ai.curriculum import CurriculumStage, get_stages as _builtin_get_stages
 from student.obfm_scenario_wrapper import OBFM_ALTITUDE_M, OBFM_SPEED_MPS
 from student.habfm_scenario_wrapper import HABFM_ALTITUDE_M, HABFM_LOS_DEG, HABFM_SPEED_MPS
+from student.match_scenario_wrapper import (
+    MATCH_ALTITUDE_M,
+    MATCH_LOS_DEG,
+    MATCH_SEPARATION_MAX_M,
+    MATCH_SEPARATION_MIN_M,
+    MATCH_SPEED_MPS,
+)
 
 
 _OBFM_OFFENSIVE_REWARD = {
@@ -207,17 +214,30 @@ def _build_two_circle_v4(start_index: int) -> list[CurriculumStage]:
           8 deg  1423-2338 m      198-325 m   (just above)
          12 deg  1675-2589 m      348-538 m   (two-circle favored)
 
-    Index cost: the ladder grows 5 -> 9, pushing full_dogfight 12 -> 16. Safe for
-    an in-flight resume as long as the run has not passed the first two_circle
-    index -- train_curriculum.py's _init_or_load_state() setdefaults any index
-    missing from curriculum_state.json (count-agnostic, so +4 is no different
-    from +1), but it canNOT fix an index whose MEANING changed under a stage
-    already marked completed. Verified against the live v6 run at add time:
-    stopped at index 2, everything from 7 up still "pending", so nothing
-    reindexed here had run yet.
+    HIGH ALPHAS REMOVED 2026-08-11. The ladder was (0, 3, 5, 8, 12, 45, 90, 135,
+    180); it is now (0, 3, 5, 8, 12), and the four high alphas are replaced by
+    _build_match_base_ladder() -- the OFFICIAL geometry. Reason: 45/90/135/180
+    spawn at roughly 3500-5486 m, which no competition round presents. The real
+    prelim and rounds 1-3 are an antiparallel BEAM merge at 609.6-914.4 m
+    (COMPETITION_RULES.md Sec5.1), and the round-4 tie-break is a head-on at
+    3048 m -- covered by alpha=0's 914-1829 m and by habfm_beam_merge, not by a
+    4-5 km two-circle setup. The five low alphas are KEPT precisely because of
+    the 152 m analysis above: that one-circle/two-circle decision is real BFM
+    skill at ranges the match actually produces, and it transfers to any merge.
+
+    Index cost: the ladder went 5 -> 9 (2026-08-05) and back to 5 (2026-08-11),
+    with three match_base stages added after it, so the block is 5 + 3 = 8 where
+    it was 9. Indices are reassigned by get_stages()'s final enumerate(), so
+    nothing here is hardcoded -- but the MEANING of the indices after the first
+    two_circle stage has changed. train_curriculum.py's _init_or_load_state()
+    setdefaults any index missing from curriculum_state.json (count-agnostic),
+    but it canNOT fix an index whose meaning changed under a stage already
+    marked completed. **So do not --resume a pre-2026-08-11 run against this
+    file; start a fresh tag.** v7 was stopped at index 2 and is void for
+    unrelated reasons (F6), so nothing in flight is affected.
     """
     stages = []
-    for offset, alpha_deg in enumerate((0, 3, 5, 8, 12, 45, 90, 135, 180)):
+    for offset, alpha_deg in enumerate((0, 3, 5, 8, 12)):
         stages.append(
             CurriculumStage(
                 index=start_index + offset,
@@ -264,6 +284,85 @@ def _build_two_circle_v4(start_index: int) -> list[CurriculumStage]:
 # Copies _TWO_CIRCLE_V4_REWARD_OVERRIDES, so it inherits energy_scale too (habfm
 # is a neutral merge -- an energy-fight stage by the same logic as two_circle).
 _HABFM_REWARD = dict(_TWO_CIRCLE_V4_REWARD_OVERRIDES)
+
+# Same reasoning again: match_base is a neutral merge, so it takes the neutral
+# reward shape rather than OBFM's position-dominated one.
+_MATCH_REWARD = dict(_TWO_CIRCLE_V4_REWARD_OVERRIDES)
+
+
+def _build_match_base_ladder(start_index: int) -> list[CurriculumStage]:
+    """The OFFICIAL prelim / rounds 1-3 geometry: an antiparallel BEAM merge.
+
+    Added 2026-08-11, replacing two_circle alphas 45/90/135/180. Until now NO
+    stage trained the geometry the competition actually opens with. From
+    COMPETITION_RULES.md Sec5.1 and student/match_scenario_wrapper.py: both
+    aircraft 609.6-914.4 m apart (2000-3000 ft) at 4572 m / 200 m/s, each nose
+    90 deg off its LOS to the other -- symmetric, neither side advantaged. The
+    wrapper randomizes the baseline heading over the full compass and mirrors
+    the side, so nothing overfits an absolute heading.
+
+    Three stages, ending on the real thing:
+        match_base_wide   914.4 m fixed  -- most time to read the merge
+        match_base_close  609.6 m fixed  -- least time, tightest turn
+        match_base        609.6-914.4 m  -- the competition preset, sampled
+
+    EVERY key the wrapper reads is set EXPLICITLY, for the reason _obfm_stage()
+    and _habfm_stage() both document at length: DEFAULT_ENV_CONFIG's own
+    initial_scenario dict is merged in AHEAD of these overrides, so a leftover
+    key silently wins over the wrapper's fallback. That is not hypothetical
+    here -- config.py's initial_scenario carries altitude_m=7000.0, so omitting
+    altitude_m would train this ladder at 7000 m instead of the confirmed
+    4572 m, exactly the bug that ran obfm_offensive at the wrong altitude for
+    weeks. separation_min_m/separation_max_m/los_deg have no leftover to
+    collide with today, but are stated anyway so a future config.py edit cannot
+    move this geometry silently.
+
+    NOTE: these stages only do anything because MatchScenarioWrapper is wired
+    into train_curriculum.env_creator() (2026-08-11, COMPETITION_PLAN.md 4.1
+    F8). Before that it was applied in the eval scripts only, and a stage asking
+    for match_base would have trained the DEFAULT spawn while claiming this
+    geometry. If that wiring is ever reverted, these stages go silently wrong
+    rather than failing -- single_agent_env.py has no branch for this mode.
+    """
+    specs = (
+        ("match_base_wide", 914.4, 914.4,
+         "Beam merge at the far edge of the band (3000 ft) -- most time to read the merge."),
+        ("match_base_close", 609.6, 609.6,
+         "Beam merge at the near edge of the band (2000 ft) -- least time, tightest turn."),
+        ("match_base", MATCH_SEPARATION_MIN_M, MATCH_SEPARATION_MAX_M,
+         "The official prelim / rounds 1-3 preset: beam merge sampled across 2000-3000 ft."),
+    )
+    stages = []
+    for offset, (name, sep_min, sep_max, description) in enumerate(specs):
+        stages.append(
+            CurriculumStage(
+                index=start_index + offset,
+                name=name,
+                description=description,
+                target_mode="behavior_tree",
+                # 12000 = 200s @ 60Hz -- COMPETITION_RULES.md Sec5 match length.
+                episode_step_limit=12000,
+                max_iterations=200,
+                checkpoint_interval=10,
+                reward_overrides=dict(_MATCH_REWARD),
+                randomization={"enabled": False},
+                # Mirrors the neutral-merge siblings (two_circle, habfm): this is a
+                # symmetric geometry, not an advantage/disadvantage split like OBFM.
+                advance_conditions={"win_rate_min": 0.70, "crash_rate_max": 0.30},
+                advance_window=10,
+                env_overrides={
+                    "initial_scenario": {
+                        "mode": "match_base",
+                        "separation_min_m": sep_min,
+                        "separation_max_m": sep_max,
+                        "los_deg": MATCH_LOS_DEG,
+                        "altitude_m": MATCH_ALTITUDE_M,
+                        "speed_mps": MATCH_SPEED_MPS,
+                    },
+                },
+            )
+        )
+    return stages
 
 
 def _habfm_stage() -> CurriculumStage:
@@ -398,8 +497,10 @@ def get_stages() -> list[CurriculumStage]:
     neutral_head = base[:insert_at]
     tail = base[insert_at:]
 
-    # v4: drop the builtin's 10-alpha two-circle ladder + its full_dogfight,
-    # replace with the 5-alpha rebuild + a full_dogfight extended to 1500 iters.
+    # v4: drop the builtin's 10-alpha two-circle ladder + its full_dogfight, replace with
+    # the 5-alpha rebuild (0/3/5/8/12 -- see _build_two_circle_v4's docstring for why the
+    # high alphas were dropped again on 2026-08-11), the match_base ladder, and a
+    # full_dogfight extended to 1500 iters.
     old_full_dogfight = next((s for s in tail if s.name == "full_dogfight"), None)
     tail = [
         s
@@ -444,12 +545,19 @@ def get_stages() -> list[CurriculumStage]:
             advance_conditions={},
         )
 
+    # match_base ladder (2026-08-11) sits between the two-circle block and the fully
+    # randomized full_dogfight: specific -> general. It is the only block that trains the
+    # geometry the competition actually opens with, and it goes LAST among the fixed
+    # geometries so the policy arrives at full_dogfight having most recently practised it.
+    match_base_stages = _build_match_base_ladder(start_index=0)  # reindexed below
+
     merged = (
         neutral_head
         + obfm_stages
         + [_habfm_stage()]
         + tail
         + two_circle_v4
+        + match_base_stages
         + [full_dogfight_v4]
     )
     return [replace(stage, index=i) for i, stage in enumerate(merged)]
