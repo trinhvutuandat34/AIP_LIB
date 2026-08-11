@@ -116,9 +116,11 @@ report kills/damage alongside win rate (a config once held 73.1 % while damage c
   flying with a corrupted throttle channel.
 
 ## Open follow-ups, in priority order
-1. **Launch v8** on the fixed gate, and check the first stage behaves: rows with
-   `metrics_age_iters == 0` should appear about every 27 iterations, and the stage should not
-   advance until ten of them exist. (F6 itself is fixed.)
+1. **Launch v8** on the fixed gate and the new curriculum (16 stages), then check the first stage
+   behaves: rows with `metrics_age_iters == 0` should appear about every 27 iterations, and the
+   stage should not advance until ten of them exist. Copy `experiments/real_eagle_v7.yaml` to
+   `real_eagle_v8.yaml`, change `output.tag` to `v8`, and drop its GEOMETRY WARNING block -- it no
+   longer applies. **Start a fresh tag; do not `--resume` v7** (stage indices changed meaning).
 2. **Ask the organizers whether each side gets its own rule XML.** If yes, `Gate2_BeamMerge` and
    every future BT change becomes locally measurable; if no, they can only be adopted on mechanism
    (4.1 **F1-BLIND**).
@@ -126,12 +128,10 @@ report kills/damage alongside win rate (a config once held 73.1 % while damage c
    delivers 14.86 G. It bounds the BT and would bound any RL policy identically.
 4. **The DQ workstream has never been started** and is the largest un-mitigated risk to a podium
    result. `student/submission_resilience.py` exists but has never been stress-tested.
-5. **`match_base` stages are still not in the curriculum** -- but the wrapper is now wired into
-   training (F8), so a stage that asks for `match_base` will actually get it rather than silently
-   training the default spawn. `student/my_curriculum.py` still trains only on `obfm_*` and
-   `two_circle_headon`, **neither of which is the competition geometry**. Adding the stages is a
-   curriculum design decision awaiting team approval; it is the single highest-value change
-   available to the next campaign.
+5. ~~`match_base` stages are not in the curriculum.~~ **DONE 2026-08-11** (F8, F8-STAGES): the
+   wrapper is wired into training and the ladder exists -- `match_base_wide` → `match_base_close`
+   → `match_base`, replacing two-circle alphas 45/90/135/180. **v8 is the first campaign that will
+   train the geometry the competition actually opens with.** Watch those three stages first.
 
 ## Guardrails (compliance -- keep it this way)
 - `src/dogfight/**` is a hard no-edit boundary. Route new logic through `student/**`,
