@@ -384,6 +384,68 @@ still never started.
 
 | F25 | **ROOT CAUSE FOUND: a `name` attribute on a control node makes it build with ZERO children. 17 of the 20 composites in the rule file are empty shells (2026-08-11).** Dumped `childrenCount()` for every composite at build time. Result is absolute: **all 3 anonymous composites have children (1, 8, 9); all 17 NAMED `<Sequence>`/`<Fallback>` nodes have 0.** Confirmed causally — deleting only the `name` attribute from `Gate2p5_GunSolutionHold`'s `<Sequence>`, changing nothing else, gives it its **4 children** back. **This explains every observation exactly, via BehaviorTree.CPP's empty-composite semantics:** an empty `Sequence` returns SUCCESS immediately, an empty `Fallback` returns FAILURE immediately. So `Gate2p5_GunSolutionHold` (Sequence, 0 children) **succeeds unconditionally and wins every tick**; `Gate1_ThreatReaction`, `Gate2_MergeAndNeutralFight`, `Gate3_EnergyState`, `Gate4_OffensiveSelector` (Fallbacks, 0 children) **all fail unconditionally**; `Tail_LeadPursuit` (Sequence, 0 children) succeeds — which is precisely the trace when Gate 2.5 is removed. **The only nodes that have ever executed are `Gate0_ClimbToSafeAltitude` and `Tail_SingleSideOffset`** — the two real `Task_*` leaves sitting directly under the anonymous outer `Fallback`. **Every one of the 23 `Task_*` maneuver classes, all five gate blocks, and every decorator in this tree has NEVER RUN.** This is the mechanical answer to C2, to A4, to every positional null in this register, and to why "~25 nodes / 6 gates" produced 0 WEZ steps in every configuration ever tested. **The fix is XML-only, no rebuild: drop `name=` from the 17 control nodes** (leaf `Task_*`/`DECO_*` names are fine — those nodes work). It is not a tuning change; it turns the tactical layer on for the first time, so it must be re-baselined from scratch and every prior BT measurement in this register should be considered void rather than merely suspect. | **[M] ROOT CAUSE** |
 
+### G. BFM doctrine ↔ implemented tree, and what to expect after the F25 fix (2026-08-11)
+
+Added because F25 established that **none of the tactical layer has ever executed**, so the
+post-fix re-baseline has no prior art to compare against — every BT number in this register was
+produced by a tree that ran two leaf tasks. Doctrine-linked expectations are the only thing left
+to check the first live run against. Source: a BFM/manoeuvring reference supplied by the team;
+mapping verified against the 23 `Task_*` classes on disk.
+
+**The tree is a near one-to-one implementation of standard BFM doctrine.** Whoever built it worked
+from this material:
+
+| Doctrine | Implemented class | Ever executed? |
+|---|---|---|
+| High Yo-Yo / Low Yo-Yo | `Task_HighYoYoUp`, `Task_LowYoYo` | **no** |
+| Flat / Rolling / Vertical Scissors | `Task_FlatScissors`, `Task_RollingScissors`, `Task_VerticalScissors` | **no** |
+| Lag Displacement Roll | `Task_LagDisplacementRoll` | **no** |
+| Break Turn | `Task_Evade` (name kept for history) | **no** |
+| Guns Defense / Jink | `Task_JinkingTurn` | **no** |
+| Notch | `Task_Notch` | **no** |
+| Lead / Pure / Lag pursuit | `Task_LeadPursuit`, `Task_pure`, `Task_LagPursuit` | **no** |
+| One-circle / two-circle flow | `Task_OneCircleFight`, `Task_NoseToNoseTurn`, `Task_NoseToTailTurn` | **no** |
+| Turn-circle entry | `Task_LeadTurn`, `Task_BarrelRollAttack` | **no** |
+| Energy vs. nose position | `Task_EnergyTactics`, `Task_AnglesTactics` | **no** |
+| Gun tracking | `Task_GunTrack` | **no** |
+| (survival / tail default) | `Task_ClimbToSafeAltitude`, `Task_SingleSideOffset` | **YES — the only two** |
+
+**RATE BAND — the sharpest doctrinal check available.** Doctrine puts maximum *sustained* turn
+rate at **430 KCAS with a 400–460 band**, and frames the two failure modes as "excessive speed
+prevents tight turns; insufficient speed prevents turning entirely". `scripts/corner_speed_probe.py`
+measured us spawning at **388.8 kt and decaying to 339.6 kt average**, inside the band only
+**7.3 %** of the match. By this doctrine we fight permanently below the rate band, which is the
+same conclusion `scripts/turn_rate_sweep.py` reached from load factor.
+
+**CORRECTS F12.** F12 concluded the ~1.2 G ceiling "sits downstream of the action and would bound
+an RL policy identically". That measurement pooled all steps, and **88–94 % of them were BT-flown,
+i.e. flying a stale aim point from a tree that never ran a maneuver task** — low G there is not a
+control-law limit, it is an aircraft not manoeuvring. The vptrack-flown steps still showed ~1.2 G
+at saturated pitch, so a real effect remains, but **the headline figure is contaminated and F12
+must be re-measured after F25 lands.**
+
+**REFRAMES F14.** `defensive_break` measured harmful (9W/5L → 6W/10L; kills 6 → 3; damage dealt
+and taken both down ~42 %). Doctrine explains the result rather than contradicting it: Jink,
+Reversal, Ditch and Radius Defense are responses to **a specific weapon employment**, keyed to
+indicators such as "the attacker becomes thinner — they are pulling lead for guns". We tested an
+**unconditional** break, which by this doctrine is just bleeding energy for nothing. So the honest
+reading is not "the defensive axis is closed" but "we tested the wrong form of it" — and the
+conditional form lives in `Task_JinkingTurn` / `Task_Evade`, inside Gate 1, which has never run.
+
+**TRANSFER CAVEAT — do not hard-code these numbers.** The reference is **F/A-18C in DCS**; this
+sim is a JSBSim F-16. `corner_speed_probe` already tested an F-16 corner figure and found forcing
+it **harmful**: 73.1 % win rate but **0 kills and 0.63 damage**, against the champion's 8 kills /
+14.29. Its own note stands — "this JSBSim model's rate may peak near where it already settles".
+The *concepts* (rate band, exclusive turning room, flow-type choice, energy vs. nose position)
+transfer; the *speeds* are hypotheses to measure. That verdict was also reached with the tactical
+layer dead, so it is due a re-run regardless.
+
+**What to check on the first live run**, in order: (1) do maneuver tasks appear in the gate trace
+at all, and which; (2) does flow-type selection match the geometry — two-circle on a rate fight,
+one-circle on a radius fight; (3) does average airspeed move toward the rate band once
+`Task_EnergyTactics` can actually run; (4) only then re-measure F12's G ceiling and F14's
+defensive question.
+
 ### The through-line
 
 A4 and C1 are the same problem from two sides: the tree optimizes toward a **proxy** (ATA < 8°,
