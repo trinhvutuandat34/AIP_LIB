@@ -187,8 +187,14 @@ class VPTrackingProvider(BTActionProvider):
         self.engage_range_m = float(kwargs.pop("engage_range_m", ENGAGE_RANGE_M))
         self.engage_los_deg = float(kwargs.pop("engage_los_deg", ENGAGE_LOS_DEG))
         self.aim_at_vp = bool(kwargs.pop("aim_at_vp", AIM_AT_VP))
-        super().__init__(*args, **kwargs)
+        # Every one of OUR kwargs must be popped BEFORE super().__init__, which is
+        # BTActionProvider's and rejects anything it does not know. throttle_control was
+        # popped after it, which was latent until the per-side CLI made it reachable:
+        # passing --{side}-vptrack-throttle raised
+        # "BTActionProvider.__init__() got an unexpected keyword argument 'throttle_control'".
+        # It never surfaced earlier because the flag had only ever been set via env var.
         self.throttle_control = bool(kwargs.pop("throttle_control", THROTTLE_CONTROL))
+        super().__init__(*args, **kwargs)
         self._los_error_sum = 0.0
         self._prev_range_m: float | None = None
         self._override_steps = 0

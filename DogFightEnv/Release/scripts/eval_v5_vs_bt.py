@@ -699,6 +699,17 @@ def parse_args():
                         "Prefer these over the other three for any result meant to predict "
                         "match performance -- obfm_* stages a six-o'clock advantage the "
                         "rules never grant.")
+    # Per-side controller overrides (2026-08-06). The Rule XML is global to both DLLs, so BT
+    # changes cannot be given to one side only: self-play cancels them exactly and the vs-BT
+    # benchmark is saturated. Varying the CONTROLLER per side is the only asymmetry available
+    # without touching the DLL, and it is what makes "tuned vs untuned" measurable at all.
+    for _side in ("ownship", "target"):
+        p.add_argument(f"--{_side}-vptrack-range-m", type=float, default=None,
+                       help=f"{_side} vptrack engagement range (default {2500.0:.0f} m).")
+        p.add_argument(f"--{_side}-vptrack-los-deg", type=float, default=None,
+                       help=f"{_side} vptrack engagement LOS half-angle (default 45 deg).")
+        p.add_argument(f"--{_side}-vptrack-throttle", type=int, choices=[0, 1], default=None,
+                       help=f"{_side} vptrack range/throttle control (default off; measured null).")
     p.add_argument("--match-los-deg", type=float, default=None,
                    help="Override each aircraft's LOS-off-nose for match_* modes. The "
                         "rounds-1-3 slide art supports two readings: 90 (antiparallel and "
@@ -742,6 +753,10 @@ def main():
         bt_dll=args.ownship_bt_dll, policy_id=args.ownship_policy_id,
         hybrid_mode=args.hybrid_mode, alpha=args.alpha, residual_scale=args.residual_scale,
         observation_mode=effective_observation_mode, observation_module=args.observation_module,
+        vptrack_range_m=args.ownship_vptrack_range_m,
+        vptrack_los_deg=args.ownship_vptrack_los_deg,
+        vptrack_throttle=(None if args.ownship_vptrack_throttle is None
+                          else bool(args.ownship_vptrack_throttle)),
     )
     # Capture vp_valid so a SAFE_VP zero substitution is distinguishable from a genuine zero
     # aimpoint. Wrapping is transparent; see VPProbe.
@@ -753,6 +768,10 @@ def main():
         bt_dll=args.target_bt_dll, policy_id=args.target_policy_id,
         hybrid_mode=args.hybrid_mode, alpha=args.alpha, residual_scale=args.residual_scale,
         observation_mode=effective_observation_mode, observation_module=args.observation_module,
+        vptrack_range_m=args.target_vptrack_range_m,
+        vptrack_los_deg=args.target_vptrack_los_deg,
+        vptrack_throttle=(None if args.target_vptrack_throttle is None
+                          else bool(args.target_vptrack_throttle)),
     )
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)
