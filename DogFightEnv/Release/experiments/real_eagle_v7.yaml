@@ -1,0 +1,107 @@
+# real_eagle v7 (2026-08-07) - the first campaign that can actually be steered.
+#
+# WHAT IS DIFFERENT FROM v5/v6, and none of it is a hyperparameter:
+#
+#  1. TELEMETRY WORKS. crash_rate / win_rate / ep_wez_steps / ep_altitude_penalty_steps were
+#     logged ZERO times across all 4,700 iterations of v6 and all 4,700 of v5 -- both campaigns
+#     trained blind and every stage advanced on max_iterations because the gate metrics were
+#     permanently NaN. Root cause was a naming mismatch (_extract_custom_metrics looked up
+#     "<name>_mean", the OLD RLlib API stack's convention; the new stack stores the key bare).
+#     Fixed, plus consumer-side carry-forward so a value survives the many iterations in which no
+#     episode closes. Verified: 90% row coverage and stage 0 advancing on "crash_rate=0.0000",
+#     the first live advance condition since v4.
+#     CHECK THIS EARLY: if crash_rate and ep_wez_steps are populated in the first ~100 rows of
+#     training_log.csv, the fix is holding under a real run. v5 and v6 both started fine.
+#
+#  2. G LIMITER AT 10 G on the action path (student/g_limiter.py::GLimitWrapper, wired in
+#     train_curriculum.env_creator). The sim enforces NO structural limit and hands out up to
+#     14.86 G against a 9 G airframe, so v5/v6 could learn against physics the competition server
+#     may not allow. v7 trains under the same limit the submission flies under.
+#
+#  3. UNATTENDED RUNS NO LONGER DIE ON A PRINT. train_curriculum.py printed non-ASCII glyphs; with
+#     stdout redirected to a file (how every unattended run is launched) Python fell back to
+#     cp1252 and raised UnicodeEncodeError at stage advancement, killing the run AFTER the stage
+#     had trained. stdout/stderr are now forced to UTF-8.
+#
+# GEOMETRY WARNING -- READ BEFORE COMMITTING ~18 HOURS TO THIS.
+# This runs student.my_curriculum, whose stages are obfm_* and two_circle_headon. Measured
+# 2026-08-06 against the official scenario slides (COMPETITION_RULES.md Sec 5.1), NEITHER is the
+# competition geometry:
+#     obfm_*             stages a six-o'clock ADVANTAGE the rules never grant
+#     two_circle_headon  neutral, but spawns at 1,497-5,379 m against a real 610-914 m
+# The real match is an antiparallel BEAM merge at 2000-3000 ft (student/match_scenario_wrapper.py,
+# mode "match_base"). A policy trained only on the two above learns a fight it will not be given
+# -- which is arguably what v1-v6 each did. Adding match_base stages to the curriculum is the
+# single highest-value change available to this campaign and is NOT done here, because it is a
+# curriculum design decision rather than a config tweak.
+#
+# Everything else is carried from v6 unchanged (gamma 0.997, 300k buffer, the v5 stability fixes:
+# grad_clip, reward finite-guard/clamp).
+#
+# run:
+#   python scripts\run_experiment.py experiments\real_eagle_v7.yaml
+# dry-run (validate wiring, no training):
+#   python scripts\run_experiment.py experiments\real_eagle_v7.yaml --dry-run
+
+name: real_eagle_v7
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: v7
+
+env:
+  observation_mode: custom
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  observation_module: student.my_observation_v2
+
+curriculum:
+  stages_module: student.my_curriculum
+
+algo:
+  name: sac
+  framework: torch
+  lr: 3.0e-4
+  gamma: 0.997
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  replay_buffer_capacity: 300000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+runtime:
+  # Kept from v5/v6: remote workers hit msgpack-OOM / concat_episode races on this box.
+  # NOTE the cost, measured: this collects exactly 100 env steps per training iteration at
+  # ~13.6 s/iter, so a full campaign sees ~470k env steps -- dozens of terminal outcomes, not
+  # thousands. If v7 plateaus the way v5/v6 did, this is the first thing to look at, not the
+  # reward function.
+  num_env_runners: 0
+  resume: true
+
+policy_probe:
+  enabled: true
+  interval: 10
+  steps: 4
+  print: true
+
+engagement_log:
+  enabled: true
+  interval: 100
+  steps: 400
+  episodes: 1
+  print: true
+
+notes: >
+  real_eagle v7 (2026-08-07). First campaign with working telemetry (v5 and v6 both trained
+  blind for 4,700 iterations each), a 10 G limiter on the action path so training physics match
+  the submission's, and no UnicodeEncodeError killing unattended runs at stage advancement.
+  Hyperparameters unchanged from v6. Trains on obfm_*/two_circle_headon, NEITHER of which is the
+  competition geometry (an antiparallel beam merge at 2000-3000 ft) -- see the geometry warning
+  in this file's header before committing the compute.
