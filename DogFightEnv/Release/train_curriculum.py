@@ -665,6 +665,19 @@ _CM_CARRY: dict = {}
 _CM_AGE = [0]
 
 
+def _reset_carry_forward() -> None:
+    """Drop the carried metrics at a stage boundary.
+
+    These are module-level globals, so without this a new stage inherits the PREVIOUS stage's
+    last closed episode and reports it as its own from iteration 0. Measured on v7 (2026-08-11):
+    stage 1 advanced after 10 iterations having closed zero episodes, on stage 0's final episode
+    (`ep_min_distance=733.0757, crash_rate=0.0000`) -- see COMPETITION_PLAN.md 4.1 F6. A stage
+    must start with nothing to report and say so ("n/a") until it measures something itself.
+    """
+    _CM_CARRY.clear()
+    _CM_AGE[0] = 0
+
+
 def _is_missing(v) -> bool:
     if v is None or v == "n/a":
         return True
@@ -920,6 +933,10 @@ class CurriculumTrainer:
               f"max_iter={stage.max_iterations}  resume_from={start_iter}")
         print(f"{'='*60}")
 
+        # F6 (2026-08-11): the carried metrics are module-level globals and must not survive a
+        # stage boundary, or this stage reports the previous one's last episode as its own.
+        _reset_carry_forward()
+
         stage_env_config = build_stage_env_config(self.base_env_config, stage)
         env_name = f"dogfight-curriculum-stage{stage.index}"
         register_env(env_name, env_creator)
@@ -965,7 +982,13 @@ class CurriculumTrainer:
                 )
 
                 stage_state["iterations_trained"]    = it + 1
-                stage_state["metric_history"]        = metric_window[-stage.advance_window * 2:]
+                # F6: advancement consumes per-episode rows, and those are ~1 in 27, so keeping a
+                # flat tail of raw rows would persist a window with no episodes in it and make
+                # every --resume re-earn the full advance_window from scratch. Persist the
+                # episode rows themselves; raw carried rows add nothing a resume can use.
+                stage_state["metric_history"] = [
+                    m for m in metric_window if m.get("metrics_age_iters") == 0
+                ][-stage.advance_window * 2:]
                 state["total_iterations_elapsed"]    = self._total_iter
                 state["updated_at"]                  = _now()
                 self._save_state(state)
@@ -976,11 +999,31 @@ class CurriculumTrainer:
 
                 self._print_row(stage.index, it, metrics)
 
-                window = metric_window[-stage.advance_window:]
+                # F6 (2026-08-11): advance on DISTINCT EPISODES, not on rows.
+                #
+                # _carry_forward repeats the last measured episode on every iteration that
+                # closes none (~26 of every 27), so a row window is mostly copies of a single
+                # episode and its "rolling average" is not an average over episodes at all.
+                # Measured on v7 stage 0: the 10-row window held 8 copies of one non-crashing
+                # episode plus 2 of a crashing one, so the gate saw crash_rate=0.2000 and
+                # passed a crash_rate_max=0.30 threshold -- while the true rate over the
+                # stage's 7 episodes was 0.8571. It advanced on a 20% crash rate that was
+                # really 86%.
+                #
+                # Selecting only the fresh rows gives one row per closed episode, so
+                # advance_window=10 means what it was always meant to mean: an average over 10
+                # measurements. check_advancement() lives in src/dogfight/ai/curriculum.py --
+                # inside the no-edit boundary -- so this is fixed by choosing what we hand it,
+                # not by changing how it averages.
+                episode_window = [
+                    m for m in metric_window if m.get("metrics_age_iters") == 0
+                ]
+                window = episode_window[-stage.advance_window:]
                 if len(window) >= stage.advance_window:
                     ok, reason = check_advancement(stage, window)
                     if ok:
-                        print(f"\n  ✓ Stage {stage.index} advancement: {reason}")
+                        print(f"\n  ✓ Stage {stage.index} advancement: {reason} "
+                              f"(over {len(window)} episodes)")
                         break
 
             stage_state["status"] = "completed"
