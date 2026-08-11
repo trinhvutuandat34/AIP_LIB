@@ -40,23 +40,31 @@ BT-relative number in the docs is an upper bound -- our own BT never shoots.
 | `AIP_BASE.dll` / `AIP_BASE_target.dll` | Built 2026-08-06 15:08, newer than every `AIP_DCS` source (newest `Controller_CY.cpp`, 14:26). **No rebuild owed.** |
 | `Rule_forTraining.xml` / `Rule_real_eagle.xml` | **Byte-identical** (MD5 `5C5979DB...`). Both carry `Gate2_BeamMerge`. `my_submission.py` loads `Rule_forTraining.xml`. |
 | G limiter | Active on **every** path -- eval, `run_local_dogfight`, live submission, and RL training (`GLimitWrapper`). |
-| `v7` | **RUNNING** since 2026-08-11 13:46:24. See the warning below before reading its results. |
+| `v7` | **STOPPED 2026-08-11 14:33** at stage 2 / 313 iterations. Its stage results are void (F6). Relaunch as **v8**; do not resume v7. |
 
 --------------------------------------------------------------------------------
-## !!! v7 is live -- do not trust its stage results yet
+## !!! v7 is void -- relaunch as v8
 
-A curriculum campaign is running (`experiments/real_eagle_v7.yaml`). Two things to know:
+v7 was stopped 2026-08-11 14:33 at stage 2 / 313 iterations. Its stage advances were invalid
+(COMPETITION_PLAN.md 4.1 **F6**): the advancement gate averaged over ROWS rather than episodes, so
+stage 0 advanced reading `crash_rate=0.2000` when its true per-episode rate was **0.8571**, and
+stage 1 advanced having closed **zero episodes of its own**. Fixed 2026-08-11. **Do not `--resume`
+v7** -- start a fresh `v8` tag so no stage carries a checkpoint earned under the broken gate.
 
-1. **Stage 1 advanced on stage 0's metrics** (COMPETITION_PLAN.md 4.1 **F6**). The E2 carry-forward
-   persists values across stage boundaries and the advancement gate never checks
-   `metrics_age_iters`, so stage 1 closed **zero episodes of its own** and still advanced. Any
-   stage whose rows all show `metrics_age_iters > 0` advanced on stale data.
-2. **Episode closure is ~1 per 27 iterations**, so every gate metric is effectively a
-   single-episode estimate.
+What changed, and what it costs:
+- Advancement now consumes **one row per closed episode**, so `advance_window=10` means an average
+  over 10 real episodes. Measured cost: **~27 iterations per episode ⇒ ~268 iterations ≈ 49 min
+  per stage**, ~14 h for all 17 -- inside the ~18 h the v7 header budgets. Sampling was
+  deliberately left unchanged (F6-COST).
+- Carried metrics are **reset at every stage boundary**, so a stage starts reporting `n/a` until
+  it measures something itself.
+- `reward_mean` / `ep_len_mean` are carried with the custom metrics under one shared
+  `metrics_age_iters` instead of going `nan` on ~84 % of rows.
 
-Progress source of truth: `artifacts/curriculum/real_eagle/v7/training_log.csv` and
+Progress source of truth: `artifacts/curriculum/real_eagle/<tag>/training_log.csv` and
 `curriculum_state.json` (both flush every iteration; the console lags due to buffering).
-**Check `metrics_age_iters` on every row before believing a number.**
+**`metrics_age_iters == 0` marks a row backed by an episode that actually closed** -- those are
+the only rows the gate now counts, and the only ones worth averaging by hand.
 
 --------------------------------------------------------------------------------
 ## Submission -- the path that matters
@@ -108,7 +116,9 @@ report kills/damage alongside win rate (a config once held 73.1 % while damage c
   flying with a corrupted throttle channel.
 
 ## Open follow-ups, in priority order
-1. **Fix F6** (stale-metric stage advancement) before any v7 stage result is used.
+1. **Launch v8** on the fixed gate, and check the first stage behaves: rows with
+   `metrics_age_iters == 0` should appear about every 27 iterations, and the stage should not
+   advance until ten of them exist. (F6 itself is fixed.)
 2. **Ask the organizers whether each side gets its own rule XML.** If yes, `Gate2_BeamMerge` and
    every future BT change becomes locally measurable; if no, they can only be adopted on mechanism
    (4.1 **F1-BLIND**).
@@ -116,9 +126,12 @@ report kills/damage alongside win rate (a config once held 73.1 % while damage c
    delivers 14.86 G. It bounds the BT and would bound any RL policy identically.
 4. **The DQ workstream has never been started** and is the largest un-mitigated risk to a podium
    result. `student/submission_resilience.py` exists but has never been stress-tested.
-5. **`match_base` stages are not in the curriculum.** `student/match_scenario_wrapper.py` exists
-   and is used only by eval scripts; `student/my_curriculum.py` trains on `obfm_*` and
-   `two_circle_headon`, **neither of which is the competition geometry**.
+5. **`match_base` stages are still not in the curriculum** -- but the wrapper is now wired into
+   training (F8), so a stage that asks for `match_base` will actually get it rather than silently
+   training the default spawn. `student/my_curriculum.py` still trains only on `obfm_*` and
+   `two_circle_headon`, **neither of which is the competition geometry**. Adding the stages is a
+   curriculum design decision awaiting team approval; it is the single highest-value change
+   available to the next campaign.
 
 ## Guardrails (compliance -- keep it this way)
 - `src/dogfight/**` is a hard no-edit boundary. Route new logic through `student/**`,
