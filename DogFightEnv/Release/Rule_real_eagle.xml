@@ -127,7 +127,23 @@
                  outcome for OBFM-defensive (HCA~0, chase geometry) or HABFM (Notch fires first
                  regardless, ~90deg beam angle never reaches these two nodes). -->
             <Fallback name="Gate1_ThreatReaction">
-              <Task_Notch name="Gate1_Notch" BB="{BB}"/>
+              <!-- HCA CARVE-OUT (2026-08-11). Task_Notch had NO angular guard, unlike its two
+                   siblings below, which were given HCA less-than-150 exclusions on 2026-08-05 for
+                   exactly this reason. Notch is FIRST in this Fallback and returns SUCCESS
+                   whenever the enemy is within 2000 m at 70 to 110 deg aspect (Task_Notch.cpp),
+                   which is precisely the official beam merge (610 to 914 m, ~90 deg). So it fired
+                   on the spawn tick, Gate 1 succeeded, and the outer Fallback NEVER REACHED
+                   GATE 2, shadowing Gate2_BeamMerge, Gate2_HeadOnMerge, Gate2_OffCenterMerge and
+                   Gate2_NeutralFight alike. That is why C6 re-merge widening and the beam branch
+                   both measured null. Same 150 deg threshold as the siblings, so a genuine
+                   near-head-on merge (HCA 180 at the match spawn) now defers to Gate 2, while
+                   non-head-on close threats, Notch actual intended use, are unaffected.
+                   XML only, no rebuild. Revert: delete this Sequence wrapper and restore the bare
+                   Task_Notch line. See COMPETITION_PLAN.md 4.1 F17. -->
+              <Sequence name="Gate1_Notch_NotHeadOn">
+                <DECO_AngleOffCheck name="Gate1_Notch_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
+                <Task_Notch name="Gate1_Notch" BB="{BB}"/>
+              </Sequence>
               <Sequence name="Gate1_JinkingTurn_NotHeadOn">
                 <DECO_AngleOffCheck name="Gate1_Jink_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
                 <!-- GUN-SOLUTION CARVE-OUT (2026-08-05, XML-only, NO rebuild). Root-cause trace
