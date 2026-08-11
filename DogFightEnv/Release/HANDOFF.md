@@ -82,6 +82,22 @@ exists: it removes the residual cliff structurally and holds 13/30 at the full 0
 destroys the ungated version. It is a config change, not a rebuild.
 
 --------------------------------------------------------------------------------
+## Regression guards -- run these before committing compute or submitting
+
+There is no CI and no test suite for the core package, so these are the tripwires. All three exit
+0 on success and name the register row each check protects.
+
+```powershell
+python scripts\verify_report_fixes.py    # ~seconds, no sim: gate/telemetry/curriculum/v8 config
+python scripts\verify_match_spawn.py     # ~1 min, real envs: match_base stages spawn correctly
+python scripts\verify_resilience.py      # ~seconds: DQ guards under injected faults
+```
+
+Run the first two after touching `train_curriculum.py`, `student/my_curriculum.py` or an
+`experiments/*.yaml`; the third before any submission. They exist because every defect they cover
+**failed silently** -- a stage advancing on stale metrics, a metric reading `nan`, a record that
+never saved, a wrapper that was never wired in. None of those show up in a training log.
+
 ## Local verification
 
 BT-vs-BT smoke (tree constructs, DLL healthy):
