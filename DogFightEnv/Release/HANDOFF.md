@@ -90,6 +90,39 @@ exists: it removes the residual cliff structurally and holds 13/30 at the full 0
 destroys the ungated version. It is a config change, not a rebuild.
 
 --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+## !!! PENDING, HELD DELIBERATELY: the behaviour tree is dead code below Gate 2.5
+
+**Do this first when v8 finishes.** `COMPETITION_PLAN.md` 4.1 **F25**: a `name` attribute on a
+control node makes BehaviorTree.CPP build it with **zero children**. Measured at build time via
+`childrenCount()`: all 3 anonymous `<Sequence>`/`<Fallback>` nodes have children (1, 8, 9); **all
+17 named ones have 0.** An empty `Sequence` returns SUCCESS immediately and an empty `Fallback`
+returns FAILURE immediately, so:
+
+- `Gate2p5_GunSolutionHold` (Sequence, 0 children) **succeeds unconditionally and wins every
+  tick**, blocking Gates 1/2/3/4 and the tail
+- every other gate block fails or succeeds vacuously
+
+**The only nodes that have ever executed are `Gate0_ClimbToSafeAltitude` and
+`Tail_SingleSideOffset`.** All 23 `Task_*` maneuver classes, all five gate blocks and every
+decorator have never run. This is the mechanical explanation for C2, A4, and every positional null
+in the register.
+
+**Fix: drop `name=` from the 17 control nodes in `Rule_forTraining.xml` / `Rule_real_eagle.xml`.**
+XML-only, no rebuild. Leaf `Task_*` / `DECO_*` names must STAY -- those nodes work and the names
+are what `GateTrace.h` reports.
+
+**Why it is held:** this is not a tuning change, it switches the tactical layer on for the first
+time. v8 is training against `AIP_BASE_target.dll` and reaches its first BT stage (index 4,
+`obfm_offensive`) at iteration 1600; changing the tree before then would swap its opponent
+mid-campaign. Apply after v8 completes, then **re-baseline from scratch** -- every prior BT
+measurement in the register is void once this lands, not merely suspect.
+
+Verify with: `AIP_BT_GATE_TRACE=<path> python scripts\eval_v5_vs_bt.py --ownship-backend bt
+--target-backend bt --scenario-mode match_base --episodes 1` and check the `.nodes.txt` dump shows
+non-zero child counts for the gate composites.
+
+--------------------------------------------------------------------------------
 ## Regression guards -- run these before committing compute or submitting
 
 There is no CI and no test suite for the core package, so these are the tripwires. All three exit
