@@ -35,7 +35,7 @@ BT-relative number in the docs is an upper bound -- our own BT never shoots.
 | Thing | State |
 |---|---|
 | `student/my_submission.py` | `MODE="vptrack"`, `TEAM_NAME="real_eagle"`. Loads **no RL bundle**. G-limited at 10 G. |
-| `BUNDLE_DIR` | Still points at `v4/stage_3` -- a **100 %-crash** policy. Inert under `vptrack`; would arm under any `rl`/`hybrid*` mode. |
+| `BUNDLE_DIR` | **`None`** (set 2026-08-11). Was a placeholder path to `v4/stage_3`, a **100 %-crash** policy that the health gate passes because it is finite-but-degenerate. Selecting any `rl`/`hybrid*` mode now **raises** instead of silently arming it. Replace with a validated bundle path when one exists. |
 | `SERVER_IP` | `221.151.77.208` -- **unconfirmed**, differs from `startup_command.txt`'s `10.185.16.247`. Confirm with organizers. Two network incidents = DQ. |
 | `AIP_BASE.dll` / `AIP_BASE_target.dll` | Built 2026-08-06 15:08, newer than every `AIP_DCS` source (newest `Controller_CY.cpp`, 14:26). **No rebuild owed.** |
 | `Rule_forTraining.xml` / `Rule_real_eagle.xml` | **Byte-identical** (MD5 `5C5979DB...`). Both carry `Gate2_BeamMerge`. `my_submission.py` loads `Rule_forTraining.xml`. |
