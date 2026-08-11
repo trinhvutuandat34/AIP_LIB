@@ -136,6 +136,36 @@ RUDDER_TAPER_CEIL = 6.0
 # positional problem is addressed -- at which point range control may start to matter. Enable
 # with DOGFIGHT_VPTRACK_THROTTLE=1.
 THROTTLE_CONTROL = os.environ.get("DOGFIGHT_VPTRACK_THROTTLE", "0") not in ("0", "false", "False")
+
+# ---- Corner-speed hold (2026-08-07) ----------------------------------------------------
+# A DIFFERENT lever from the range setpoint above, and it targets a different quantity. BFM
+# fundamentals (theaviationist, F-16): turn RATE peaks at corner speed ~430-450 KTAS / 0.8 M,
+# giving a 2500 ft radius at 20 deg/sec; rate is what wins an angles fight between identical
+# aircraft. Nothing in this stack has ever targeted speed -- every BT Task node hardcodes a
+# throttle constant (Sec 4.1 D4) and the range setpoint above chases distance, not energy.
+#
+# MEASURED (scripts/corner_speed_probe.py, N=20 self-play on match_base): we spawn at 388.8 kt
+# and DECELERATE, averaging 339.6 kt over the match -- 90-110 kt below the band -- and spend
+# only 7.3% of the match inside it. The opponent does the same (7.2%), which is exactly why
+# self-play cannot answer whether it matters: neither side ever fights at corner. The
+# asymmetric harness can.
+#
+# MEASURED 2026-08-07 -- HARMFUL AT 440 kt. Default OFF.
+#     self-play vs champion  7W/16D/7L, identical to control (23.3%)
+#     vs BT                  73.1% win rate but 0 KILLS and 0.63 damage (champion: 8 and 14.29)
+# The win RATE survived while damage collapsed 96%: dealing 0.63 against an opponent dealing
+# zero still scores as a differential win. Win rate alone would have passed this change --
+# check damage and kills alongside it.
+# Most likely the setpoint, not the idea: the probe shows this airframe settles naturally at
+# 339.6 kt, and forcing it ~100 kt faster widens the turn radius so it cannot hold a 152-914 m
+# WEZ. 430-450 kt is a real-F-16 figure at a particular weight and altitude; this JSBSim model's
+# rate may well peak near where it already settles. A proper test is an IN-SIM rate sweep
+# (turn rate vs TAS at fixed G) to find this model's actual corner, not the article's number.
+# Enable with DOGFIGHT_VPTRACK_CORNER=1, and sweep DOGFIGHT_VPTRACK_CORNER_KT if so.
+CORNER_HOLD = os.environ.get("DOGFIGHT_VPTRACK_CORNER", "0") not in ("0", "false", "False")
+CORNER_KT = float(os.environ.get("DOGFIGHT_VPTRACK_CORNER_KT", "440.0"))
+CORNER_BAND_KT = 15.0        # deadband so throttle does not chatter around the setpoint
+MPS_TO_KT = 1.94384
 TARGET_RANGE_M = float(os.environ.get("DOGFIGHT_VPTRACK_TARGET_M", "220.0"))
 RANGE_P = 1.0 / 400.0     # full authority at 400 m of range error
 CLOSURE_D = 1.0 / 40.0    # damping on per-step closure, so it settles instead of oscillating
@@ -230,6 +260,8 @@ class VPTrackingProvider(BTActionProvider):
         # It never surfaced earlier because the flag had only ever been set via env var.
         self.throttle_control = bool(kwargs.pop("throttle_control", THROTTLE_CONTROL))
         self.defensive_break = bool(kwargs.pop("defensive_break", DEFENSIVE_BREAK))
+        self.corner_hold = bool(kwargs.pop("corner_hold", CORNER_HOLD))
+        self.corner_kt = float(kwargs.pop("corner_kt", CORNER_KT))
         self.threat_ata_deg = float(kwargs.pop("threat_ata_deg", THREAT_ATA_DEG))
         super().__init__(*args, **kwargs)
         self._los_error_sum = 0.0
@@ -378,7 +410,22 @@ class VPTrackingProvider(BTActionProvider):
             pitch_cmd = -1.0
             rudder_cmd = 0.0          # uncoordinated rudder only slows the roll rate here
 
-        throttle_cmd = self._range_throttle(rng, bt_throttle) if self.throttle_control else None
+        if self.corner_hold:
+            # Hold the rate-optimal speed: full throttle when slow, idle when fast, BT's value
+            # inside the deadband. Deliberately independent of range -- this is an energy
+            # objective, and mixing it with the range setpoint would let them fight.
+            tas_kt = float(np.linalg.norm([own[StateIndex.VX], own[StateIndex.VY],
+                                           own[StateIndex.VZ]])) * MPS_TO_KT
+            if tas_kt < self.corner_kt - CORNER_BAND_KT:
+                throttle_cmd = 1.0
+            elif tas_kt > self.corner_kt + CORNER_BAND_KT:
+                throttle_cmd = 0.0
+            else:
+                throttle_cmd = float(bt_throttle)
+        elif self.throttle_control:
+            throttle_cmd = self._range_throttle(rng, bt_throttle)
+        else:
+            throttle_cmd = None
         return roll_cmd, pitch_cmd, rudder_cmd, throttle_cmd
 
     def compute_action(self, context: ActionContext) -> ActionResult:
