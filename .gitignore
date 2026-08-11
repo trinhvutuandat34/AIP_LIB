@@ -38,3 +38,9 @@ DogFightEnv/Release/logs/
 DogFightEnv/Release.zip
 DogFightEnv/Release/AIP_BASE_item13*.dll
 DogFightEnv/Release/bt_probe/
+
+# Local BT A/B rig: a DLL copy + its own rule XML so the two aircraft can read
+# DIFFERENT trees (COMPETITION_PLAN.md 4.1 F1-BLIND-BROKEN). Built by
+# scripts/setup_peer_bt.py; contains a 2.8 MB DLL copy, and is a measurement rig,
+# not part of any submission.
+DogFightEnv/Release/bt_peer*/

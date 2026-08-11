@@ -19,7 +19,7 @@ same pass, so local validation via run_local_dogfight.py actually exercises what
 -------------------------------------------
   # RL 모델 사용
   python run_unreal_inference.py --mode rl \\
-      --bundle-dir artifacts/curriculum/real_eagle/v4/stage_3_autopilot_pursuit/final_bundle \\
+      --bundle-dir <검증된_bundle_경로> \\
       --observation-mode custom --observation-module student.my_observation_v2 \\
       --team-name real_eagle \\
       --server-ip <서버IP> --server-port 9999
@@ -33,7 +33,7 @@ same pass, so local validation via run_local_dogfight.py actually exercises what
 
   # RL + BT 하이브리드 (팀 확정 전략)
   python run_unreal_inference.py --mode hybrid \\
-      --bundle-dir artifacts/curriculum/real_eagle/v4/stage_3_autopilot_pursuit/final_bundle \\
+      --bundle-dir <검증된_bundle_경로> \\
       --observation-mode custom --observation-module student.my_observation_v2 \\
       --bt-dll AIP_BASE.dll \\
       --bt-rule-xml Rule_forTraining.xml \\
@@ -110,11 +110,14 @@ SERVER_PORT = 9999
 # 사용할 백엔드 모드 선택: "rl" | "bt" | "vptrack" | "hybrid" | "hybrid_vptrack" | "hybrid_gated"
 #
 # TEMP SAFE DEFAULT (2026-08-05): forced to "bt" until a bundle is validated (via
-# eval_matchup.py, beats pure BT) -- BUNDLE_DIR below still points at the v4 stage_3 bundle,
-# documented (below) as a 100%-crash policy. The health gate only catches NaN/Inf weights, not
-# this (finite-but-degenerate), so "hybrid" would blend that crash behavior into the BT floor
+# eval_matchup.py, beats pure BT). At the time, BUNDLE_DIR still pointed at the v4 stage_3
+# bundle, documented below as a 100%-crash policy. The health gate only catches NaN/Inf weights,
+# not this (finite-but-degenerate), so "hybrid" would blend that crash behavior into the BT floor
 # every match. Team-confirmed target strategy is still Hybrid(residual) -- flip back once
 # BUNDLE_DIR points at a bundle that actually beats BT-alone.
+#
+# UPDATE 2026-08-11: BUNDLE_DIR is now None rather than a placeholder path, so an rl/hybrid* mode
+# can no longer silently arm that crash policy -- it raises instead. See the BUNDLE_DIR block.
 #
 # UPGRADED 2026-08-06: "bt" -> "vptrack". This does NOT weaken the safety argument above --
 # it strengthens it. "vptrack" loads NO RL bundle at all (see build_action_provider), so every
@@ -143,21 +146,27 @@ MODE = "vptrack"   # was "bt" (2026-08-05), was "hybrid" -- see notes above
 
 # RL 모드 설정
 # =========================================================================
-# !!! 경고 (2026-08-01 검증): 아래 BUNDLE_DIR은 "고장난" 모델을 가리킵니다.
-#     제출용이 아니라 자리표시자입니다. 실제 학습 아티팩트를 직접 확인한 결과:
-#       - v4/stage_3 (아래 경로)  = 최종 crash_rate 100%, reward -1.001,
-#                                   접근 실패(min-distance 4.8 km) -- 100% 추락 정책
-#       - v4/stage_4~7            = SAC가 stage 4 iter 248에서 NaN 발산 -> 가중치 손상
-#       - v4/stage_0~2            = loiter/고정 표적만 상대(실전 교전 미학습)
-#     즉, 현재 경진대회에 쓸 수 있는 RL bundle이 하나도 없습니다.
+# !!! BUNDLE_DIR = None (2026-08-11). 현재 경진대회에 쓸 수 있는 RL bundle이 하나도
+#     없습니다. 실제 학습 아티팩트를 직접 확인한 결과:
+#       - v4/stage_3   = 최종 crash_rate 100%, reward -1.001,
+#                        접근 실패(min-distance 4.8 km) -- 100% 추락 정책
+#       - v4/stage_4~7 = SAC가 stage 4 iter 248에서 NaN 발산 -> 가중치 손상
+#       - v4/stage_0~2 = loiter/고정 표적만 상대(실전 교전 미학습)
+#       - v5           = 100% 자기추락(20/20), v6 = 18/20 추락, 0승, WEZ 0
+#       - v7           = 2026-08-11 학습 진행 중
 #
-# 조치: experiments/real_eagle_v5.yaml 로 안정화 재학습(grad_clip + reward guard)
-#     을 돌린 뒤, full_dogfight 까지 통과한 안정적인 bundle 경로로 아래를 교체하세요.
-#     v5 완료 전에 실전 슬롯이 온다면 MODE="bt"(순수 BT)가 유일하게 안전한 제출입니다
-#     -- residual hybrid는 고장난 RL을 더해도 BT 베이스까지 함께 망가뜨립니다
-#     (NaN -> clip_action이 전체 action을 0으로 -> idle stall).
+#     2026-08-11 이전에는 여기에 v4/stage_3 경로가 "자리표시자"로 남아 있었습니다.
+#     그것이 위험한 이유: 아래 건전성 게이트(require_healthy_bundle)는 NaN/Inf 가중치만
+#     잡아내는데, 그 번들은 "유한하지만 망가진(finite-but-degenerate)" 상태라 게이트를
+#     그대로 통과합니다. 즉 MODE를 rl / hybrid* 로 바꾸는 순간 100% 추락 정책이 아무런
+#     경고 없이 실전 경로에 실립니다. None으로 두면 그 경로가 조용히 무장되는 대신
+#     즉시 큰 소리로 실패합니다(_build_action_provider_raw의 가드 참고).
+#
+# 조치: 검증된 bundle -- 즉 "vptrack 단독보다 낫다"가 측정으로 확인된 bundle -- 이
+#     나오면 아래를 그 경로 문자열로 교체하세요. 그때까지 안전한 제출은
+#     MODE="vptrack"이며, 이것은 RL bundle을 전혀 로드하지 않습니다.
 # =========================================================================
-BUNDLE_DIR = "artifacts/curriculum/real_eagle/v4/stage_3_autopilot_pursuit/final_bundle"  # TODO: v5 안정 bundle로 교체
+BUNDLE_DIR = None   # 검증된 bundle이 생기면 경로 문자열로 교체 (위 설명 참고)
 OBSERVATION_MODE = "real_eagle15"                  # student.my_observation_v2의 OBSERVATION_MODE
 OBSERVATION_MODULE = "student.my_observation_v2"   # 학습 시 사용한 custom 관측 모듈
 
@@ -192,11 +201,12 @@ STRICT_BUNDLE_HEALTH = False
 # =============================================================================
 # 경진대회 제출 전 로컬에서 결과 확인:
 #   python run_local_dogfight.py \\
-#       --ownship-backend hybrid \\
-#       --ownship-bundle-dir artifacts/curriculum/real_eagle/v4/stage_3_autopilot_pursuit/final_bundle \\
-#       --observation-mode custom --observation-module student.my_observation_v2 \\
+#       --ownship-backend vptrack \\
 #       --target-backend bt \\
 #       --save-log
+#
+# hybrid 계열을 확인하려면 --ownship-bundle-dir에 *검증된* bundle 경로를 넣으세요.
+# v4/stage_3은 예시로도 쓰지 마세요 -- 100% 추락 정책입니다 (위 BUNDLE_DIR 설명 참고).
 
 
 # =============================================================================
@@ -226,6 +236,19 @@ def _build_action_provider_raw():
     if MODE == "vptrack":
         print(f"[{TEAM_NAME}] VP 트래킹 백엔드 사용 (RL 없음): {BT_DLL}")
         return VPTrackingProvider(dll_name=BT_DLL)
+
+    # BUNDLE_DIR 가드 (2026-08-11): 여기 도달했다는 것은 MODE가 rl/hybrid* 계열이라는
+    # 뜻이고, 그러려면 RL 번들이 반드시 있어야 합니다. 예전처럼 자리표시자 경로를 남겨두면
+    # 건전성 게이트가 "유한하지만 망가진" 번들을 통과시켜 100% 추락 정책이 조용히 실립니다.
+    # 조용히 무장되는 대신 여기서 멈춥니다.
+    if BUNDLE_DIR is None:
+        raise RuntimeError(
+            f"MODE={MODE!r}는 RL 번들을 요구하지만 BUNDLE_DIR이 None입니다.\n"
+            f"현재 검증된 RL bundle이 없습니다(v4 stage_3=100% 추락, v4 stage_4~7=NaN, "
+            f"v5=100% 자기추락, v6=0승).\n"
+            f"안전한 제출은 MODE=\"vptrack\"입니다 (RL 번들 불필요, 측정 12/30 승).\n"
+            f"vptrack 단독보다 낫다고 측정된 bundle이 생기면 BUNDLE_DIR을 그 경로로 설정하세요."
+        )
 
     bundle_path = ROOT / BUNDLE_DIR
     if not bundle_path.exists():

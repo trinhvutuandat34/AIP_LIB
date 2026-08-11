@@ -88,6 +88,7 @@ from ray.tune.logger import UnifiedLogger
 from DogFightEnvWrapper import DogFightWrapper
 from student.obfm_scenario_wrapper import ObfmScenarioWrapper
 from student.habfm_scenario_wrapper import HabfmScenarioWrapper
+from student.match_scenario_wrapper import MatchScenarioWrapper
 from student.my_callbacks import StudentDogFightCallbacks
 from student.g_limiter import GLimitWrapper
 from dogfight.ai.checkpoint_io import (
@@ -205,6 +206,16 @@ def env_creator(env_config):
     # ~91deg LOS both sides) -- single_agent_env.py never had a "habfm" mode branch
     # at all (not a revert casualty, just never built). Transparent no-op otherwise.
     env = HabfmScenarioWrapper(env)
+    # MatchScenarioWrapper applies the OFFICIAL match geometry -- initial_scenario.mode
+    # "match_base" (prelim + rounds 1-3: antiparallel beam merge, 2000-3000 ft) and
+    # "match_tiebreak" (round 4+). It existed since 2026-08-07 but was wired only into the eval
+    # scripts, never here, so a curriculum stage asking for match_base would have gone straight
+    # to single_agent_env.py, which has no branch for either mode, and trained the DEFAULT spawn
+    # while its name and logs claimed the match geometry. That is the same silent-no-op class as
+    # the G limiter shipping inert and _recycle_native_bts() skipping hybrid. Wiring it here
+    # first, so the stages can be added against a wrapper that is actually in the loop.
+    # Transparent no-op for every other initial_scenario.mode.
+    env = MatchScenarioWrapper(env)
     # G limiter on the ACTION path (2026-08-07). The sim enforces no structural limit and hands
     # out up to 14.86 G against a 9 G airframe (scripts/g_limit_check.py). Without this a policy
     # trains against physics the competition server may not allow, and the divergence surfaces on
@@ -665,6 +676,19 @@ _CM_CARRY: dict = {}
 _CM_AGE = [0]
 
 
+def _reset_carry_forward() -> None:
+    """Drop the carried metrics at a stage boundary.
+
+    These are module-level globals, so without this a new stage inherits the PREVIOUS stage's
+    last closed episode and reports it as its own from iteration 0. Measured on v7 (2026-08-11):
+    stage 1 advanced after 10 iterations having closed zero episodes, on stage 0's final episode
+    (`ep_min_distance=733.0757, crash_rate=0.0000`) -- see COMPETITION_PLAN.md 4.1 F6. A stage
+    must start with nothing to report and say so ("n/a") until it measures something itself.
+    """
+    _CM_CARRY.clear()
+    _CM_AGE[0] = 0
+
+
 def _is_missing(v) -> bool:
     if v is None or v == "n/a":
         return True
@@ -693,7 +717,11 @@ def _carry_forward(metrics: dict) -> dict:
         if _CM_CARRY:
             _CM_AGE[0] += 1
             return {**_CM_CARRY, "metrics_age_iters": _CM_AGE[0]}
-        return {**metrics, "metrics_age_iters": "n/a"}
+        # Nothing measured yet in this stage. Every value is missing by the test above, so
+        # normalise them all to "n/a": RLlib reports episode_return_mean as float nan rather
+        # than an absent key, which would otherwise write "nan" into the CSV right next to the
+        # "n/a" the custom metrics write for the very same condition (N3).
+        return {**{k: "n/a" for k in metrics}, "metrics_age_iters": "n/a"}
     _CM_CARRY.clear()
     _CM_CARRY.update(metrics)
     _CM_AGE[0] = 0
@@ -701,8 +729,17 @@ def _carry_forward(metrics: dict) -> dict:
 
 
 def _extract_custom_metrics(result: dict) -> dict:
-    cm = result.get("env_runners", {}).get("custom_metrics", {})
+    env_m = result.get("env_runners", {})
+    cm = env_m.get("custom_metrics", {})
     return _carry_forward({
+        # N3 (2026-08-11): reward_mean / ep_len_mean are published by the SAME event as the
+        # custom metrics -- an episode closing -- so they belong inside the same carry and share
+        # its metrics_age_iters. Read straight off env_runners (as they were until now) they came
+        # back `nan` on 163 of v7's 194 rows, numeric on exactly the 7 iterations that closed an
+        # episode, leaving the primary optimizer-health signal unreadable on 84% of iterations.
+        # E2's carry-forward had only ever covered the custom-metric path.
+        "reward_mean":       env_m.get("episode_return_mean", "n/a"),
+        "ep_len_mean":       env_m.get("episode_len_mean",    "n/a"),
         "win_rate":          _cm_get(cm, "win"),
         "loss_rate":         _cm_get(cm, "loss"),
         "timeout_rate":      _cm_get(cm, "timeout"),
@@ -811,11 +848,13 @@ class CurriculumTrainer:
         if args.observation_module:
             env_preview_config["observation_module"] = args.observation_module
         env_preview = env_creator(env_preview_config)
-        # env_creator() returns HabfmScenarioWrapper(ObfmScenarioWrapper(DogFightWrapper(...))) --
-        # .unwrapped drills through both scenario wrappers to the actual DogFightWrapper, which is
-        # the one that has .config. Neither wrapper defines __getattr__ forwarding (this Gymnasium
-        # version's gym.Wrapper doesn't either), so env_preview.config itself would raise
-        # AttributeError on the outer wrapper.
+        # env_creator() returns a wrapper stack -- currently
+        # GLimitWrapper(MatchScenarioWrapper(HabfmScenarioWrapper(ObfmScenarioWrapper(
+        # DogFightWrapper(...))))). .unwrapped drills through all of them to the actual
+        # DogFightWrapper, which is the one that has .config, so this stays correct as wrappers
+        # are added. None of them defines __getattr__ forwarding (this Gymnasium version's
+        # gym.Wrapper doesn't either), so env_preview.config itself would raise AttributeError
+        # on the outer wrapper.
         preview_config = env_preview.unwrapped.config
         self.base_env_config = {
             **env_preview_config,
@@ -920,6 +959,10 @@ class CurriculumTrainer:
               f"max_iter={stage.max_iterations}  resume_from={start_iter}")
         print(f"{'='*60}")
 
+        # F6 (2026-08-11): the carried metrics are module-level globals and must not survive a
+        # stage boundary, or this stage reports the previous one's last episode as its own.
+        _reset_carry_forward()
+
         stage_env_config = build_stage_env_config(self.base_env_config, stage)
         env_name = f"dogfight-curriculum-stage{stage.index}"
         register_env(env_name, env_creator)
@@ -965,7 +1008,13 @@ class CurriculumTrainer:
                 )
 
                 stage_state["iterations_trained"]    = it + 1
-                stage_state["metric_history"]        = metric_window[-stage.advance_window * 2:]
+                # F6: advancement consumes per-episode rows, and those are ~1 in 27, so keeping a
+                # flat tail of raw rows would persist a window with no episodes in it and make
+                # every --resume re-earn the full advance_window from scratch. Persist the
+                # episode rows themselves; raw carried rows add nothing a resume can use.
+                stage_state["metric_history"] = [
+                    m for m in metric_window if m.get("metrics_age_iters") == 0
+                ][-stage.advance_window * 2:]
                 state["total_iterations_elapsed"]    = self._total_iter
                 state["updated_at"]                  = _now()
                 self._save_state(state)
@@ -976,11 +1025,31 @@ class CurriculumTrainer:
 
                 self._print_row(stage.index, it, metrics)
 
-                window = metric_window[-stage.advance_window:]
+                # F6 (2026-08-11): advance on DISTINCT EPISODES, not on rows.
+                #
+                # _carry_forward repeats the last measured episode on every iteration that
+                # closes none (~26 of every 27), so a row window is mostly copies of a single
+                # episode and its "rolling average" is not an average over episodes at all.
+                # Measured on v7 stage 0: the 10-row window held 8 copies of one non-crashing
+                # episode plus 2 of a crashing one, so the gate saw crash_rate=0.2000 and
+                # passed a crash_rate_max=0.30 threshold -- while the true rate over the
+                # stage's 7 episodes was 0.8571. It advanced on a 20% crash rate that was
+                # really 86%.
+                #
+                # Selecting only the fresh rows gives one row per closed episode, so
+                # advance_window=10 means what it was always meant to mean: an average over 10
+                # measurements. check_advancement() lives in src/dogfight/ai/curriculum.py --
+                # inside the no-edit boundary -- so this is fixed by choosing what we hand it,
+                # not by changing how it averages.
+                episode_window = [
+                    m for m in metric_window if m.get("metrics_age_iters") == 0
+                ]
+                window = episode_window[-stage.advance_window:]
                 if len(window) >= stage.advance_window:
                     ok, reason = check_advancement(stage, window)
                     if ok:
-                        print(f"\n  ✓ Stage {stage.index} advancement: {reason}")
+                        print(f"\n  ✓ Stage {stage.index} advancement: {reason} "
+                              f"(over {len(window)} episodes)")
                         break
 
             stage_state["status"] = "completed"
@@ -1033,17 +1102,36 @@ class CurriculumTrainer:
             record_dir = (ROOT / "artifacts" / "records" /
                           self.args.output_name / self.args.output_tag /
                           f"stage_{stage.index}")
+            # N4 (2026-08-11): training_record._to_markdown() reads item["iteration"] and
+            # item["episode_len_mean"]; our rows are keyed total_iter / ep_len_mean. The first
+            # raised KeyError('iteration') at EVERY stage advancement and the except below turned
+            # it into a one-line warning, so no training_record.json/.md was ever written for any
+            # stage and nothing failed loudly. The second missed silently through .get() and
+            # printed n/a for every episode length. training_record.py is inside the src/dogfight
+            # no-edit boundary, so the row shape is adapted here rather than the reader changed.
+            record_history = [
+                {
+                    **m,
+                    "iteration": m.get("total_iter", m.get("iter_in_stage")),
+                    "episode_len_mean": m.get("ep_len_mean", "n/a"),
+                }
+                for m in metric_window
+            ]
             save_training_record(
                 output_dir=record_dir,
                 algorithm_name=self.algorithm_name,
                 cli_args=vars(self.args),
                 env_config=stage_env_config,
                 algorithm_config={},
-                result_history=metric_window,
+                result_history=record_history,
                 workspace_root=ROOT,
             )
         except Exception as rexc:
+            # Print the traceback, not just the message: this failure mode presented for months
+            # as the bare string "'iteration'", which named the missing key but not the file,
+            # line, or reader that wanted it.
             print(f"  [WARNING] Training record save failed: {rexc}")
+            traceback.print_exc()
 
     def _build_algorithm(self, stage: CurriculumStage, env_config: dict, env_name: str):
         args = self.args
@@ -1343,7 +1431,8 @@ class CurriculumTrainer:
         it: int,
         algorithm: Any,
     ) -> dict:
-        env_m   = result.get("env_runners", {})
+        # reward_mean / ep_len_mean now come from _extract_custom_metrics, which carries them
+        # forward alongside the custom metrics under one shared metrics_age_iters (N3).
         custom  = _extract_custom_metrics(result)
         learner = _extract_learner_stats(result)
         _fill_algorithm_runtime_stats(learner, algorithm)
@@ -1351,8 +1440,6 @@ class CurriculumTrainer:
             "stage":             stage_idx,
             "iter_in_stage":     it,
             "total_iter":        self._total_iter,
-            "reward_mean":       env_m.get("episode_return_mean", "n/a"),
-            "ep_len_mean":       env_m.get("episode_len_mean",    "n/a"),
             **custom,
             **learner,
         }

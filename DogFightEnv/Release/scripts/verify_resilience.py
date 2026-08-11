@@ -178,12 +178,81 @@ def verify_supervisor() -> None:
         SR.time.sleep = real_sleep
 
 
+# ── added 2026-08-11 ──────────────────────────────────────────────────────────
+# Three gaps found while re-verifying this file's subject. The cases above cover a provider that
+# hiccups occasionally and a client whose run() drops or crashes; these cover a provider that is
+# broken for the REST OF THE MATCH, a server we cannot reach AT ALL (make_client itself failing,
+# which the run()-based cases never exercise), and close() throwing on the way out.
+def verify_sustained_faults() -> None:
+    print("\nSustained / connect-time faults -- the match-day shapes not covered above:")
+
+    class _AlwaysBroken(ActionProvider):
+        def __init__(self):
+            self.calls = 0
+
+        def compute_action(self, context):
+            self.calls += 1
+            if self.calls == 1:                      # one good action to seed the fallback
+                return ActionResult(action=np.array([0.3, -0.2, 0.1, 0.7], np.float32), source="good")
+            raise RuntimeError("provider broken for the rest of the match")
+
+        def close(self):
+            raise RuntimeError("close exploded")
+
+    inner = _AlwaysBroken()
+    provider = ResilientActionProvider(inner)
+    ctx = ActionContext(sim=None, opponent_sim=None)
+    provider.compute_action(ctx)
+    bad = 0
+    for _ in range(500):
+        r = provider.compute_action(ctx)
+        a = np.asarray(r.action).reshape(-1)
+        if a.shape != (4,) or not np.all(np.isfinite(a)):
+            bad += 1
+    check("500 consecutive provider failures still yield usable actions", bad == 0,
+          f"{bad} bad of 500")
+
+    try:
+        provider.close()
+        closed_ok = True
+    except Exception:
+        closed_ok = False
+    check("close() swallows an inner exception", closed_ok)
+
+    # make_client() itself failing -- i.e. we cannot even open a socket. The _Client cases above
+    # all assume construction succeeds, so this path was untested.
+    sleeps: list[float] = []
+    real_sleep = SR.time.sleep
+    SR.time.sleep = lambda s: sleeps.append(s)
+    try:
+        attempts = {"n": 0}
+
+        def flaky_make_client():
+            attempts["n"] += 1
+            if attempts["n"] <= 8:
+                raise OSError("cannot reach server")
+            raise KeyboardInterrupt()
+
+        try:
+            supervise_client(flaky_make_client, max_backoff_sec=5.0, log=lambda *a, **k: None)
+            survived = True
+        except Exception:
+            survived = False
+        check("survives 8 consecutive CONNECT failures and keeps retrying",
+              survived and attempts["n"] == 9, f"{attempts['n']} attempts")
+        check("backoff grows then caps during a connect outage",
+              bool(sleeps) and max(sleeps) <= 5.0 and max(sleeps) > 1.0, f"sleeps={sleeps}")
+    finally:
+        SR.time.sleep = real_sleep
+
+
 def main() -> int:
     print("=" * 72)
     print("Pre-submission resilience check (no server required)")
     print("=" * 72)
     verify_provider()
     verify_supervisor()
+    verify_sustained_faults()
     print("\n" + "=" * 72)
     if FAILURES:
         print(f"FAILED {len(FAILURES)} check(s): {', '.join(FAILURES)}")

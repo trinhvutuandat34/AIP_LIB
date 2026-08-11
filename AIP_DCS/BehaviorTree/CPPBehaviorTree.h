@@ -11,6 +11,7 @@
 #include "../Geometry/Quaternion.h"
 #include "./BT_Content/BlackBoard/CPPBlackBoard.h"
 #include "./BT_Content/Functions.h"
+#include "./BT_Content/GateTrace.h"
 #include "../Geometry/Controller_CY.h"
 
 
@@ -66,6 +67,10 @@ public:
 	BT::Tree tree;	// C++ 비헤비어트리 트리
 	CPPBlackBoard* BB;	// C++ 비헤비어 트리의 기본 블랙보드 방식이 쓰레기 수준이라 따로 블랙보드 클래스를 구현하여 사용
 	StickController Controller; // 제어기. 비헤비어트리에서 VP(추적점)을 생성하면 그 VP를 향하여 움직이게 하는 Roll Pitch Yaw 커멘드 값을 생성
+	// Gate-selection trace state (2026-08-11). Per-tree by design: both aircraft tick on the same
+	// thread, so a static would share the tick counter and change-detection between them. Costs
+	// one long long + one std::string per tree and is untouched unless AIP_BT_GATE_TRACE is set.
+	GateTrace::State GateTraceState;
 public:
 
 
