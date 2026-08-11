@@ -1089,17 +1089,36 @@ class CurriculumTrainer:
             record_dir = (ROOT / "artifacts" / "records" /
                           self.args.output_name / self.args.output_tag /
                           f"stage_{stage.index}")
+            # N4 (2026-08-11): training_record._to_markdown() reads item["iteration"] and
+            # item["episode_len_mean"]; our rows are keyed total_iter / ep_len_mean. The first
+            # raised KeyError('iteration') at EVERY stage advancement and the except below turned
+            # it into a one-line warning, so no training_record.json/.md was ever written for any
+            # stage and nothing failed loudly. The second missed silently through .get() and
+            # printed n/a for every episode length. training_record.py is inside the src/dogfight
+            # no-edit boundary, so the row shape is adapted here rather than the reader changed.
+            record_history = [
+                {
+                    **m,
+                    "iteration": m.get("total_iter", m.get("iter_in_stage")),
+                    "episode_len_mean": m.get("ep_len_mean", "n/a"),
+                }
+                for m in metric_window
+            ]
             save_training_record(
                 output_dir=record_dir,
                 algorithm_name=self.algorithm_name,
                 cli_args=vars(self.args),
                 env_config=stage_env_config,
                 algorithm_config={},
-                result_history=metric_window,
+                result_history=record_history,
                 workspace_root=ROOT,
             )
         except Exception as rexc:
+            # Print the traceback, not just the message: this failure mode presented for months
+            # as the bare string "'iteration'", which named the missing key but not the file,
+            # line, or reader that wanted it.
             print(f"  [WARNING] Training record save failed: {rexc}")
+            traceback.print_exc()
 
     def _build_algorithm(self, stage: CurriculumStage, env_config: dict, env_name: str):
         args = self.args
