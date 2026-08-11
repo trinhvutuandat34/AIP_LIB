@@ -31,3 +31,10 @@ DogFightEnv/Release/logs/
 *.log
 *.bak
 *.bak_*
+
+# Local build/experiment leftovers (2026-08-06). Release.zip is 4.7 GB -- GitHub rejects any
+# single file over 100 MB, so committing it breaks the push outright; the probe DLLs and
+# bt_probe/ are throwaway A/B artifacts, not runtime assets.
+DogFightEnv/Release.zip
+DogFightEnv/Release/AIP_BASE_item13*.dll
+DogFightEnv/Release/bt_probe/
