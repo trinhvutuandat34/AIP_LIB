@@ -710,6 +710,8 @@ def parse_args():
                        help=f"{_side} vptrack engagement LOS half-angle (default 45 deg).")
         p.add_argument(f"--{_side}-vptrack-throttle", type=int, choices=[0, 1], default=None,
                        help=f"{_side} vptrack range/throttle control (default off; measured null).")
+        p.add_argument(f"--{_side}-vptrack-defensive", type=int, choices=[0, 1], default=None,
+                       help=f"{_side} defensive break when losing the gun duel (default off).")
     p.add_argument("--match-los-deg", type=float, default=None,
                    help="Override each aircraft's LOS-off-nose for match_* modes. The "
                         "rounds-1-3 slide art supports two readings: 90 (antiparallel and "
@@ -757,6 +759,8 @@ def main():
         vptrack_los_deg=args.ownship_vptrack_los_deg,
         vptrack_throttle=(None if args.ownship_vptrack_throttle is None
                           else bool(args.ownship_vptrack_throttle)),
+        vptrack_defensive=(None if args.ownship_vptrack_defensive is None
+                           else bool(args.ownship_vptrack_defensive)),
     )
     # Capture vp_valid so a SAFE_VP zero substitution is distinguishable from a genuine zero
     # aimpoint. Wrapping is transparent; see VPProbe.
@@ -772,6 +776,8 @@ def main():
         vptrack_los_deg=args.target_vptrack_los_deg,
         vptrack_throttle=(None if args.target_vptrack_throttle is None
                           else bool(args.target_vptrack_throttle)),
+        vptrack_defensive=(None if args.target_vptrack_defensive is None
+                           else bool(args.target_vptrack_defensive)),
     )
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)

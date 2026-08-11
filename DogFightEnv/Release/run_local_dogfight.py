@@ -62,7 +62,7 @@ def _verify_bundle_if_present(bundle_dir: str, observation_mode: str, observatio
         verify_bundle_observation(bundle_payload, observation_mode, observation_module)
 
 
-def _vptrack_kwargs(range_m, los_deg, throttle) -> dict:
+def _vptrack_kwargs(range_m, los_deg, throttle, defensive=None) -> dict:
     """Per-side overrides for VPTrackingProvider, omitting any left as None.
 
     Added 2026-08-06 to make ASYMMETRIC evaluation possible. Both aircraft read one global
@@ -79,6 +79,8 @@ def _vptrack_kwargs(range_m, los_deg, throttle) -> dict:
         kw["engage_los_deg"] = float(los_deg)
     if throttle is not None:
         kw["throttle_control"] = bool(throttle)
+    if defensive is not None:
+        kw["defensive_break"] = bool(defensive)
     return kw
 
 
@@ -96,6 +98,7 @@ def build_provider(
     vptrack_range_m: float | None = None,
     vptrack_los_deg: float | None = None,
     vptrack_throttle: bool | None = None,
+    vptrack_defensive: bool | None = None,
 ):
     if backend == "fixed":
         return None
@@ -105,7 +108,7 @@ def build_provider(
         # Native BT for tactics/throttle, student-space control law for terminal pointing.
         # See student/controller_providers.py for the measured defect this bypasses.
         return VPTrackingProvider(dll_name=bt_dll, **_vptrack_kwargs(
-            vptrack_range_m, vptrack_los_deg, vptrack_throttle))
+            vptrack_range_m, vptrack_los_deg, vptrack_throttle, vptrack_defensive))
     if backend in ("hybrid_vptrack", "hybrid_gated"):
         # hybrid_vptrack: plain residual on the fixed floor. MEASURED 2026-08-06 to be strictly
         #   WORSE than the floor alone (0/30 wins vs 12/30) -- the residual's magnitude dwarfs
@@ -121,7 +124,7 @@ def build_provider(
         return hybrid_cls(
             primary_provider=rl_provider,
             secondary_provider=VPTrackingProvider(dll_name=bt_dll, **_vptrack_kwargs(
-                vptrack_range_m, vptrack_los_deg, vptrack_throttle)),
+                vptrack_range_m, vptrack_los_deg, vptrack_throttle, vptrack_defensive)),
             mode=hybrid_mode,
             alpha=alpha,
             residual_scale=residual_scale,

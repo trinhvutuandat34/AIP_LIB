@@ -141,6 +141,41 @@ RANGE_P = 1.0 / 400.0     # full authority at 400 m of range error
 CLOSURE_D = 1.0 / 40.0    # damping on per-step closure, so it settles instead of oscillating
 THROTTLE_AUTHORITY = float(os.environ.get("DOGFIGHT_VPTRACK_THR_AUTH", "0.7"))
 
+# ---- Deny damage (defensive break) -----------------------------------------------------
+# EVERYTHING in this controller had been offensive. Measured in self-play (N=30, match_base):
+# damage dealt 11.85 vs damage TAKEN 11.86 -- perfectly symmetric, because nothing anywhere in
+# the stack considers not being shot. In a fight where both sides score equally and neither
+# dies (53% draws), a point of damage denied is worth exactly as much as a point dealt, and it
+# is the only asymmetry never explored.
+#
+# NOT blanket evasion. Self-play rewards mutual passivity -- a config that avoids damage by
+# disengaging scores well here and loses the real match on damage differential (the competition
+# adjudicates a timeout on who dealt more, COMPETITION_RULES.md Sec 5). So this fires only when
+# we are LOSING the gun duel: the opponent is inside their own WEZ range band on us AND their
+# ATA is tighter than ours, i.e. they will score before we do. If we are better aligned we keep
+# tracking and win the exchange.
+#
+# The break itself is a max-rate turn INTO the threat: same roll-to-pull machinery as the
+# tracking law (roll to put the threat in the pull plane) but with full pitch instead of
+# error-proportional. That both spoils their tracking solution and generates angles, rather
+# than running away, which only prolongs their shot.
+# MEASURED 2026-08-06 -- IT WORKS AND IT IS STILL NOT WORTH SHIPPING. Default OFF.
+#   self-play vs champion   W/D/L 7/14/9 (control 7/16/7), win rate 23.3% both
+#                           damage taken 11.86 -> 7.55 (-36%), deaths 3 -> 0
+#                           damage dealt 11.85 -> 7.99 (-33%)
+#   vs BT (passivity guard) 70.0% vs 73.3%, same 8 kills -- no regression, guard passes
+# The mechanism does exactly what it claims: it denies damage and we are never shot down. But
+# it costs offence almost exactly 1:1, so the DIFFERENTIAL barely moves and the phased record
+# is slightly worse. Breaking off a shot to avoid one is a wash when both sides shoot equally
+# well -- and the competition scores a timeout on differential, not on survival
+# (COMPETITION_RULES.md Sec 5).
+# WORTH RE-TESTING against an opponent that out-shoots us, where trading 1:1 is a gain rather
+# than a wash -- e.g. the organizers' cutoff model. Enable with DOGFIGHT_VPTRACK_DEFENSIVE=1
+# or --{side}-vptrack-defensive 1.
+DEFENSIVE_BREAK = os.environ.get("DOGFIGHT_VPTRACK_DEFENSIVE", "0") not in ("0", "false", "False")
+THREAT_ATA_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_THREAT_ATA", "8.0"))
+WEZ_MIN_M, WEZ_MAX_M = 152.4, 914.4
+
 # Aim at the target LOS, not the BT's VP. The VP is 86.4-86.8 deg off target during gun-hold,
 # which is the whole problem. Flip to True to A/B the VP-following path.
 AIM_AT_VP = False
@@ -194,11 +229,14 @@ class VPTrackingProvider(BTActionProvider):
         # "BTActionProvider.__init__() got an unexpected keyword argument 'throttle_control'".
         # It never surfaced earlier because the flag had only ever been set via env var.
         self.throttle_control = bool(kwargs.pop("throttle_control", THROTTLE_CONTROL))
+        self.defensive_break = bool(kwargs.pop("defensive_break", DEFENSIVE_BREAK))
+        self.threat_ata_deg = float(kwargs.pop("threat_ata_deg", THREAT_ATA_DEG))
         super().__init__(*args, **kwargs)
         self._los_error_sum = 0.0
         self._prev_range_m: float | None = None
         self._override_steps = 0
         self._total_steps = 0
+        self._break_steps = 0
 
     def reset(self, context: ActionContext | None = None) -> None:
         # The base class reset() is a deliberate no-op (native BT is kept alive across episode
@@ -209,6 +247,28 @@ class VPTrackingProvider(BTActionProvider):
         self._los_error_sum = 0.0
         self._prev_range_m = None
         return super().reset(context)
+
+    def _losing_gun_duel(self, own, tgt, rng: float, own_ata_deg: float) -> bool:
+        """True when the opponent will score before we do.
+
+        Their ATA (angle from THEIR nose to us) is what puts us in their gun cone, so it is
+        computed from the target's own body axes, not ours. Requires all three: they are inside
+        their scoring range band, their ATA is inside the threat threshold, and their ATA is
+        tighter than ours -- the last term is what keeps this from degenerating into evasion.
+        """
+        if not (WEZ_MIN_M <= rng <= WEZ_MAX_M):
+            return False
+        tgt_fwd, _, _ = body_axes(tgt)
+        to_us = np.array([
+            float(own[StateIndex.N]) - float(tgt[StateIndex.N]),
+            float(own[StateIndex.E]) - float(tgt[StateIndex.E]),
+            -(float(own[StateIndex.D]) - float(tgt[StateIndex.D])),
+        ])
+        n = float(np.linalg.norm(to_us))
+        if not np.isfinite(n) or n <= 0:
+            return False
+        tgt_ata = float(np.arccos(_clamp(float(np.dot(tgt_fwd, to_us / n)), -1.0, 1.0)) * RADTODEG)
+        return tgt_ata < self.threat_ata_deg and tgt_ata < own_ata_deg
 
     def _range_throttle(self, rng: float, bt_throttle: float) -> float:
         """Close to the high-damage edge of the WEZ band, without overshooting through it.
@@ -308,6 +368,16 @@ class VPTrackingProvider(BTActionProvider):
             -1.0,
             1.0,
         )
+        # DENY DAMAGE. If the opponent will score before we do, stop flying the predictable
+        # tracking solution and break INTO them at max rate: same roll (put the threat in the
+        # pull plane) but full pitch instead of error-proportional. Overrides the offensive
+        # commands rather than blending, because a half-committed break is the worst of both.
+        if self.defensive_break and self._losing_gun_duel(own, tgt, rng, los_deg):
+            self._break_steps += 1
+            roll_cmd = _clamp(K_ROLL * phi / np.pi, -1.0, 1.0)
+            pitch_cmd = -1.0
+            rudder_cmd = 0.0          # uncoordinated rudder only slows the roll rate here
+
         throttle_cmd = self._range_throttle(rng, bt_throttle) if self.throttle_control else None
         return roll_cmd, pitch_cmd, rudder_cmd, throttle_cmd
 
@@ -349,6 +419,7 @@ class VPTrackingProvider(BTActionProvider):
         info.update({
             "ctrl_source": "vptrack",
             "ctrl_override_steps": self._override_steps,
+            "ctrl_break_steps": self._break_steps,
             "ctrl_total_steps": self._total_steps,
         })
         return ActionResult(
