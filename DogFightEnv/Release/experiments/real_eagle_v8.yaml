@@ -1,0 +1,141 @@
+# real_eagle v8 (2026-08-11) - the first campaign whose stage gates measure what they claim,
+# and the first to train the geometry the competition actually opens with.
+#
+# v7 was stopped after 313 iterations because its stage advances were invalid. Do NOT resume v7,
+# and do not compare against its stage results -- they are void. Full detail in
+# References and Manuals/COMPETITION_PLAN.md 4.1 F6.
+#
+# WHAT IS DIFFERENT FROM v7. Again none of it is a hyperparameter.
+#
+#  1. THE ADVANCEMENT GATE NOW MEASURES WHAT IT NAMES (4.1 F6). Two defects, both from E2's
+#     carry-forward:
+#       * the carried metrics were module-level globals never cleared between stages, so a new
+#         stage inherited the previous stage's last episode. v7's stage 1 advanced after 10
+#         iterations having closed ZERO episodes of its own.
+#       * the gate averaged over ROWS, not episodes. carry-forward repeats the last measured
+#         episode on every iteration that closes none (~26 of 27), so v7's stage 0 final window
+#         was 8 copies of its single non-crashing episode plus 2 of a crashing one. It read
+#         crash_rate=0.2000, passed a crash_rate_max=0.30 gate, and advanced -- while the TRUE
+#         rate over that stage's 7 episodes was 0.8571.
+#     Now: carry is reset at each stage boundary, and the gate consumes one row per closed
+#     episode, so advance_window=10 means an average over 10 real measurements.
+#
+#  2. THE CURRICULUM TRAINS THE OFFICIAL BEAM MERGE (4.1 F8, F8-STAGES). v7's own header called
+#     this "the single highest-value change available to this campaign" and then did not do it.
+#     Done now: match_base_wide (914.4 m) -> match_base_close (609.6 m) -> match_base
+#     (609.6-914.4 m sampled, the competition preset), all at 4572 m / 200 m/s / LOS 90 deg,
+#     replacing two-circle alphas 45/90/135/180 (which spawned at ~3500-5486 m, a geometry no
+#     round presents). Alphas 0/3/5/8/12 are KEPT -- their 152 m lateral-spacing analysis is real
+#     BFM at ranges the match does produce. 17 -> 16 stages.
+#     MatchScenarioWrapper is now wired into train_curriculum.env_creator(); before 2026-08-11 it
+#     was in the eval scripts only, so a match_base stage would have silently trained the DEFAULT
+#     spawn while its name and logs claimed otherwise.
+#
+#  3. TELEMETRY GAPS CLOSED. reward_mean/ep_len_mean were read straight off env_runners and were
+#     `nan` on 163 of v7's 194 rows; they are now carried with the custom metrics under one shared
+#     metrics_age_iters. And every stage advancement was silently failing to write its
+#     training_record (KeyError 'iteration', swallowed into a one-line warning) -- fixed, and the
+#     handler now prints the traceback.
+#
+#  4. G LIMITER carried from v7, and now measured FREE: 80 self-play/peer episodes at N=30 each
+#     reproduce the pre-limiter win rates within sampling error (4.1 F11). In-match G is ~1.5
+#     against a 10 G cap, so it costs nothing and removes a train/deploy divergence.
+#
+# WHAT TO CHECK EARLY -- this replaces v7's telemetry check, which now passes trivially:
+#     * rows with metrics_age_iters == 0 should appear roughly every 27 iterations. Those are the
+#       only rows the gate counts and the only ones worth averaging by hand.
+#     * NO stage should advance before ten such rows exist within it. If one does, F6 has
+#       regressed -- stop and read train_curriculum._run_stage's episode_window.
+#     * a stage's first rows should read "n/a", NOT the previous stage's numbers.
+#
+# WHAT THIS DOES NOT FIX, stated so the run is not misread as a fresh start:
+#     * v7's stage 0 crashed on 8 of its first 9 closed episodes, with ep_altitude_penalty_steps
+#       firing on exactly those 8 and zero on the survivor. NOTHING here addresses that. v8 will
+#       report it honestly instead of advancing past it -- which means stage 0 may now sit at
+#       max_iterations rather than falsely advancing. That is the fix working, not a new failure.
+#     * the ~1.2 G ceiling (4.1 F12) is DOWNSTREAM of the action: both controllers already command
+#       full aft stick most of the time and still get ~1.2 G, and G is *higher* at low pitch
+#       command than at full. It will bound this policy exactly as it bounds the BT. No reward or
+#       hyperparameter change reaches it.
+#
+# COST, measured from v7 rather than assumed (4.1 F6-COST): 101.8 env steps/iteration at
+# ~10.9 s/iter against 2,734-step episodes = ~27 iterations per episode, so an honest 10-episode
+# gate is ~268 iterations ~= 49 min per stage, ~13 h for 16 stages. Sampling was deliberately NOT
+# changed to speed this up: raising steps/iteration does not reduce the ~27k env steps a 10-episode
+# gate needs and would alter SAC's update-to-data ratio, and shortening episodes would change what
+# flight_survival means. Hyperparameters stay identical to v6/v7 so v8 remains comparable.
+#
+# run:
+#   python scripts\run_experiment.py experiments\real_eagle_v8.yaml
+# dry-run (validate wiring, no training):
+#   python scripts\run_experiment.py experiments\real_eagle_v8.yaml --dry-run
+
+name: real_eagle_v8
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: v8
+
+env:
+  observation_mode: custom
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  observation_module: student.my_observation_v2
+
+curriculum:
+  stages_module: student.my_curriculum
+
+algo:
+  name: sac
+  framework: torch
+  lr: 3.0e-4
+  gamma: 0.997
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  replay_buffer_capacity: 300000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+runtime:
+  # Kept from v5/v6/v7: remote workers hit msgpack-OOM / concat_episode races on this box.
+  # Measured cost, and why it is accepted rather than tuned: 101.8 env steps per iteration at
+  # ~10.9 s/iter, so a 10-episode advance gate is ~268 iterations (~49 min) per stage. See the
+  # COST note in this file's header -- raising this does not reduce the env steps a gate needs,
+  # it only relabels them across fewer, longer iterations, while changing the update-to-data
+  # ratio and breaking comparability with v6/v7.
+  num_env_runners: 0
+  # Safe: this resumes v8's OWN state file if v8 is interrupted and relaunched. It can never pick
+  # up v7 -- that is keyed by tag. Do NOT point a v7 tag at this file: the match_base ladder
+  # changed the MEANING of every stage index after the first two-circle stage, and
+  # _init_or_load_state() cannot repair an index whose meaning changed under a completed stage.
+  resume: true
+
+policy_probe:
+  enabled: true
+  interval: 10
+  steps: 4
+  print: true
+
+engagement_log:
+  enabled: true
+  interval: 100
+  steps: 400
+  episodes: 1
+  print: true
+
+notes: >
+  real_eagle v8 (2026-08-11). First campaign whose stage gates average over real episodes rather
+  than over carried rows (v7 stage 0 advanced reading crash_rate=0.2000 when the true per-episode
+  rate was 0.8571; stage 1 advanced on zero episodes of its own), and the first to train the
+  official beam merge -- a match_base ladder replaces two-circle alphas 45/90/135/180, 16 stages
+  total. reward_mean no longer nan on most rows, and stage training_records actually save.
+  Hyperparameters unchanged from v6/v7 so the campaigns stay comparable. Expect ~49 min per stage
+  (~13 h): an honest 10-episode gate costs ~268 iterations at this sampling rate. Stage 0's
+  self-crash from v7 is NOT fixed here -- v8 will report it instead of advancing past it.
