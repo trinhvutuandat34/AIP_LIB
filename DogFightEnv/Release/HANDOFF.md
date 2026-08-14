@@ -43,7 +43,7 @@ number in these docs is an upper bound -- our own BT never shoots.
 |---|---|
 | `student/my_submission.py` | `MODE="vptrack"`, `TEAM_NAME="real_eagle"`. Loads **no RL bundle**. G-limited at 10 G. |
 | `BUNDLE_DIR` | **`None`** (set 2026-08-11). Was a placeholder path to `v4/stage_3`, a **100 %-crash** policy that the health gate passes because it is finite-but-degenerate. Selecting any `rl`/`hybrid*` mode now **raises** instead of silently arming it. Replace with a validated bundle path when one exists. |
-| `SERVER_IP` | `221.151.77.208` -- **unconfirmed**, differs from `startup_command.txt`'s `10.185.16.247`. Confirm with organizers. Two network incidents = DQ. |
+| `SERVER_IP` | `221.151.77.208` -- **not a real value to chase down.** Confirmed 2026-08-13: the organizers have not released a competition address yet. This, `startup_command.txt`'s `10.185.16.247`, and a third value found this session (`172.30.1.49`) are all team members' own personal machines used for ad-hoc practice, not candidates for "which is correct." Wait for the official announcement; do not guess. **Port is also unconfirmed** -- the only two real connectivity tests on record (`startup_command.txt` git history) both used `6666`, never the `9999` hardcoded here, and `COMPETITION_RULES.md` states no port at all. Confirm IP and port together when the real one lands. Two network incidents = DQ. |
 | `AIP_BASE.dll` / `AIP_BASE_target.dll` | Built 2026-08-06 15:08, newer than every `AIP_DCS` source (newest `Controller_CY.cpp`, 14:26). **No rebuild owed.** |
 | `Rule_forTraining.xml` / `Rule_real_eagle.xml` | **Byte-identical** (MD5 `5C5979DB...`). Both carry `Gate2_BeamMerge`. `my_submission.py` loads `Rule_forTraining.xml`. |
 | G limiter | Active on **every** path -- eval, `run_local_dogfight`, live submission, and RL training (`GLimitWrapper`). |
@@ -216,12 +216,16 @@ report kills/damage alongside win rate (a config once held 73.1 % while damage c
 
 1. **The DQ workstream, and it is now unambiguously first.** It has never been started, it is the
    only item here that loses the competition regardless of how well the aircraft flies (two network
-   incidents = DQ), and it needs no compute. Two parts, neither reachable from this repo alone:
-   **(a)** a live induced packet-loss / latency rehearsal against a practice or competition server
-   -- `student/submission_resilience.py` and `scripts/verify_resilience.py` pass under in-process
-   fault injection but **no real UDP server has ever been in the loop**; **(b)** confirm
-   `SERVER_IP` with the organizers -- `my_submission.py` has `221.151.77.208`,
-   `startup_command.txt` has `10.185.16.247`, and they disagree.
+   incidents = DQ), and it needs no compute. Two parts: **(a)** a live induced packet-loss /
+   latency rehearsal against a real listening server -- `student/submission_resilience.py` and
+   `scripts/verify_resilience.py` pass under in-process fault injection but **no real UDP server
+   has ever been in the loop**. Does NOT need to wait on (b): `DogFightViewer.exe`
+   (`Windows/BattleServer_V0.2/`) is how the team runs personal practice sessions and can stand in
+   as a real server locally -- rehearse against that first. **(b)** confirmed 2026-08-13: the
+   organizers have not released a competition `SERVER_IP` yet (4.1 **F27**). Every value currently
+   in this codebase is a team member's personal machine, not a candidate to pick between --
+   there is nothing to confirm until the official announcement, and the port is unconfirmed too
+   (only `6666` has ever been in a real tested command; `9999` is untested boilerplate).
 2. **Finish the re-baseline** (4.1 **F26-OWED**). Four geometries were re-measured post-F25;
    **A2, A3, A5, C6, the Gate 3 energy thresholds and the `Task_Notch` carve-out are still void
    and un-re-run** -- every one of them was a verdict on a branch that never executed. B1/B2
