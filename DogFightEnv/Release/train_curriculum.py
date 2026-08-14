@@ -216,6 +216,31 @@ def env_creator(env_config):
     # first, so the stages can be added against a wrapper that is actually in the loop.
     # Transparent no-op for every other initial_scenario.mode.
     env = MatchScenarioWrapper(env)
+    # ResidualBTWrapper (2026-08-13) trains the policy as a CORRECTION on the native BT
+    # (final = BT + scale*policy) instead of as a standalone controller. OFF unless a YAML sets
+    # env.residual_training.enabled, so every existing config -- including v8 -- is byte-identical
+    # in behaviour. v1-v8 all trained standalone; "hybrid" was only ever assembled at inference by
+    # StudentHybridProvider, so those bundles were optimised for a job they were never given,
+    # which is a plausible part of why D3-REBASED measured every hybrid config as <= vptrack alone.
+    # The composition here is verified algebraically identical to the inference one by
+    # scripts/verify_residual_wrapper.py -- which caught a real throttle-halving bug in the first
+    # draft, so do not change either side without re-running it.
+    # Placed INSIDE GLimitWrapper so the G limiter clamps the FINAL composed action; limiting the
+    # bare policy residual before the BT term is added would clamp the wrong quantity.
+    residual_cfg = cfg.get("residual_training") or {}
+    if residual_cfg.get("enabled"):
+        from student.residual_training_wrapper import ResidualBTWrapper
+        env = ResidualBTWrapper(
+            env,
+            dll_name=residual_cfg.get("bt_dll", "AIP_BASE.dll"),
+            residual_scale=float(residual_cfg.get("residual_scale", 0.35)),
+        )
+        print(
+            f"[env_creator] ResidualBTWrapper ACTIVE -- policy trains as a residual on "
+            f"{residual_cfg.get('bt_dll', 'AIP_BASE.dll')} at scale "
+            f"{residual_cfg.get('residual_scale', 0.35)}",
+            flush=True,
+        )
     # G limiter on the ACTION path (2026-08-07). The sim enforces no structural limit and hands
     # out up to 14.86 G against a 9 G airframe (scripts/g_limit_check.py). Without this a policy
     # trains against physics the competition server may not allow, and the divergence surfaces on
