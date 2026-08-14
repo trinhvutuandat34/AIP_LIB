@@ -233,9 +233,21 @@ def _build_action_provider_raw():
     # student 쪽 제어 법칙이 가져간다. 2026-08-06 측정(N=30, OBFM, 동일 시드):
     # 승률 0/30 -> 12/30, WEZ 접촉 0/30 -> 30/30, 자기추락 0. RL 번들이 전혀 필요 없으므로
     # 번들 상태와 무관하게 안전하다 -- 즉 MODE="bt"보다 강한 새로운 안전 바닥이다.
+    # THROTTLE_CONTROL=True 명시 (2026-08-13, 4.1 F29-THROTTLE-CONFIRMED). 이전에는
+    # controller_providers.THROTTLE_CONTROL 기본값(off)에 의존했습니다. 두 가지 이유로 여기서
+    # 명시적으로 켭니다.
+    #   (1) 측정 결과가 뒤집혔습니다. F2-CHAMPION은 "null", F14는 "harmful"로 기록했지만
+    #       그 측정들은 전술 계층이 죽어 있던 트리(F25 이전)에서 나온 것입니다. 살아 있는
+    #       트리에 대해 peer rig로 3개 시드 N=30씩 재측정한 결과, 패배율이 매 시드마다
+    #       감소했습니다(8 -> 5/5/4), 피해량도 8.31 -> 5.37/4.64/3.21. 통합 N=90에서
+    #       패배율 26.7% -> 15.6%.
+    #   (2) 환경변수(DOGFIGHT_VPTRACK_THROTTLE)에 의존하면 경기 당일 셸에 그 변수가
+    #       설정되지 않았을 때 조용히 예전 동작으로 되돌아갑니다. 제출 경로에서는 추측이
+    #       아니라 코드가 값을 정해야 합니다.
+    # 되돌리려면: throttle_control=False (또는 이 인자를 제거).
     if MODE == "vptrack":
-        print(f"[{TEAM_NAME}] VP 트래킹 백엔드 사용 (RL 없음): {BT_DLL}")
-        return VPTrackingProvider(dll_name=BT_DLL)
+        print(f"[{TEAM_NAME}] VP 트래킹 백엔드 사용 (RL 없음): {BT_DLL} (throttle_control=True)")
+        return VPTrackingProvider(dll_name=BT_DLL, throttle_control=True)
 
     # BUNDLE_DIR 가드 (2026-08-11): 여기 도달했다는 것은 MODE가 rl/hybrid* 계열이라는
     # 뜻이고, 그러려면 RL 번들이 반드시 있어야 합니다. 예전처럼 자리표시자 경로를 남겨두면
