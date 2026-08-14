@@ -1,0 +1,395 @@
+<root main_tree_to_execute = "MainTree">
+
+  <!--
+    RECONSTRUCTED 2026-07-15. The 2026-07-15 accidental full-tree revert (see
+    memory/project_bulk_revert_regression_2026_07_15.md) overwrote this file back to the
+    2-branch Task_Empty placeholder template, wiring the entire BT tactics expansion
+    (Batches A through D, 20 new Task_/Decorator_/Service_ nodes) out of the active tree,
+    even though every Task_*.cpp source file survived untouched on disk.
+
+    This is NOT a guess: it is a direct transcription of the tree sketch and per-node
+    trigger table in the original design plan
+    (~/.claude/plans/i-have-aerial-combat-bt-guide-detailed-m-serene-duckling.md, outside
+    the project directory so the revert never touched it), cross-checked against every
+    Task_*.cpp/DECO_*.cpp file's own providedPorts() and design-intent comments, which
+    independently reference this same Gate 0 to 4 structure by name; for example
+    Task_FlatScissors.cpp says: "Gate 2's shared Sequence (Rule_forTraining.xml) already
+    confirmed close range and mutual off-boresight... before this node is ever ticked".
+
+    One confirmed deviation from the plan's original sketch, applied here: Task_SingleSideOffset
+    is wired as a BARE Fallback child (no wrapping Sequence/DECO_DistanceCheck), per its own
+    cpp comment: a Range 3000 to 5000 XML gate would cut the node off mid-maneuver exactly
+    when Distance drops below 3000m during its own "close" phase, which needs to keep
+    running down to the 2000m handoff. It self-gates its 3000 to 5000m entry internally on a
+    fresh claim instead, the same idiom Task_HighYoYoUp/Task_LowYoYo/Task_Evade already use.
+
+    Gate 0 through 4 naming below matches the plan and the C++ comments exactly, so future
+    edits can cross-reference either source directly.
+
+    NOT verified against the actual compiled AIP_BASE.dll/AIP_BASE_target.dll: this reconstruction
+    was validated via BehaviorTreeFactory tree construction only (bt_factory registration plus XML
+    parse, which catches unknown-node/unknown-port errors), not a live flight test. Confirm with
+    run_local_dogfight.py ownship-backend bt target-backend bt save-log (the plan's own
+    verification step 3) before trusting this in training or submission.
+  -->
+
+  <!--
+    F25 FIX APPLIED 2026-08-13: name= REMOVED from all 17 control nodes in this file.
+    THIS TURNS THE TACTICAL LAYER ON FOR THE FIRST TIME. See COMPETITION_PLAN.md 4.1 F25.
+
+    ROOT CAUSE. BehaviorTree.CPP builds a control node (Sequence/Fallback) with ZERO
+    CHILDREN whenever it carries a name= attribute. Measured at build time via
+    childrenCount(): all 3 anonymous composites had children (1, 8, 9); all 17 NAMED ones
+    had 0. Confirmed causally - deleting only the name attribute from
+    Gate2p5_GunSolutionHold's Sequence, changing nothing else, gave it its 4 children back.
+
+    WHAT THAT MEANT. An empty Sequence returns SUCCESS immediately and an empty Fallback
+    returns FAILURE immediately, so Gate2p5_GunSolutionHold (Sequence, 0 children) SUCCEEDED
+    UNCONDITIONALLY AND WON EVERY TICK, blocking Gates 1/2/3/4 and the tail beneath it, while
+    every other gate block failed or succeeded vacuously. The only nodes that had ever
+    executed in this project's history were Gate0_ClimbToSafeAltitude and
+    Tail_SingleSideOffset - the two bare leaves directly under the anonymous outer Fallback.
+    All 23 Task_* maneuver classes, all five gate blocks and every decorator had NEVER RUN.
+    That is the mechanical explanation for C2, A4 and every positional null in the register.
+
+    SCOPE OF THIS EDIT. Only the 17 <Sequence>/<Fallback> name= attributes were removed
+    (12 Sequence + 5 Fallback). Leaf Task_*/DECO_* names are UNTOUCHED - those nodes work,
+    and their names are what GateTrace.h reports. Verified post-edit: 0 named control nodes
+    remain, 23 Task_ and 29 DECO_ leaf names intact. No DLL rebuild required, XML only.
+
+    CONSEQUENCE FOR READING TRACES. Control nodes no longer carry a name, so GateTrace.h
+    will report them by node type rather than by their old Gate*_ labels. The Gate*_ names
+    survive only in the comments below and in the docs. Re-labelling them for trace
+    readability is a SEPARATE question - do not simply put name= back, that is the bug.
+
+    RE-BASELINE REQUIRED. This is not a tuning change. Every BT-relative measurement taken
+    anywhere in this project before this date is VOID, not merely suspect - they all describe
+    a tree running two leaf tasks. Re-measure from scratch before trusting any prior number.
+
+    REVERT: restore Rule_forTraining.xml.bak_pre_f25_20260813 /
+    Rule_real_eagle.xml.bak_pre_f25_20260813 (both taken immediately before this edit), or
+    git checkout the two rule XMLs.
+  -->
+
+  <BehaviorTree ID="MainTree">
+    <Sequence>
+
+        <!-- EF 부분 트리-->
+        <Sequence>
+          <SelectTarget name="SelectTarget" BB="{BB}"/>
+          <DirectionVectorUpdate name="DirectionVectorUpdate" BB="{BB}"/>
+          <DistanceUpdate name="DistanceUpdateService" BB="{BB}"/>
+          <CheckSight name="CheckSight" BB="{BB}"/>
+          <AngleOffUpdate name="AngleOffUpdate" BB="{BB}"/>
+          <AspectAngleUpdate name="AspectAngleUpdate" BB="{BB}"/>
+          <EnergyStateUpdate name="EnergyStateUpdate" BB="{BB}"/>
+
+          <Fallback>
+
+            <!-- GATE 0 - Survival. Absolute top priority, untouched from the original 8-node tree. -->
+            <Task_ClimbToSafeAltitude name="Gate0_ClimbToSafeAltitude" BB="{BB}"/>
+
+            <!-- GATE 2.5 - Gun-solution hold. MOVED HERE 2026-08-06 (was between Gate 2 and
+                 Gate 3). Kept the "2.5" name so the diff against the old tree stays readable.
+
+                 WHY THE MOVE. The old placement's own comment said it "sits below Gate 1
+                 (threat) and Gate 2 (merge) so survival and the merge still preempt". Measured
+                 2026-08-06, that preemption is not occasional; it is total:
+
+                   * BT vs BT and BT vs a straight-and-level autopilot target, N=20 each, full
+                     200 s: ZERO WEZ contact and zero damage in either direction. 80 episodes
+                     across three configurations, nothing scored.
+                   * A Python mirror of StickController::GetStick fed with the BT's REAL VP
+                     (agreement 0.997 correlation vs the actual RollCMD) shows that during close
+                     tracking the commanded aimpoint sits 83-87 deg AWAY from the target, and
+                     Roll_Effect = 0.0000, so PitchCMD, which is a PRODUCT with Roll_Effect,
+                     is identically zero exactly when we are trying to track.
+                   * An 85-deg-off aimpoint is the signature of the ownship-relative nodes:
+                     Task_Notch writes MyLocation + perp*3000 (exactly perpendicular),
+                     Task_Evade / Task_EnergyTactics / Task_JinkingTurn write
+                     MyLocation + awayFromTarget. Those are Gate 1 and Gate 2 nodes.
+
+                 So the tree reaches gun geometry (range is achieved ~3 % of steps, min ATA
+                 4.4 deg) and then hands the tick to a defensive node before Gate 2.5 is ever
+                 evaluated. Gate 2.5 is not failing its own decorators; it is not being reached.
+
+                 The reference BT architecture in the AI Combat SDK guide orders its selector
+                 HardDeck -> GunEngagement -> ThreatResponse -> offense, i.e. the SHOT above the
+                 THREAT reaction, and states the principle directly ("offense beats defense;
+                 BreakTurn only when necessary", "removing unnecessary defensive branches made
+                 the tree stronger"). That guide is a DIFFERENT competition with a 12 deg WEZ
+                 cone, so its thresholds must NOT be copied here where the cone is 1 deg, but
+                 the ordering principle applies, and a 1 deg cone makes it matter more, not
+                 less: we can least afford a defensive branch spending our tracking ticks.
+
+                 Survival (Gate 0) still preempts everything, which is the one ordering the
+                 reference also keeps absolute.
+
+                 REVERT: move this whole Sequence back between Gate 2 and Gate 3 (a marker
+                 comment is left at the old location), or restore
+                 Rule_forTraining.xml.bak_gateorder_20260806.
+                 UNVALIDATED at the time of writing; the BT vs autopilot baseline (0/20 WEZ
+                 contact) is the control to re-run against. -->
+            <Sequence>
+              <DECO_DistanceCheck name="Gun_DistGt152p4" UpDown="Greater" Distance="152.4" BB="{BB}"/>
+              <DECO_DistanceCheck name="Gun_DistLt914" UpDown="Less" Distance="914" BB="{BB}"/>
+              <!-- WIDENED 5 -> 8 deg (2026-08-05): pseudo-hysteresis dwell, no rebuild. True
+                   enter/exit hysteresis needs a RUNNING latch (SyncActionNode forbids RUNNING ->
+                   C++ change); widening the single hold gate is the rebuild-free approximation,
+                   holds the track through a defender's jink out to 8 deg instead of dropping at
+                   5, giving the pure-pursuit loop more dwell to grind ATA toward the 1.0-deg WEZ.
+                   Shares 8 deg with Gate 1's carve-out (complementary). Range stays 150-914 m
+                   (physical gun range; WEZ max 914.4 m). Revert = 8 back to 5. -->
+              <DECO_LOSCheck name="Gun_OwnATA_Lt8" UpDown="Less" InputLOS="8" Which="Own" BB="{BB}"/>
+              <Task_GunTrack name="Gun_Track" BB="{BB}"/>
+            </Sequence>
+
+            <!-- GATE 1 - Immediate threat reaction. Each node self-gates its own trigger
+                 (EnemyInSight_Target / Distance / Los_Degree_Target) internally on a fresh claim;
+                 no XML-level decorators here by design (plan §1). Notch (narrowest: near-beam)
+                 is checked before JinkingTurn (general close-range spoil) before Evade/TheBreak
+                 (widest: any close threat).
+
+                 FIX 2026-07-16 (real competition scenario audit): JinkingTurn's and Evade's C++
+                 gates are EnemyInSight_Target (~191deg hemisphere, no range limit) + Distance
+                 alone; neither excludes a symmetric, neutral head-on merge (HCA>=150, both
+                 sides equally approaching, neither side actually threatened yet). At the real
+                 Prelims starting range (2000-3000ft = ~610-914m), both conditions were trivially
+                 true on BOTH aircraft, so Gate 1 fired a defensive jink/break for BOTH sides on
+                 literally every match's opening merge, and Gate 2's purpose-built
+                 Task_NoseToNoseTurn (below) never got a chance to run, because Gate 1 is checked
+                 first and neither node's gate has any angular awareness. Wrapped both in a
+                 same-threshold (150deg) HCA exclusion so a genuine near-head-on merge defers to
+                 Gate 2 at any range, while non-head-on close threats (the actual intended use
+                 case for both nodes) are unaffected. Verified this doesn't change Gate 1's
+                 outcome for OBFM-defensive (HCA~0, chase geometry) or HABFM (Notch fires first
+                 regardless, ~90deg beam angle never reaches these two nodes). -->
+            <Fallback>
+              <!-- HCA CARVE-OUT (2026-08-11). Task_Notch had NO angular guard, unlike its two
+                   siblings below, which were given HCA less-than-150 exclusions on 2026-08-05 for
+                   exactly this reason. Notch is FIRST in this Fallback and returns SUCCESS
+                   whenever the enemy is within 2000 m at 70 to 110 deg aspect (Task_Notch.cpp),
+                   which is precisely the official beam merge (610 to 914 m, ~90 deg). So it fired
+                   on the spawn tick, Gate 1 succeeded, and the outer Fallback NEVER REACHED
+                   GATE 2, shadowing Gate2_BeamMerge, Gate2_HeadOnMerge, Gate2_OffCenterMerge and
+                   Gate2_NeutralFight alike. That is why C6 re-merge widening and the beam branch
+                   both measured null. Same 150 deg threshold as the siblings, so a genuine
+                   near-head-on merge (HCA 180 at the match spawn) now defers to Gate 2, while
+                   non-head-on close threats, Notch actual intended use, are unaffected.
+                   XML only, no rebuild. Revert: delete this Sequence wrapper and restore the bare
+                   Task_Notch line. See COMPETITION_PLAN.md 4.1 F17. -->
+              <Sequence>
+                <DECO_AngleOffCheck name="Gate1_Notch_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
+                <Task_Notch name="Gate1_Notch" BB="{BB}"/>
+              </Sequence>
+              <!-- DEFENSIVE PRIORITY FIX (2026-08-13, XML-only, no rebuild). The Break was MOVED
+                   ABOVE the jink and gated on an actual gun solution being on US. Read this before
+                   reordering these two back.
+
+                   MEASURED PROBLEM. Post-F25, with the tactical layer running for the first time,
+                   obfm_defensive scores 1W/0D/29L with 16 deaths and 27.51 damage taken (was
+                   0W/30D/0L and 0.00 damage taken purely because the pre-F25 opponent could not
+                   shoot). A gate trace of that geometry
+                   (artifacts/eval/postf25_obfmdef_gatetrace.*) shows the engagement is completely
+                   locked: the attacker runs Gun_Track on 300/300 traced ticks (a continuously held
+                   gun solution at 557 m, their ATA 4.7 deg), and we run Gate1_JinkingTurn on
+                   300/300 ticks with NOTHING ELSE EVER WINNING. Task_Evade never executes.
+
+                   WHY. In this Fallback the order was Notch -> JinkingTurn -> TheBreak, and
+                   JinkingTurn's guards (HCA < 150, own ATA >= 8) are both trivially true in a
+                   chase (HCA ~0, own ATA ~175), so it succeeds every tick and STARVES TheBreak.
+                   We answered a tracking gun with an undifferentiated continuous jink, forever.
+
+                   THE FIX. TheBreak now sits first and carries two extra conditions describing the
+                   situation a break actually answers: the bandit is pointed at us (target ATA
+                   < 20) and inside gun range (< 914 m, the WEZ max). Outside that, it fails and the
+                   jink below still runs exactly as before, so non-gun close threats are unaffected.
+                   Doctrine agrees: Jink/Reversal/Ditch/Radius Defense are responses to a SPECIFIC
+                   weapon employment (COMPETITION_PLAN.md 4.1 section G), which is why F14's
+                   UNCONDITIONAL break measured harmful. Note also BFM_MANEUVER_GAP_REFERENCE.md:
+                   the vertical-reversal family (Split-S, sliceback, pitchback) that genuinely
+                   defeats a tracking gun has NO node in this tree at all, so this fix is the best
+                   available answer with existing nodes, not the doctrinally complete one.
+
+                   REVERT: swap these two Sequences back and delete the two added decorators
+                   (Gate1_Break_TheyArePointed_TgtATA_Lt20, Gate1_Break_InGunRange_DistLt914), or
+                   restore Rule_forTraining.xml.bak_pre_gate1reorder_20260813. -->
+              <Sequence>
+                <DECO_AngleOffCheck name="Gate1_Break_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
+                <!-- Same gun-solution carve-out as Gate1_JinkingTurn below (own ATA >= 8): if WE
+                     have the shot, do not defend. -->
+                <DECO_LOSCheck name="Gate1_Break_NotGunSolution_OwnATA_Ge8" UpDown="Greater" InputLOS="8" Which="Own" BB="{BB}"/>
+                <!-- ADDED 2026-08-13: only break when THEY are pointed at us and in gun range. -->
+                <DECO_LOSCheck name="Gate1_Break_TheyArePointed_TgtATA_Lt20" UpDown="Less" InputLOS="20" Which="Target" BB="{BB}"/>
+                <DECO_DistanceCheck name="Gate1_Break_InGunRange_DistLt914" UpDown="Less" Distance="914" BB="{BB}"/>
+                <Task_Evade name="Gate1_TheBreak" BB="{BB}"/>
+              </Sequence>
+              <Sequence>
+                <DECO_AngleOffCheck name="Gate1_Jink_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
+                <!-- GUN-SOLUTION CARVE-OUT (2026-08-05, XML-only, NO rebuild). Root-cause trace
+                     found Gate 1 (this jink/break) sits ABOVE Gate 2.5 (Gun_Track) with no
+                     angular awareness, so the instant a maneuvering defender's nose sweeps into
+                     our forward hemisphere it yanks the nose off an in-hand shot -> 0 WEZ in 80
+                     eval eps. This DECO_LOSCheck fires the jink ONLY when own ATA >= 8 deg; when
+                     own ATA < 8 (we are tracking a gun solution) it FAILS, so Gate 1 falls
+                     through and Gate 2.5 gets to hold. Shares the 8-deg threshold with the
+                     widened Gun_OwnATA_Lt8 below (complementary: jink >= 8, gun-hold <= 8).
+                     Deliberately aggressive: in a mutual high-aspect pass we keep OUR tracking
+                     shot instead of defending; the failure mode was being too passive. Tune 8
+                     against the geometry trace; revert = delete this one DECO_LOSCheck. -->
+                <DECO_LOSCheck name="Gate1_Jink_NotGunSolution_OwnATA_Ge8" UpDown="Greater" InputLOS="8" Which="Own" BB="{BB}"/>
+                <Task_JinkingTurn name="Gate1_JinkingTurn" BB="{BB}"/>
+              </Sequence>
+            </Fallback>
+
+            <!-- GATE 2 - Merge & neutral-fight detection. -->
+            <Fallback>
+
+              <!-- Head-on merge: HCA>150, both ATA<20, Distance 500-10000m -> covers both the
+                   Prelims opening merge (2000-3000ft = ~610-914m) and the Finals tie-break
+                   (10,000+ft = ~3048m). Floor LOWERED from 3000 to 500 on 2026-07-16 (real
+                   competition scenario audit): the original 3000m floor excluded the entire
+                   Prelims starting range, so this node could only ever fire for the rare Finals
+                   tie-break, never for a normal match's opening merge. 500m keeps a token floor
+                   (this Sequence is for the OPENING merge specifically, not any incidental
+                   close-range head-on alignment later in an already-established fight) while
+                   safely covering the real ~610m minimum. See Gate 1's comment above for the
+                   paired fix that was required for this to actually be reachable. -->
+              <!--; real_eagle 2026-08-06: BEAM MERGE branch ; ADOPTED on mechanism, neutral on
+                   both available benchmarks. Read this before removing it.
+                   PROBLEM IT FIXES (traced): the official match starts antiparallel and abeam at
+                   2000-3000 ft and NO Gate 0-2.5 branch matched that geometry ; Gate1 needs
+                   HCA < 150 (actual 180), Gate2_HeadOnMerge needs BOTH ATAs < 20 (actual ~91),
+                   Gate2p5 needs ATA < 8, Gate2_OffCenterMerge needs 3000-5000 m (actual 610). The
+                   tree fell through to its lowest-priority default, which saturates roll toward an
+                   aimpoint 86 deg off the target and 118 deg off its own nose: a max-rate turn
+                   AWAY. Both aircraft mirrored it to within 0.3 deg, so range grew 610 m ; 3278 m
+                   in 11 s and the match became a 2841 m orbit that timed out 0-0.
+                   MEASURED EFFECT, BT-only both sides, same seed, first 10 s:
+                       shipped        609.8 ; 3084.8 m,  ATA 91.3 ; 118.0 deg  (separating)
+                       this branch    609.8 ; 2298.2 m,  ATA 91.3 ;  79.2 deg  (closing)
+                   i.e. it turns toward the bandit instead of away, which is the behaviour the
+                   tree was missing at the one geometry every prelim round starts from.
+                   WHY IT IS ADOPTED WITHOUT A WIN-RATE GAIN. Neither benchmark can show one:
+                   vs our own BT is saturated (73.3%, 0 losses ; nothing left to convert), and
+                   self-play is symmetric (both aircraft read THIS file, so the edge cancels ;
+                   measured 7W/15D/8L vs 7W/16D/7L baseline, unchanged). The only case where a
+                   better merge pays is an opponent that does NOT have it ; i.e. the actual
+                   competition ; and that is exactly what we cannot test, because the rule XML is
+                   global to both DLLs. Adopted on the mechanism, which is measured, rather than
+                   on a win rate, which is unmeasurable here.
+                   Maneuver chosen by A/B (N=30 each, vs BT): NoseToTail 22/30, LeadTurn 22/30,
+                   OneCircle 21/30, NoseToNose 21/30 ; all within noise, NoseToTail kept because
+                   it produced the cleanest ATA reversal in the trace above.
+                   REVERT: delete this Sequence. -->
+              <Sequence>
+                <DECO_AngleOffCheck name="Gate2_Beam_HCA_Gt120" UpDown="Greater" InputAO="120" BB="{BB}"/>
+                <DECO_LOSCheck name="Gate2_Beam_OwnATA_Gt45" UpDown="Greater" InputLOS="45" Which="Own" BB="{BB}"/>
+                <DECO_LOSCheck name="Gate2_Beam_OwnATA_Lt150" UpDown="Less" InputLOS="150" Which="Own" BB="{BB}"/>
+                <DECO_DistanceCheck name="Gate2_Beam_DistLt2500" UpDown="Less" Distance="2500" BB="{BB}"/>
+                <Task_NoseToTailTurn name="Gate2_Beam_NoseToTail" BB="{BB}"/>
+              </Sequence>
+              <Sequence>
+                <DECO_AngleOffCheck name="Gate2_HCA_Gt150" UpDown="Greater" InputAO="150" BB="{BB}"/>
+                <DECO_LOSCheck name="Gate2_OwnATA_Lt20" UpDown="Less" InputLOS="20" Which="Own" BB="{BB}"/>
+                <DECO_LOSCheck name="Gate2_TgtATA_Lt20" UpDown="Less" InputLOS="20" Which="Target" BB="{BB}"/>
+                <DECO_DistanceCheck name="Gate2_HeadOn_DistGt500" UpDown="Greater" Distance="500" BB="{BB}"/>
+                <DECO_DistanceCheck name="Gate2_HeadOn_DistLt10000" UpDown="Less" Distance="10000" BB="{BB}"/>
+                <Task_NoseToNoseTurn name="Gate2_NoseToNoseTurn" BB="{BB}"/>
+              </Sequence>
+
+              <!-- Off-center merge / re-merge: AA 30-90, Distance 3000-5000m, closing. -->
+              <Sequence>
+                <DECO_AspectAngleCheck name="Gate2_AA_Gt30" UpDown="Greater" AA="30" BB="{BB}"/>
+                <DECO_AspectAngleCheck name="Gate2_AA_Lt90" UpDown="Less" AA="90" BB="{BB}"/>
+                <DECO_DistanceCheck name="Gate2_Remerge_DistGt3000" UpDown="Greater" Distance="3000" BB="{BB}"/>
+                <DECO_DistanceCheck name="Gate2_Remerge_DistLt5000" UpDown="Less" Distance="5000" BB="{BB}"/>
+                <DECO_ClosureRateCheck name="Gate2_Closing" UpDown="Greater" Closure="0" BB="{BB}"/>
+                <Task_LeadTurn name="Gate2_LeadTurn" BB="{BB}"/>
+              </Sequence>
+
+              <!-- Sustained close-range stalemate (neither side breaking off, both off-boresight):
+                   Distance<2000m, both ATA>45 -> Scissors family. Nested Fallback, not a separate
+                   top-level gate, since it's tactically what happens when a merge doesn't resolve
+                   (plan §1) - the direct stalemate-breaker for the documented BT-vs-BT draw. -->
+              <Sequence>
+                <DECO_DistanceCheck name="Gate2_Neutral_DistLt2000" UpDown="Less" Distance="2000" BB="{BB}"/>
+                <DECO_LOSCheck name="Gate2_Neutral_OwnATA_Gt45" UpDown="Greater" InputLOS="45" Which="Own" BB="{BB}"/>
+                <DECO_LOSCheck name="Gate2_Neutral_TgtATA_Gt45" UpDown="Greater" InputLOS="45" Which="Target" BB="{BB}"/>
+                <Fallback>
+                  <Task_FlatScissors name="Gate2_FlatScissors" BB="{BB}"/>
+                  <Task_VerticalScissors name="Gate2_VerticalScissors" BB="{BB}"/>
+                  <Task_RollingScissors name="Gate2_RollingScissors" BB="{BB}"/>
+                </Fallback>
+              </Sequence>
+
+            </Fallback>
+
+            <!-- GATE 2.5 MOVED 2026-08-06: it now sits directly under Gate 0, above Gate 1.
+                 See the block there for the measurement that motivated the move. -->
+
+            <!-- GATE 3 - Energy-ratio guard, scoped narrowly in front of the offensive branches
+                 only (scope decision: leave the existing safety/defensive priority order above
+                 untouched). The "matched" band (now 0.8 to 1.4) falls through unchanged to Gate 4.
+                 EDIT 2026-08-01 (hypothesis H1, energy-guard shadowing): superior threshold raised
+                 1.2 to 1.4. At only a ~20 percent energy edge (1.2), Gate 3 committed to
+                 Task_AnglesTactics (a flat pressing turn) and shadowed the entire Gate 4 selector,
+                 including HighYoYoUp, the better answer when close and overtaking. Reserving the
+                 commitment for a clearer ~40 percent edge routes marginal-advantage geometry to
+                 Gate 4's situation-specific maneuvers instead. The inferior threshold (0.8) is left
+                 ALONE on purpose: it gates Task_EnergyTactics (extend/survive when disadvantaged),
+                 a survival behavior not worth weakening blind. UNTESTED on this box; revert by
+                 changing 1.4 back to 1.2. Reading Task_Notch.cpp REFUTED the paired H3 (Notch
+                 over-fire): Notch already self-gates narrowly (beam 70-110 deg, Distance under
+                 2000 m, 1.5 s cap) and does not fire when we are the one behind, so it was left
+                 untouched. -->
+            <Fallback>
+              <Sequence>
+                <DECO_EnergyRatioCheck name="Gate3_Ratio_Gt1_4" UpDown="Greater" Ratio="1.4" BB="{BB}"/>
+                <Task_AnglesTactics name="Gate3_AnglesTactics" BB="{BB}"/>
+              </Sequence>
+              <Sequence>
+                <DECO_EnergyRatioCheck name="Gate3_Ratio_Lt0_8" UpDown="Less" Ratio="0.8" BB="{BB}"/>
+                <Task_EnergyTactics name="Gate3_EnergyTactics" BB="{BB}"/>
+              </Sequence>
+            </Fallback>
+
+            <!-- GATE 4 - Offensive maneuver selector. Bare Fallback children (plan §1): each
+                 phased node self-gates its own distance/speed/altitude entry internally on a
+                 fresh claim, same idiom as Gate 1. Task_OneCircleFight/Task_LagPursuit are the
+                 original (pre-expansion) pursuit nodes, kept as the fallback within this gate. -->
+            <Fallback>
+              <Task_HighYoYoUp name="Gate4_HighYoYoUp" BB="{BB}"/>
+              <Task_BarrelRollAttack name="Gate4_BarrelRollAttack" BB="{BB}"/>
+              <Task_LowYoYo name="Gate4_LowYoYo" BB="{BB}"/>
+              <Task_NoseToTailTurn name="Gate4_NoseToTailTurn" BB="{BB}"/>
+              <Task_LagDisplacementRoll name="Gate4_LagDisplacementRoll" BB="{BB}"/>
+              <Task_OneCircleFight name="Gate4_OneCircleFight" BB="{BB}"/>
+              <Task_LagPursuit name="Gate4_LagPursuit" BB="{BB}"/>
+            </Fallback>
+
+            <!-- TAIL - final fallback pursuit nodes, from the original 8-node tree, plus the new
+                 pre-filter. Task_SingleSideOffset is BARE (see file header note: a wrapping
+                 Distance 3000-5000 Sequence would cut it off mid-maneuver; it self-gates instead). -->
+            <Task_SingleSideOffset name="Tail_SingleSideOffset" BB="{BB}"/>
+
+            <Sequence>
+              <DECO_DistanceCheck name="Tail_DistGt2000" UpDown="Greater" Distance="2000" BB="{BB}"/>
+              <Task_LeadPursuit name="Tail_LeadPursuit" BB="{BB}"/>
+            </Sequence>
+
+            <Sequence>
+              <DECO_DistanceCheck name="Tail_DistLt2000" UpDown="Less" Distance="2000" BB="{BB}"/>
+              <Task_Pure name="Tail_Pure" BB="{BB}"/>
+            </Sequence>
+
+          </Fallback>
+
+        </Sequence>
+
+
+    </Sequence>
+  </BehaviorTree>
+
+
+</root>
