@@ -1,12 +1,14 @@
 # HANDOFF -- real_eagle (AIP TGC 2026)
 
-Last updated: 2026-08-11. Working dir for every command below: `DogFightEnv/Release/`
+Last updated: 2026-08-13. Working dir for every command below: `DogFightEnv/Release/`
 (PowerShell, `aip` conda env). This file is the operational critical path; the "why"
 lives in `References and Manuals/` (COMPETITION_PLAN.md, PROJECT_ANALYSIS.md, etc.).
 
-> **Rewritten 2026-08-11.** The previous revision was dated 2026-08-01 and told you to rebuild the
-> DLL and run v5. Both are long done and v5 is known-dead. Everything below reflects the tree as it
-> actually stands.
+> **Updated 2026-08-13.** The 2026-08-11 revision told you the BT fix was pending and to launch
+> v8. **The fix is applied** (F25 -> 4.1 F26, commit `5412a79`) and the tactical layer executes
+> for the first time in this project's history; **v8 was retired, not resumed.** Every BT-relative
+> number recorded before 2026-08-13 is void, and the four geometries that were re-measured are in
+> 4.1 F26 -- the rest is listed as still-owed in F26-OWED.
 
 --------------------------------------------------------------------------------
 ## Where the project actually is
@@ -45,18 +47,26 @@ number in these docs is an upper bound -- our own BT never shoots.
 | `AIP_BASE.dll` / `AIP_BASE_target.dll` | Built 2026-08-06 15:08, newer than every `AIP_DCS` source (newest `Controller_CY.cpp`, 14:26). **No rebuild owed.** |
 | `Rule_forTraining.xml` / `Rule_real_eagle.xml` | **Byte-identical** (MD5 `5C5979DB...`). Both carry `Gate2_BeamMerge`. `my_submission.py` loads `Rule_forTraining.xml`. |
 | G limiter | Active on **every** path -- eval, `run_local_dogfight`, live submission, and RL training (`GLimitWrapper`). |
-| `v7` | **STOPPED 2026-08-11 14:33** at stage 2 / 313 iterations. Its stage results are void (F6). Relaunch as **v8**; do not resume v7. |
+| `v7` | **STOPPED 2026-08-11 14:33** at stage 2 / 313 iterations. Its stage results are void (F6). Superseded by v8. |
+| `v8` | **RETIRED 2026-08-13, do not resume.** Killed by an unplanned machine reboot (08:24:38, five minutes after its last checkpoint write) at stage 15/16. All 14 completed stages advanced on `max_iterations_reached`, never on their own gate, and all 31 real episodes measured in stage 15 ended in a crash. Treat as pipeline validation, not a policy. **Eight campaigns, still no usable RL bundle.** |
+| Rule XMLs | **F25 APPLIED 2026-08-13** (`5412a79`) -- the tactical layer executes for the first time. Still byte-identical to each other. See the section below. |
 
 --------------------------------------------------------------------------------
-## !!! v7 is void -- relaunch as v8
+## Curriculum training -- v7 void, v8 retired, and what a v9 would need
 
-v7 was stopped 2026-08-11 14:33 at stage 2 / 313 iterations. Its stage advances were invalid
-(COMPETITION_PLAN.md 4.1 **F6**): the advancement gate averaged over ROWS rather than episodes, so
-stage 0 advanced reading `crash_rate=0.2000` when its true per-episode rate was **0.8571**, and
-stage 1 advanced having closed **zero episodes of its own**. Fixed 2026-08-11. **Do not `--resume`
-v7** -- start a fresh `v8` tag so no stage carries a checkpoint earned under the broken gate.
+**Status 2026-08-13: no campaign is running and none is scheduled.** v7 was stopped 2026-08-11
+(gate bug, F6). v8 ran on the fixed gate and was **retired 2026-08-13** after an unplanned reboot
+killed it at stage 15/16 -- but its results were not worth resuming for: **all 14 completed stages
+advanced on `max_iterations_reached`, never on their own condition**, and all 31 real episodes in
+stage 15 ended in a crash. **Eight campaigns, zero usable bundles.**
 
-What changed, and what it costs:
+**If a v9 is ever launched, two things changed underneath it that matter.** First, the BT opponent
+is now genuinely competent (F25 applied 2026-08-13) -- every earlier campaign trained against a
+tree that ran two leaf tasks, so the difficulty curve is not comparable to v1-v8. Second, and
+against a hard deadline, weigh it against §8 robustness: the DQ workstream has never been started
+and can lose the competition regardless of policy quality.
+
+The v7-era gate fixes below still apply and are still correct:
 - Advancement now consumes **one row per closed episode**, so `advance_window=10` means an average
   over 10 real episodes. Measured cost: **~27 iterations per episode ⇒ ~270 iterations ≈ 49 min
   per stage**. Sampling was deliberately left unchanged (F6-COST).
@@ -91,36 +101,66 @@ destroys the ungated version. It is a config change, not a rebuild.
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
-## !!! PENDING, HELD DELIBERATELY: the behaviour tree is dead code below Gate 2.5
+## DONE 2026-08-13: the tactical layer is ALIVE (F25 applied)
 
-**Do this first when v8 finishes.** `COMPETITION_PLAN.md` 4.1 **F25**: a `name` attribute on a
-control node makes BehaviorTree.CPP build it with **zero children**. Measured at build time via
-`childrenCount()`: all 3 anonymous `<Sequence>`/`<Fallback>` nodes have children (1, 8, 9); **all
-17 named ones have 0.** An empty `Sequence` returns SUCCESS immediately and an empty `Fallback`
-returns FAILURE immediately, so:
+**This section used to say "PENDING, HELD DELIBERATELY". It is applied.** Commit `5412a79`;
+every number and the full detail live in `COMPETITION_PLAN.md` 4.1 **F26**.
 
-- `Gate2p5_GunSolutionHold` (Sequence, 0 children) **succeeds unconditionally and wins every
-  tick**, blocking Gates 1/2/3/4 and the tail
-- every other gate block fails or succeeds vacuously
+`name=` is gone from all 17 control nodes in both rule XMLs. Leaf `Task_*`/`DECO_*` names were
+left alone (they work, and they are what `GateTrace.h` reports). Verified by **instrumentation,
+not outcomes**: the node inventory shows **zero empty composites**, `Gate2p5_GunSolutionHold`
+went 0 -> **4 children**, and **17 nodes across all five gate blocks now win ticks where exactly
+two ever had.** Gate 2.5 correctly **fails** `Gun_OwnATA_Lt8` at the merge (91 deg vs <8 deg)
+instead of succeeding vacuously and swallowing every tick beneath it.
 
-**The only nodes that have ever executed are `Gate0_ClimbToSafeAltitude` and
-`Tail_SingleSideOffset`.** All 23 `Task_*` maneuver classes, all five gate blocks and every
-decorator have never run. This is the mechanical explanation for C2, A4, and every positional null
-in the register.
+**What it is worth**, isolated through the peer rig on `match_base`, N=30, vptrack both sides,
+varying only the opponent's tree: opponent **with** a working tree -> 9W/14D/7L; opponent
+**without** it -> **16W/14D/0L, damage 6.99 / 0.06, zero deaths.**
 
-**Fix: drop `name=` from the 17 control nodes in `Rule_forTraining.xml` / `Rule_real_eagle.xml`.**
-XML-only, no rebuild. Leaf `Task_*` / `DECO_*` names must STAY -- those nodes work and the names
-are what `GateTrace.h` reports.
+**v8 was retired, not resumed** -- an unplanned reboot killed it at 08:24:38 on 2026-08-13 and
+none of its 14 completed stages had advanced on a real gate. There is still **no usable RL
+policy after eight campaigns**, and `MODE="vptrack"` remains the submission.
 
-**Why it is held:** this is not a tuning change, it switches the tactical layer on for the first
-time. v8 is training against `AIP_BASE_target.dll` and reaches its first BT stage (index 4,
-`obfm_offensive`) at iteration 1600; changing the tree before then would swap its opponent
-mid-campaign. Apply after v8 completes, then **re-baseline from scratch** -- every prior BT
-measurement in the register is void once this lands, not merely suspect.
+**Every BT-relative number recorded before 2026-08-13 is VOID**, including rows marked "fixed".
+The re-baseline covers `match_base`, `obfm_offensive`, `obfm_defensive` and `two_circle_headon`.
+Still un-re-run and still void: **A2, A3, A5, C6, the Gate 3 energy thresholds and the
+`Task_Notch` carve-out** (4.1 F26-OWED). F5's and F12's G-ceiling findings are **refuted** --
+there was never a control-law ceiling, it was an aircraft not manoeuvring.
 
-Verify with: `AIP_BT_GATE_TRACE=<path> python scripts\eval_v5_vs_bt.py --ownship-backend bt
---target-backend bt --scenario-mode match_base --episodes 1` and check the `.nodes.txt` dump shows
-non-zero child counts for the gate composites.
+Re-verify any time with:
+```powershell
+$env:AIP_BT_GATE_TRACE="<path>"
+python scripts\eval_v5_vs_bt.py --ownship-backend bt --target-backend bt --scenario-mode match_base --episodes 1 --ownship-bt-dll AIP_BASE_gatetrace.dll --target-bt-dll AIP_BASE_gatetrace_target.dll --out-csv <path>.eval.csv
+```
+Check `<path>.nodes.txt` shows non-zero child counts for every composite. **The deployed
+`AIP_BASE*.dll` are the 2026-08-06 build and do NOT contain `GateTrace.h`** -- the instrumented
+build is at `bin/debug.x64/AIP_DCS.dll`, copied to `AIP_BASE_gatetrace*.dll`, which is why those
+two flags are needed. Those copies are local-only and untracked, the same add-only pattern as
+`AIP_BASE_item13.dll`; recreate with
+`Copy-Item bin\debug.x64\AIP_DCS.dll DogFightEnv\Release\AIP_BASE_gatetrace.dll` if missing.
+
+--------------------------------------------------------------------------------
+## !!! READ BEFORE CHANGING THE BEHAVIOUR TREE
+
+**Never adopt OR reject a BT change on a symmetric measurement.** Both DLLs sit in `Release/` and
+read one global `Rule_forTraining.xml`, so an ordinary eval gives BOTH aircraft your change and
+systematically inflates it. Score BT changes through `scripts/setup_peer_bt.py` only:
+
+```powershell
+python scripts\setup_peer_bt.py --xml experiments\rule_variants\<baseline>.xml
+python scripts\eval_v5_vs_bt.py --ownship-backend vptrack --target-backend vptrack --scenario-mode match_base --episodes 30 --target-bt-dll bt_peer/AIP_BASE_target.dll
+```
+
+This is not theoretical. A Gate 1 reorder measured **10W/18D/2L -> 21W/8D/1L** the ordinary way
+and looked like a large win; through the peer rig it was **6W/11D/13L against a 9W/14D/7L
+control**, i.e. losing better than 2:1 on the confirmed competition geometry. Reverted
+(4.1 F26-GATE1-REJECTED); variant kept at
+`experiments/rule_variants/gate1_break_first_EXPERIMENTAL.xml`. The tell was visible in the
+symmetric numbers and is F5's lesson: **wins rose while kills fell 4->1 and damage dealt fell
+7.71->4.43.** Report kills and damage differential alongside win rate, always.
+
+Do **not** also pass `--bt-rule-xml` with the peer rig -- `activate_rule_xml()` copies over our
+live file and silently restores symmetry.
 
 --------------------------------------------------------------------------------
 ## Regression guards -- run these before committing compute or submitting
@@ -172,26 +212,44 @@ report kills/damage alongside win rate (a config once held 73.1 % while damage c
 - Any pre-2026-07-14 practice-match result involving the RL or hybrid backend: the policy was
   flying with a corrupted throttle channel.
 
-## Open follow-ups, in priority order
-1. **Launch v8.** The config exists -- `experiments/real_eagle_v8.yaml`, dry-run clean, 16 stages:
-   ```powershell
-   python scripts\run_experiment.py experiments\real_eagle_v8.yaml
-   ```
-   Then check the first stage behaves: rows with `metrics_age_iters == 0` should appear about
-   every 27 iterations, no stage should advance until ten of them exist, and a stage's first rows
-   should read `n/a` rather than the previous stage's numbers. Expect **~49 min per stage, ~22 h total**. **Never point a v7 tag at this curriculum** -- the match_base ladder changed the
+## Open follow-ups, in priority order (rewritten 2026-08-13)
+
+1. **The DQ workstream, and it is now unambiguously first.** It has never been started, it is the
+   only item here that loses the competition regardless of how well the aircraft flies (two network
+   incidents = DQ), and it needs no compute. Two parts, neither reachable from this repo alone:
+   **(a)** a live induced packet-loss / latency rehearsal against a practice or competition server
+   -- `student/submission_resilience.py` and `scripts/verify_resilience.py` pass under in-process
+   fault injection but **no real UDP server has ever been in the loop**; **(b)** confirm
+   `SERVER_IP` with the organizers -- `my_submission.py` has `221.151.77.208`,
+   `startup_command.txt` has `10.185.16.247`, and they disagree.
+2. **Finish the re-baseline** (4.1 **F26-OWED**). Four geometries were re-measured post-F25;
+   **A2, A3, A5, C6, the Gate 3 energy thresholds and the `Task_Notch` carve-out are still void
+   and un-re-run** -- every one of them was a verdict on a branch that never executed. B1/B2
+   uniquely survive, because `Gate0_ClimbToSafeAltitude` was one of the only two live nodes.
+   Score any BT change through the peer rig, never symmetrically.
+3. **Re-sweep the champion controller envelope.** 2500 m / 45° / throttle-off was tuned by sweep
+   (F2-CHAMPION) against a tree flying a stale aim point, and it is **what ships**. There is no
+   reason to assume it is still the optimum now that the BT manoeuvres underneath it. ~8 x N=30.
+4. **The defensive role** (4.1 **F26-DEFENSIVE**). `obfm_defensive` is 1W/0D/**29L** with 16
+   deaths once the opponent can shoot. `defensive_break` is a measured no-op and the Gate 1
+   reorder was rejected on `match_base`; the untested idea is to gate the break on own-ATA > 90 so
+   it fires only when the bandit is genuinely behind our 3-9 line. Note the scope: `match_base` is
+   the confirmed prelim geometry and we are even there; OBFM presets are unconfirmed (§4 row 6).
+5. **A v9 is optional and should be justified against items 1-3.** Eight campaigns have produced
+   zero usable bundles. The BT opponent is now genuinely competent, so v1-v8 difficulty is not
+   comparable. If launched: `python scripts\run_experiment.py experiments\real_eagle_v8.yaml`
+   under a fresh tag, expect ~49 min/stage and ~22 h, and check rows with
+   `metrics_age_iters == 0` appear about every 27 iterations with no stage advancing until ten
+   exist. **Never point a v7 tag at this curriculum** -- the `match_base` ladder changed the
    meaning of every stage index after the first two-circle stage.
-2. **Ask the organizers whether each side gets its own rule XML.** If yes, `Gate2_BeamMerge` and
-   every future BT change becomes locally measurable; if no, they can only be adopted on mechanism
-   (4.1 **F1-BLIND**).
-3. **The ~4 G ceiling** (4.1 **F5**): the aircraft never exceeds 3.95 G p95 though the action path
-   delivers 14.86 G. It bounds the BT and would bound any RL policy identically.
-4. **The DQ workstream has never been started** and is the largest un-mitigated risk to a podium
-   result. `student/submission_resilience.py` exists but has never been stress-tested.
-5. ~~`match_base` stages are not in the curriculum.~~ **DONE 2026-08-11** (F8, F8-STAGES): the
-   wrapper is wired into training and the ladder exists -- `match_base_wide` → `match_base_close`
-   → `match_base`, replacing two-circle alphas 45/90/135/180. **v8 is the first campaign that will
-   train the geometry the competition actually opens with.** Watch those three stages first.
+
+~~Ask the organizers whether each side gets its own rule XML.~~ **RESOLVED 2026-08-11/13.** It is
+a local-harness property, not a competition one (F1-BLIND-RESOLVED), and `scripts/setup_peer_bt.py`
+now makes per-side rules work locally -- proven across full N=30 runs, see the section above.
+
+~~The ~4 G ceiling (F5).~~ **REFUTED 2026-08-13** (4.1 **F26-G-CEILING**). There was never a
+control-law ceiling: it was an aircraft not manoeuvring. Post-fix, BT pitch saturation fell
+84% -> 37.8% and G median rose 1.16 -> 2.06 with p95 21.45, against F5's "never exceeds 3.95".
 
 ## Guardrails (compliance -- keep it this way)
 - `src/dogfight/**` is a hard no-edit boundary. Route new logic through `student/**`,
@@ -200,5 +258,12 @@ report kills/damage alongside win rate (a config once held 73.1 % while damage c
   `aircraft/`, `engine/`, `scripts/*_cruise.xml`) -- content edits only.
 - Preserve `src/dogfight/unreal/protocol.py`'s wire format. Keep `--action-repeat 6`
   (the 1/6 s compute-budget rule) matched to training `step_ratio=6`.
-- **"It is in the tree" is not "it is wired in."** Three features have shipped inert
-  (`DECO_BFMCheck`, `_recycle_native_bts()` for hybrid, the G limiter). Show a call site.
+- **"It is in the tree" is not "it is wired in."** Five things have shipped inert:
+  `DECO_BFMCheck`, `_recycle_native_bts()` for hybrid, the G limiter, `MatchScenarioWrapper`
+  (F8) -- and, for the entire project until 2026-08-13, **the whole behaviour tree below
+  Gate 2.5** (F25). Show a call site, or a trace.
+- **Parse-check every rule XML edit.** `--` is illegal inside an XML comment and will make the
+  tree fail to build; a 2026-08-13 edit hit exactly this and was caught only by an explicit
+  `[xml]` parse before the eval ran. That is why existing comments in the file use `;` where an
+  arrow or dash would read more naturally. A naive regex for `--` gives false positives on the
+  `-->` terminator -- trust the parser.

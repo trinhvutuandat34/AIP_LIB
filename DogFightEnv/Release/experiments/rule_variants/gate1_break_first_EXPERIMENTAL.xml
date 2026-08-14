@@ -182,6 +182,48 @@
                 <DECO_AngleOffCheck name="Gate1_Notch_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
                 <Task_Notch name="Gate1_Notch" BB="{BB}"/>
               </Sequence>
+              <!-- DEFENSIVE PRIORITY FIX (2026-08-13, XML-only, no rebuild). The Break was MOVED
+                   ABOVE the jink and gated on an actual gun solution being on US. Read this before
+                   reordering these two back.
+
+                   MEASURED PROBLEM. Post-F25, with the tactical layer running for the first time,
+                   obfm_defensive scores 1W/0D/29L with 16 deaths and 27.51 damage taken (was
+                   0W/30D/0L and 0.00 damage taken purely because the pre-F25 opponent could not
+                   shoot). A gate trace of that geometry
+                   (artifacts/eval/postf25_obfmdef_gatetrace.*) shows the engagement is completely
+                   locked: the attacker runs Gun_Track on 300/300 traced ticks (a continuously held
+                   gun solution at 557 m, their ATA 4.7 deg), and we run Gate1_JinkingTurn on
+                   300/300 ticks with NOTHING ELSE EVER WINNING. Task_Evade never executes.
+
+                   WHY. In this Fallback the order was Notch -> JinkingTurn -> TheBreak, and
+                   JinkingTurn's guards (HCA < 150, own ATA >= 8) are both trivially true in a
+                   chase (HCA ~0, own ATA ~175), so it succeeds every tick and STARVES TheBreak.
+                   We answered a tracking gun with an undifferentiated continuous jink, forever.
+
+                   THE FIX. TheBreak now sits first and carries two extra conditions describing the
+                   situation a break actually answers: the bandit is pointed at us (target ATA
+                   < 20) and inside gun range (< 914 m, the WEZ max). Outside that, it fails and the
+                   jink below still runs exactly as before, so non-gun close threats are unaffected.
+                   Doctrine agrees: Jink/Reversal/Ditch/Radius Defense are responses to a SPECIFIC
+                   weapon employment (COMPETITION_PLAN.md 4.1 section G), which is why F14's
+                   UNCONDITIONAL break measured harmful. Note also BFM_MANEUVER_GAP_REFERENCE.md:
+                   the vertical-reversal family (Split-S, sliceback, pitchback) that genuinely
+                   defeats a tracking gun has NO node in this tree at all, so this fix is the best
+                   available answer with existing nodes, not the doctrinally complete one.
+
+                   REVERT: swap these two Sequences back and delete the two added decorators
+                   (Gate1_Break_TheyArePointed_TgtATA_Lt20, Gate1_Break_InGunRange_DistLt914), or
+                   restore Rule_forTraining.xml.bak_pre_gate1reorder_20260813. -->
+              <Sequence>
+                <DECO_AngleOffCheck name="Gate1_Break_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
+                <!-- Same gun-solution carve-out as Gate1_JinkingTurn below (own ATA >= 8): if WE
+                     have the shot, do not defend. -->
+                <DECO_LOSCheck name="Gate1_Break_NotGunSolution_OwnATA_Ge8" UpDown="Greater" InputLOS="8" Which="Own" BB="{BB}"/>
+                <!-- ADDED 2026-08-13: only break when THEY are pointed at us and in gun range. -->
+                <DECO_LOSCheck name="Gate1_Break_TheyArePointed_TgtATA_Lt20" UpDown="Less" InputLOS="20" Which="Target" BB="{BB}"/>
+                <DECO_DistanceCheck name="Gate1_Break_InGunRange_DistLt914" UpDown="Less" Distance="914" BB="{BB}"/>
+                <Task_Evade name="Gate1_TheBreak" BB="{BB}"/>
+              </Sequence>
               <Sequence>
                 <DECO_AngleOffCheck name="Gate1_Jink_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
                 <!-- GUN-SOLUTION CARVE-OUT (2026-08-05, XML-only, NO rebuild). Root-cause trace
@@ -197,12 +239,6 @@
                      against the geometry trace; revert = delete this one DECO_LOSCheck. -->
                 <DECO_LOSCheck name="Gate1_Jink_NotGunSolution_OwnATA_Ge8" UpDown="Greater" InputLOS="8" Which="Own" BB="{BB}"/>
                 <Task_JinkingTurn name="Gate1_JinkingTurn" BB="{BB}"/>
-              </Sequence>
-              <Sequence>
-                <DECO_AngleOffCheck name="Gate1_Break_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
-                <!-- Same gun-solution carve-out as Gate1_JinkingTurn above (own ATA >= 8). -->
-                <DECO_LOSCheck name="Gate1_Break_NotGunSolution_OwnATA_Ge8" UpDown="Greater" InputLOS="8" Which="Own" BB="{BB}"/>
-                <Task_Evade name="Gate1_TheBreak" BB="{BB}"/>
               </Sequence>
             </Fallback>
 
