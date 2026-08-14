@@ -33,25 +33,37 @@ USAGE
 Our side keeps reading Release/Rule_forTraining.xml, so do NOT pass --bt-rule-xml as well:
 bt_rule_manager.activate_rule_xml() copies over that live file and would change our side too.
 
-!!! KNOWN BROKEN BEYOND EPISODE 0 -- READ THIS BEFORE USING (2026-08-11, COMPETITION_PLAN 4.1 F18)
+THIS RIG WORKS. It is the ONLY valid instrument for scoring a BT change (2026-08-13).
 
-    The peer's rule file is in effect for the FIRST EPISODE ONLY. Measured three ways: adding
-    Gate2_BeamMerge, gating Task_Notch, and DELETING Gate1_ThreatReaction outright each changed
-    only episode 0 -- in vptrack (29/30 identical) and in BT-vs-BT (9/10 identical). Deleting a
-    whole gate block cannot be inert, so from episode 1 the peer is not building from its own XML;
-    eval_v5_vs_bt.py's _recycle_native_bts() re-creates the tree between episodes and the peer's
-    file stops being the source.
+    An earlier revision of this docstring carried a large "KNOWN BROKEN BEYOND EPISODE 0" warning
+    from COMPETITION_PLAN 4.1 F18. THAT WARNING WAS WRONG and is removed. F18 observed that three
+    separate peer tree changes each moved only episode 0 and concluded the rig stopped delivering
+    per-side rules after episode 1. F19 then blamed the harness, and F20 refuted both by direct
+    measurement: every eval log shows exactly 60 "Behavior Tree Initialized" for 30 episodes x 2
+    aircraft and zero "BT already exists", i.e. _recycle_native_bts() destroys and rebuilds both
+    trees every episode and each re-reads its own XML. The rig was fine the whole time.
 
-    A multi-episode A/B through this rig therefore measures NOTHING, and it measures nothing
-    QUIETLY -- the result looks like an ordinary symmetric null. That is how F16 came to record
-    "Gate2_BeamMerge is null" on 29/30 identical episodes; it has been withdrawn.
+    The real reason those edits moved nothing was F25: a name= attribute on a control node made
+    BehaviorTree.CPP build it with ZERO children, so 17 of 20 composites were empty shells and
+    essentially the entire tactical layer was dead code. The edits were to branches that never
+    executed. F25 was fixed 2026-08-13 and this rig was then used across full N=30 runs with the
+    peer genuinely in effect throughout.
 
-    --verify does NOT catch this: it runs --episodes 1, which is exactly the episode that works.
-    It was vacuous for the runs it was meant to license.
+    PROVEN IN USE (2026-08-13), both N=30 on match_base, vptrack both sides:
+      * ours (F25-fixed) vs peer on the pre-F25 tree  -> 16W/14D/0L, damage 6.99/0.06
+        against a 9W/14D/7L symmetric control. That is the measurement F1-BLIND said was
+        impossible and it is what established the F25 fix is worth shipping.
+      * ours (F25 + a Gate 1 reorder) vs peer on F25-only -> 6W/11D/13L, i.e. the rig REJECTED a
+        change that a symmetric same-tree-both-sides comparison had made look like a large win
+        (21W/8D/1L). The change was reverted on this evidence.
 
-    TO FIX: make the recycler rebuild the peer's BT from the peer DLL each episode. Until then,
-    use this rig for single-episode trajectory comparison only, and treat any N>1 result from it
-    as unmeasured rather than null.
+    THE STANDING RULE THAT FOLLOWS: never adopt or reject a BT change on a symmetric measurement.
+    Both aircraft read one global rule XML, so any same-tree-both-sides comparison gives BOTH
+    sides the change and systematically inflates it. Score BT changes through this rig only.
+
+    --verify runs --episodes 1. That is a resolution check, not a licence for an N>1 run; re-run
+    it whenever the peer directory may have gone stale, and sanity-check that your result is not
+    silently symmetric (see the two traps below).
 """
 from __future__ import annotations
 
