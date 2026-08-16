@@ -306,9 +306,16 @@ def verify_f8_wiring() -> None:
 
     fn = next(n for n in ast.walk(ast.parse((ROOT / "train_curriculum.py").read_text("utf-8")))
               if isinstance(n, ast.FunctionDef) and n.name == "env_creator")
-    applied = [n.value.func.id for n in ast.walk(fn)
-               if isinstance(n, ast.Assign) and isinstance(n.value, ast.Call)
-               and isinstance(n.value.func, ast.Name) and n.value.func.id.endswith("Wrapper")]
+    # SORT BY LINE NUMBER -- ast.walk() is breadth-first, NOT source order, so any wrapper applied
+    # inside a conditional (ResidualBTWrapper, 2026-08-13) is yielded AFTER the top-level ones and
+    # lands spuriously last. That made the "GLimitWrapper stays outermost" check below fail on a
+    # tree whose runtime order was verified correct (GLimitWrapper -> ResidualBTWrapper ->
+    # MatchScenarioWrapper -> ... -> DogFightWrapper). A guard that cries wolf gets ignored, which
+    # is worse than no guard, so it sorts explicitly rather than trusting traversal order.
+    applied = [name for _, name in sorted(
+        (n.lineno, n.value.func.id) for n in ast.walk(fn)
+        if isinstance(n, ast.Assign) and isinstance(n.value, ast.Call)
+        and isinstance(n.value.func, ast.Name) and n.value.func.id.endswith("Wrapper"))]
     check(f"MatchScenarioWrapper applied in env_creator (order: {applied})",
           "MatchScenarioWrapper" in applied)
     check("GLimitWrapper stays outermost", applied and applied[-1] == "GLimitWrapper")

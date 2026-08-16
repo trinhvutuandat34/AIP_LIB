@@ -1,5 +1,35 @@
-# real_eagle v8 (2026-08-11) - the first campaign whose stage gates measure what they claim,
-# and the first to train the geometry the competition actually opens with.
+# real_eagle v9_residual (2026-08-13) - THE FIRST CAMPAIGN THAT TRAINS THE POLICY AS A RESIDUAL
+# ON THE NATIVE BT, and the first to train against a behaviour tree whose tactical layer actually
+# executes.
+#
+# ==========================================================================================
+# WHAT IS DIFFERENT FROM v8 -- read this before comparing v9 against any earlier campaign.
+# ==========================================================================================
+#
+#  A. RESIDUAL TRAINING (env.residual_training below, 4.1 F26/D3-REBASED). v1-v8 all trained
+#     STANDALONE policies -- the network had to learn flight, survival AND tactics from a blank
+#     init. "Hybrid" was only ever assembled at INFERENCE by StudentHybridProvider
+#     (final = BT + 0.35*policy), so every bundle was optimised for a job it was never given.
+#     That is a plausible part of why D3-REBASED measured every hybrid config as <= vptrack alone.
+#     v9 composes the SAME arithmetic during training, so the policy learns the correction it will
+#     actually be asked to make. Verified algebraically identical to the inference composition by
+#     scripts/verify_residual_wrapper.py -- which caught a real throttle-halving bug in the first
+#     draft. Re-run it after touching either side.
+#
+#  B. THE OPPONENT IS A DIFFERENT, MUCH STRONGER AIRCRAFT (4.1 F25/F26). v1-v8 trained against a
+#     tree that ran exactly TWO leaf nodes: a `name=` attribute made BehaviorTree.CPP build all 17
+#     named composites with ZERO children, so the whole tactical layer was dead code. Fixed
+#     2026-08-13. The BT opponent now runs 17 nodes across all five gate blocks, went from 0 to 2
+#     kills in BT-vs-BT and from 8 to 967 WEZ-contact steps. **v9's difficulty curve is therefore
+#     NOT comparable to v1-v8's** -- a worse-looking v9 stage result may mean a harder opponent,
+#     not a worse policy. Do not read v8 numbers as a baseline.
+#
+#  C. Everything else is deliberately unchanged from v8: same 16-stage curriculum, same gates,
+#     same hyperparameters, same sampling. Comparability is broken by A and B alone, which is the
+#     point -- one campaign, two intended changes, nothing incidental.
+#
+# The v8 mechanics below (gates that measure what they name, the match_base ladder, telemetry,
+# G limiter, stage budgets) all still apply and are carried forward verbatim.
 #
 # v7 was stopped after 313 iterations because its stage advances were invalid. Do NOT resume v7,
 # and do not compare against its stage results -- they are void. Full detail in
@@ -76,9 +106,15 @@
 # flight_survival means. Hyperparameters stay identical to v6/v7 so v8 remains comparable.
 #
 # run:
-#   python scripts\run_experiment.py experiments\real_eagle_v8.yaml
+#   python scripts\run_experiment.py experiments\real_eagle_v9_residual.yaml
 # dry-run (validate wiring, no training):
-#   python scripts\run_experiment.py experiments\real_eagle_v8.yaml --dry-run
+#   python scripts\run_experiment.py experiments\real_eagle_v9_residual.yaml --dry-run
+#
+# CONFIRM RESIDUAL TRAINING IS ACTUALLY ON before letting it run 22 h. env_creator prints
+#   [env_creator] ResidualBTWrapper ACTIVE -- policy trains as a residual on AIP_BASE.dll at scale 0.35
+# once per env build. If that line is absent the wrapper is OFF and this is just another
+# standalone campaign wearing a v9 label -- kill it and check env.residual_training.enabled.
+# ("It is in the tree" is not "it is wired in": five features have shipped inert in this project.)
 
 name: real_eagle_v9_residual
 script: train_curriculum
@@ -163,10 +199,16 @@ engagement_log:
   print: true
 
 notes: >
-  real_eagle v8 (2026-08-11). First campaign whose stage gates average over real episodes rather
-  than over carried rows (v7 stage 0 advanced reading crash_rate=0.2000 when the true per-episode
-  rate was 0.8571; stage 1 advanced on zero episodes of its own), and the first to train the
-  official beam merge -- a match_base ladder replaces two-circle alphas 45/90/135/180, 16 stages
-  total. reward_mean no longer nan on most rows, and stage training_records actually save.
-  Hyperparameters unchanged from v6/v7 so the campaigns stay comparable. Expect ~49 min per stage (~22 h total): an honest 10-episode gate costs ~268 iterations at this sampling rate. Stage 0's
-  self-crash from v7 is NOT fixed here -- v8 will report it instead of advancing past it.
+  real_eagle v9_residual (2026-08-13). FIRST campaign to train the policy as a RESIDUAL on the
+  native BT (final = BT + 0.35*policy) instead of as a standalone controller -- v1-v8 all trained
+  standalone and "hybrid" was only ever assembled at inference, so no bundle was ever optimised
+  for the composition it was deployed into. Composition verified algebraically identical to
+  StudentHybridProvider's by scripts/verify_residual_wrapper.py. ALSO the first campaign trained
+  against a behaviour tree whose tactical layer actually executes: until the F25 fix on
+  2026-08-13 the opponent ran exactly two leaf nodes (17 named composites built with zero
+  children), and it now runs 17 nodes across all five gate blocks. THE OPPONENT IS THEREFORE
+  MUCH STRONGER THAN IN v1-v8 AND THESE STAGE RESULTS ARE NOT COMPARABLE TO THOSE CAMPAIGNS --
+  a worse-looking stage may mean a harder opponent, not a worse policy. Curriculum, gates,
+  sampling and all hyperparameters are unchanged from v8 so those two changes are the only
+  intended differences. Expect ~49 min per stage (~22 h total). v7/v8's stage-0 self-crash is
+  NOT addressed here; it will be reported honestly rather than advanced past.
