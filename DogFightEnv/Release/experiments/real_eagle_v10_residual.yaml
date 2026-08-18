@@ -1,0 +1,165 @@
+# real_eagle v10_residual (2026-08-18) - SECOND residual-training attempt, ONE variable changed
+# from v9: residual_scale 0.35 -> 0.10. This is a targeted retry of a diagnosed failure, not a
+# fresh experiment, so read v9's result before this run, not instead of it.
+#
+# ==========================================================================================
+# WHY v9 FAILED, AND WHY THIS IS THE FIX BEING TESTED (4.1 F31) -- read this first.
+# ==========================================================================================
+#
+# v9 completed all 16 stages (~25h, the FIRST campaign in this project's history to reach
+# status: completed rather than being stopped or voided) and its wiring was verified correct
+# both before and after the run -- not assumed. Runtime chain built live:
+# GLimitWrapper -> ResidualBTWrapper -> ... -> DogFightWrapper (G limiter outermost, correct).
+# Ownship-side BT ticks with 0 failures over live steps. Both final bundles were weight-healthy,
+# no NaN. This was not the "shipped inert" pattern that has bitten this project five times before.
+#
+# The TRAINED POLICY ITSELF was the problem. Evaluated at exactly the composition it was trained
+# under (hybrid mode, scale 0.35, match_base, N=30): 0W/22D/0L, damage 0.61/0.00, WEZ 46, and
+# 8 of 30 episodes (27%) ended with the OWNSHIP CRASHING ITSELF (end_condition "ownship altitude
+# below min", health 1.0 right up to the crash -- a flight-control failure, not combat damage) --
+# against plain BT alone's 6W/23D/1L, 2.72/1.01, wez 967, ZERO self-crashes. Ruled out rather
+# than assumed that this was a repeat of stage-0's target-falls-on-its-own curriculum quirk:
+# pure BT alone (scale=0.0) through stage 0's exact config crashed 0/15 times. The instability is
+# the trained residual's OWN contribution, not the BT baseline it rides on.
+#
+# THE HYPOTHESIS THIS RUN TESTS: 0.35 is too much authority for an undertrained network to wield
+# safely over episodes running out to ~3400-4700+ steps. Evidence this is plausible, not a guess:
+# D3-REBASED measured the OLD (non-residually-trained) v6 policy, composed post-hoc at inference,
+# on the SAME OBFM geometry: 0.02 -> 12/30, 0.10 -> 13/30, 0.35 -> 0/30 -- a cliff between 0.10
+# and 0.35 that predates this project's residual-training wrapper entirely. v9 trained AT 0.35
+# and got a policy that cannot even survive its own composition. This run trains AT 0.10 instead,
+# so training-time authority matches the one scale a policy has ever been shown to tolerate.
+#
+# WHAT IS NOT CHANGED, on purpose -- one variable at a time, matching this project's own
+# standing discipline (4.1 F26-RULE, learned from the Gate 1 reorder that had to be reverted
+# after a symmetric measurement masked a real regression): curriculum, gates, sampling, all SAC
+# hyperparameters, and the ResidualBTWrapper's composition formula are byte-identical to v9.
+# If v10 also fails, the failure mode (self-crash vs simply weak) tells you whether scale was
+# ever the right hypothesis, or whether something more fundamental needs to change next.
+#
+# ==========================================================================================
+# Carried forward verbatim from v9/v8 (still true, not re-derived here):
+# ==========================================================================================
+#  * Trains against the F25-fixed BT (17 nodes executing across 5 gate blocks) -- NOT comparable
+#    to v1-v8's numbers, which trained against a tree running 2 leaf nodes.
+#  * Stage-advancement gate measures real episodes, not carried rows (4.1 F6).
+#  * match_base_wide -> match_base_close -> match_base ladder trains the official beam merge
+#    (4.1 F8-STAGES), 16 stages total.
+#  * G limiter active on the training action path (4.1), OUTSIDE ResidualBTWrapper so it clamps
+#    the final composed action, not the bare policy residual.
+#  * Stage budgets raised so 10-episode gates can actually fire (4.1 F6-COST): ~270 iterations
+#    per gated stage, ~49 min, ~22h total across all 16 stages.
+#  * v7/v8/v9's stage-0 self-crash issue is NOT specifically addressed by this change; watch
+#    whether a smaller residual scale incidentally helps it too, but that is not the hypothesis
+#    under test here.
+#
+# run:
+#   python scripts\run_experiment.py experiments\real_eagle_v10_residual.yaml
+# dry-run (validate wiring, no training):
+#   python scripts\run_experiment.py experiments\real_eagle_v10_residual.yaml --dry-run
+#
+# CONFIRM RESIDUAL TRAINING IS ACTUALLY ON, AND AT THE RIGHT SCALE, before letting it run ~22h.
+# env_creator prints, once per env build:
+#   [env_creator] ResidualBTWrapper ACTIVE -- policy trains as a residual on AIP_BASE.dll at scale 0.1
+# If that line is absent, the wrapper is OFF and this is just another standalone campaign wearing
+# a v10 label -- kill it. If the scale printed is not 0.1, this run is not testing what it says
+# it's testing -- kill it and check env.residual_training.residual_scale.
+# ("It is in the tree" is not "it is wired in": five features have shipped inert in this project.)
+#
+# EVALUATE THE SAME WAY v9 WAS, before concluding anything: hybrid mode (NOT hybrid_vptrack --
+# that composes with a different baseline the policy never trained against), residual-scale 0.10
+# (matching training, not v9's 0.35), match_base, N=30, against plain BT. Compare self-crash rate
+# specifically, not just win rate -- that is where v9's failure actually showed up.
+
+name: real_eagle_v10_residual
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: v10_residual
+
+env:
+  observation_mode: custom
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  observation_module: student.my_observation_v2
+
+  # RESIDUAL TRAINING (2026-08-18) -- second attempt, scale lowered from v9's 0.35 to 0.10.
+  # See the file header (4.1 F31) for the full diagnosis. Formula, unchanged from v9:
+  #     final_action = BT_action + residual_scale * policy_action
+  # student/residual_training_wrapper.py, verified algebraically identical to the inference
+  # composition (StudentHybridProvider) by scripts/verify_residual_wrapper.py -- re-run it if
+  # either side is touched before launching.
+  #
+  # bt_dll is the OWNSHIP-side name, deliberately NOT target_behavior_dll: Windows loads a DLL
+  # once per resolved path, so sharing one file with the opponent would share its static
+  # blackboard state too -- the same reason AIP_BASE.dll and AIP_BASE_target.dll are two files.
+  #
+  # IMPORTANT: my_submission.py's shipping RESIDUAL_SCALE is still 0.35 (matching v9, since v9's
+  # bundle was never adopted). If a v10 bundle is ever deployed, update RESIDUAL_SCALE there to
+  # 0.10 to match what this policy was actually trained for -- deploying at a mismatched scale
+  # reproduces exactly the D3-REBASED problem this whole residual-training effort exists to fix.
+  residual_training:
+    enabled: true
+    bt_dll: AIP_BASE.dll
+    residual_scale: 0.10
+
+curriculum:
+  stages_module: student.my_curriculum
+
+algo:
+  name: sac
+  framework: torch
+  lr: 3.0e-4
+  gamma: 0.997
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  replay_buffer_capacity: 300000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+runtime:
+  # Kept from v5-v9: remote workers hit msgpack-OOM / concat_episode races on this box.
+  # Measured cost, unchanged from v9 -- scale is not expected to change wall-clock materially:
+  # ~270 iterations per gated stage (~49 min), ~22h total across 16 stages.
+  num_env_runners: 0
+  # Safe: this resumes v10's OWN state file if interrupted and relaunched. It can never pick up
+  # v9 or earlier -- state is keyed by output.tag. Do NOT point an earlier tag at this file.
+  resume: true
+
+policy_probe:
+  enabled: true
+  interval: 10
+  steps: 4
+  print: true
+
+engagement_log:
+  enabled: true
+  interval: 100
+  steps: 400
+  episodes: 1
+  print: true
+
+notes: >
+  real_eagle v10_residual (2026-08-18). SECOND residual-training attempt (4.1 F31), one variable
+  changed from v9: residual_scale 0.35 -> 0.10. v9 completed all 16 stages with verified-correct
+  wiring (BT ticks with 0 failures, G limiter correctly outermost, weight-healthy final bundles)
+  but the trained policy actively harmed performance when evaluated at its own trained
+  composition: 0W/22D/0L vs plain BT's 6W/23D/1L, and 27% of episodes ended in the OWNSHIP
+  crashing itself -- a flight-control failure traced to the trained residual's own contribution,
+  not the BT baseline (pure BT alone crashed 0/15 times in the same test). Hypothesis: 0.35 is
+  too much authority for an undertrained network to wield safely over ~3400-4700+ step episodes.
+  D3-REBASED measured the old non-residually-trained v6 policy tolerating 0.10 (13/30) while 0.35
+  destroyed it (0/30) -- a cliff that predates this wrapper entirely. This run trains AT 0.10 so
+  training-time authority matches the one scale ever shown tolerable. Curriculum, gates, sampling
+  and all hyperparameters are otherwise byte-identical to v9, so scale is the only intended
+  difference and any change in outcome is attributable to it. Trains against the F25-fixed BT
+  (17 nodes across 5 gate blocks) -- not comparable to v1-v8. Expect ~49 min per stage, ~22h
+  total. Evaluate the same way v9 was evaluated (hybrid mode, scale 0.10, match_base, N=30 vs
+  BT) before concluding anything, and check self-crash rate specifically.
