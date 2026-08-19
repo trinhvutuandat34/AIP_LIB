@@ -1,0 +1,182 @@
+# real_eagle v12_standalone_livetree (2026-08-19) - STANDALONE (non-residual) training against
+# the LIVE, F25-fixed behaviour tree. Prepared as the contingency if v11 fails; do NOT launch
+# while v11 is still running or before its result is known (see WHEN TO RUN THIS, below).
+#
+# ==========================================================================================
+# WHY THIS RUN EXISTS -- it closes a gap none of v8/v9/v10/v11 covers.
+# ==========================================================================================
+#
+# Every campaign to date falls into exactly one of two buckets, and NEITHER answers the
+# question this run asks:
+#
+#   v1-v8   STANDALONE, but trained against the DEAD tree. F25 (the `name=` attribute bug that
+#           built all 17 named composites with zero children) was not fixed until 2026-08-13,
+#           after v8 finished. Those campaigns faced an opponent running TWO leaf nodes.
+#   v9-v11  Face the LIVE tree (17 nodes, 5 gate blocks), but all three are RESIDUAL-mode --
+#           the policy is composed with the BT via ResidualBTWrapper during training.
+#
+# So: no campaign has ever trained a plain standalone policy against the live tree. That means
+# every residual failure so far (v9 destructive at scale 0.35, v10 inert at 0.10, v11 pending)
+# has been interpreted WITHOUT a control for "can this reward/curriculum produce a working
+# policy against this opponent at all, residual or not". This run is that control.
+#
+# WHY THIS IS THE RIGHT NEXT EXPERIMENT rather than a third residual variant (staged/ramped
+# scale, or warm-starting): it is the most DIAGNOSTIC result available, useful in both
+# directions, and it is a prerequisite for one of the alternatives anyway.
+#
+#   If standalone ALSO produces near-zero conversion  -> the problem is NOT residual training.
+#       It is the reward, the curriculum, or the difficulty of this opponent. That would mean
+#       every scale/reward tweak applied to v9-v11 was tuning the wrong layer, and it redirects
+#       all remaining effort away from residual composition entirely.
+#   If standalone WORKS                                -> residual composition is the specific
+#       bottleneck, and the resulting bundle may be deployable immediately via `hybrid_gated`
+#       (EnvelopeGatedHybridProvider), which was built to be safe at full residual authority even
+#       with a policy that was never optimised for the composition -- 4.1 D3-REBASED measured it
+#       holding 13/30 at scale 0.35 where the ungated version collapsed to 0/30 with the same
+#       (unusable, 0-win) v6 policy. That is a deployment path that does NOT require another
+#       22h campaign.
+#
+#   It is also a PREREQUISITE for warm-starting (pretrain standalone -> fine-tune as residual),
+#   which cannot be attempted at all until a usable standalone checkpoint exists.
+#
+# ==========================================================================================
+# WHAT IS DIFFERENT FROM v11, AND FROM v8
+# ==========================================================================================
+#
+# vs v11: `env.residual_training` is ABSENT (not `enabled: false` -- absent, so env_creator's
+#   `residual_cfg.get("enabled")` is falsy and ResidualBTWrapper is never constructed). The
+#   policy's action goes straight to the env, exactly as in v1-v8. Curriculum returns to
+#   `student.my_curriculum` -- the canonical, unmodified one -- NOT
+#   student.my_curriculum_residual_v2, whose damage_scale=60 override was a residual-specific
+#   hypothesis (4.1 F35) with no reason to carry into a standalone run. That keeps this a clean
+#   control against v8's known-good standalone configuration.
+#
+# vs v8: identical config, EXCEPT it faces the live F25-fixed tree simply because that is what
+#   AIP_BASE_target.dll now builds. Nothing in this file changes the opponent -- the tree fix
+#   lives in the rule XML, already applied and committed (5412a79). This is precisely the point:
+#   it isolates "live tree vs dead tree" as the only meaningful difference from v8, since every
+#   hyperparameter, the curriculum, gates, sampling and budgets are unchanged.
+#
+# EXPECT THIS TO BE HARD, AND DO NOT MISREAD A WORSE-THAN-v8 RESULT. The live tree is a far
+# stronger opponent than v1-v8 ever faced (BT-vs-BT went 0 -> 2 kills and 8 -> 967 WEZ-contact
+# steps after F25). A standalone policy that underperforms v8's numbers may simply be facing a
+# harder problem, not training worse. The comparison that matters is against the CURRENT floor
+# (vptrack + throttle-on, 4.1 F29) and against v11's residual result -- NOT against v8.
+#
+# ==========================================================================================
+# WHEN TO RUN THIS -- read before launching.
+# ==========================================================================================
+#   * ONLY IF v11 FAILS. If v11 produces a usable policy, adopt that instead (confirm on a
+#     second seed first, per the standing rule that a single strong result has reversed on
+#     retest before -- 4.1 F32).
+#   * NOT concurrently with v11 or any other campaign. Both need the same box; runtime.
+#     num_env_runners is 0 precisely because remote workers hit msgpack-OOM/concat_episode races
+#     here, and two simultaneous campaigns would contend for the same resources and make both
+#     runs' timings uninterpretable.
+#   * BUDGET AWARENESS: ~22h. Against the runway to prelims, there is realistically room for ONE
+#     more campaign after v11, not several. If this one also fails, the honest call is to stop
+#     RL work and ship the measured floor (vptrack + throttle-on, F25 + F29), which does not
+#     depend on any of this working.
+#
+# run:
+#   python scripts\run_experiment.py experiments\real_eagle_v12_standalone_livetree.yaml
+# dry-run (validate wiring, no training):
+#   python scripts\run_experiment.py experiments\real_eagle_v12_standalone_livetree.yaml --dry-run
+#
+# CONFIRM THE WRAPPER IS *OFF* before letting this run ~22h -- the inverse of the v9/v10/v11
+# check. env_creator prints this line ONLY when residual training is active:
+#   [env_creator] ResidualBTWrapper ACTIVE -- policy trains as a residual on ...
+# For THIS run that line must be ABSENT. If it appears, this is not a standalone control at all
+# and the result would be uninterpretable -- kill it and check that env.residual_training is
+# absent from this file.
+#
+# EVALUATE DIFFERENTLY FROM v9/v10/v11. Those were evaluated in `hybrid` mode because they were
+# trained composed. This policy is standalone, so evaluate it standalone FIRST:
+#   --ownship-backend rl --ownship-bundle-dir <final_bundle> --observation-mode custom \
+#     --observation-module student.my_observation_v2 --scenario-mode match_base --episodes 30
+# THEN, only if it is not self-crashing, additionally evaluate it through `hybrid_gated` -- that
+# is the deployment path that could use a standalone-trained policy without a retrain (see the
+# D3-REBASED note above). Report self-crash rate AND WEZ-contact/damage in both cases, per
+# 4.1 F34-COMPARE.
+
+name: real_eagle_v12_standalone_livetree
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: v12_standalone
+
+env:
+  observation_mode: custom
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  observation_module: student.my_observation_v2
+  # NOTE: `residual_training` is deliberately ABSENT, not set to enabled:false. env_creator does
+  # `residual_cfg = cfg.get("residual_training") or {}` then `if residual_cfg.get("enabled")`, so
+  # an absent key is falsy and ResidualBTWrapper is never constructed. Do not add the key back
+  # "for clarity" -- its absence IS the experiment.
+
+curriculum:
+  # The canonical, unmodified curriculum -- NOT student.my_curriculum_residual_v2. That module's
+  # damage_scale=60 override was a residual-specific hypothesis (4.1 F35); carrying it into a
+  # standalone run would confound this control with an untested reward change.
+  stages_module: student.my_curriculum
+
+algo:
+  name: sac
+  framework: torch
+  lr: 3.0e-4
+  gamma: 0.997
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  replay_buffer_capacity: 300000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+runtime:
+  # Kept from v5-v11: remote workers hit msgpack-OOM / concat_episode races on this box.
+  num_env_runners: 0
+  # Safe: resumes v12's OWN state file if interrupted. Keyed by output.tag, so it can never pick
+  # up v11 or earlier.
+  resume: true
+
+policy_probe:
+  enabled: true
+  interval: 10
+  steps: 4
+  print: true
+
+engagement_log:
+  enabled: true
+  interval: 100
+  steps: 400
+  episodes: 1
+  print: true
+
+notes: >
+  real_eagle v12_standalone_livetree (2026-08-19). CONTROL RUN, prepared as the contingency if
+  v11 fails -- do not launch while v11 is running or before its result is known. Closes a gap no
+  campaign covers: v1-v8 were standalone but faced the DEAD tree (F25 fixed only on 2026-08-13,
+  after v8); v9/v10/v11 face the LIVE tree but are all residual-mode. So no campaign has ever
+  trained a plain standalone policy against the live F25-fixed opponent, meaning every residual
+  failure so far has been interpreted without a control for whether this reward/curriculum can
+  produce a working policy against this opponent at all. Diagnostic in both directions: if
+  standalone also fails, the problem is the reward/curriculum/opponent difficulty rather than
+  residual composition, and further scale or reward tuning on the residual is misdirected effort;
+  if it works, residual composition is the specific bottleneck and the bundle may be deployable
+  via hybrid_gated (D3-REBASED: held 13/30 at scale 0.35 where ungated collapsed to 0/30, even
+  with an unusable policy) without another 22h campaign. Also a prerequisite for warm-starting
+  (pretrain standalone then fine-tune as residual), which cannot be attempted until a usable
+  standalone checkpoint exists. residual_training is ABSENT (not false) so ResidualBTWrapper is
+  never constructed; curriculum is the canonical student.my_curriculum, NOT the residual-specific
+  damage_scale=60 variant. Config is otherwise identical to v8, isolating live-tree-vs-dead-tree
+  as the only meaningful difference. Expect it to be hard -- the live tree is a much stronger
+  opponent (BT-vs-BT: 0 to 2 kills, 8 to 967 WEZ steps after F25) -- so compare against the
+  current floor (vptrack + throttle-on) and v11, NOT against v8's numbers. Evaluate STANDALONE
+  first (--ownship-backend rl), then via hybrid_gated only if it is not self-crashing. ~22h.
