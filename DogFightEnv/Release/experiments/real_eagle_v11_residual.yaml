@@ -1,0 +1,170 @@
+# real_eagle v11_residual (2026-08-19) - THIRD residual-training attempt. residual_scale stays
+# at v10's proven-safe 0.10; the ONE variable changed is damage_scale on the match-relevant
+# stages (student/my_curriculum_residual_v2.py, 4.1 F34/F35).
+#
+# ==========================================================================================
+# WHY v10 FAILED IN A DIFFERENT WAY THAN v9, AND WHAT THIS RUN TESTS -- read this first.
+# ==========================================================================================
+#
+# v9 (scale 0.35): trained a policy that actively destroyed itself. 27% of evaluated episodes
+# ended in the OWNSHIP CRASHING ITSELF (ownship altitude below min), health 1.0 right up to the
+# crash. Too much authority for an undertrained network to hold safely.
+#
+# v10 (scale 0.10, otherwise identical): the instability is GONE -- zero self-crashes across 30
+# evaluated episodes, confirming that diagnosis was correct. But evaluated at its own trained
+# composition, v10 achieves ZERO WEZ-contact steps in all 30 episodes, against the UNMODIFIED
+# BT's 967. Damage dealt across the entire 30-episode run: 0.03. It survives by contributing
+# nothing, not by contributing usefully. Two attempts now bracket the same outcome from opposite
+# directions: "too much authority, destructive" and "safe authority, inert" -- neither helps.
+#
+# THE HYPOTHESIS THIS RUN TESTS (a different mechanism than v10's, not a re-derivation of it).
+# student/my_reward.py's compute_reward() pays two DENSE per-step shaping terms -- `pursuit`
+# (ATA x range) and `position` (aspect x range) -- purely from resulting geometry, with NO
+# dependency on whether the residual did anything to get there. Since the unmodified BT already
+# achieves decent geometry on its own (967 WEZ-contact steps), a policy that perturbs nothing can
+# still collect most of that shaping reward for free, while any authority it actually exercises
+# risks the crash-penalty exposure that destroyed v9. `damage_scale` -- the WEZ-phase damage
+# estimate term, the one component that specifically requires CONVERTING a position rather than
+# just holding one -- was never adjusted for these stages. pursuit_scale/position_scale were
+# already dialed 0.3->0.2 and advantage_scale already turned on (0.1) for exactly this class of
+# concern (_TWO_CIRCLE_V4_REWARD_OVERRIDES, landed before residual training existed) -- but
+# damage_scale sits at the same 20.0 every non-residual campaign uses. This run raises it to 60.0
+# (3x), on stages 6-15 ONLY (habfm_beam_merge through full_dogfight -- the stages that inherit
+# that override dict). Stages 0-5 (flight_survival through obfm_defensive) are BYTE-IDENTICAL to
+# v10/student.my_curriculum -- both v9 and v10 got through early training without incident, so
+# nothing there is touched. Verified directly, not assumed: student/my_curriculum_residual_v2.py
+# prints base-vs-v11 damage_scale per stage and asserts exactly stages 6-15 differ; also verified
+# calling it does not mutate student.my_curriculum's own state (no shared-dict aliasing bug).
+#
+# CONFIDENCE, STATED HONESTLY. Unlike v10's scale change -- which retested a cliff D3-REBASED had
+# already measured before v10 ever ran -- this is a reasoned hypothesis built from reading the
+# reward code, not a re-test of an existing result. There is no prior measurement showing
+# damage_scale=60 helps. If v11 ALSO produces near-zero WEZ contact, that is evidence the
+# free-rider explanation is wrong or incomplete -- do NOT simply try a larger multiplier next
+# without new evidence for why; that would be guessing, not diagnosing, and this project has a
+# standing rule against exactly that (4.1 F26-RULE: one variable, evidence-driven, every time).
+#
+# WHAT IS NOT CHANGED from v10, on purpose, matching this project's own one-variable discipline:
+# residual_scale (0.10), the ResidualBTWrapper composition formula, curriculum stage COUNT/order/
+# budgets/gates, sampling, and every SAC hyperparameter.
+#
+# ==========================================================================================
+# Carried forward verbatim from v8/v9/v10 (still true, not re-derived here):
+# ==========================================================================================
+#  * Trains against the F25-fixed BT (17 nodes executing across 5 gate blocks) -- NOT comparable
+#    to v1-v8's numbers, which trained against a tree running 2 leaf nodes.
+#  * Stage-advancement gate measures real episodes, not carried rows (4.1 F6).
+#  * match_base_wide -> match_base_close -> match_base ladder trains the official beam merge
+#    (4.1 F8-STAGES), 16 stages total.
+#  * G limiter active on the training action path, OUTSIDE ResidualBTWrapper so it clamps the
+#    final composed action, not the bare policy residual (verified live for v9 AND v10 by
+#    building a real env and walking the wrapper chain -- do the same before trusting this run).
+#  * Stage budgets: ~270 iterations per gated stage (~49 min), ~22h total across 16 stages.
+#
+# run:
+#   python scripts\run_experiment.py experiments\real_eagle_v11_residual.yaml
+# dry-run (validate wiring, no training):
+#   python scripts\run_experiment.py experiments\real_eagle_v11_residual.yaml --dry-run
+#
+# CONFIRM RESIDUAL TRAINING IS ACTUALLY ON, AND AT THE RIGHT SCALE, before letting it run ~22h.
+# env_creator prints, once per env build:
+#   [env_creator] ResidualBTWrapper ACTIVE -- policy trains as a residual on AIP_BASE.dll at scale 0.1
+# If that line is absent, the wrapper is OFF -- kill it. If the scale is not 0.1, this is not the
+# experiment it claims to be -- kill it and check env.residual_training.residual_scale.
+# ("It is in the tree" is not "it is wired in": five features have shipped inert in this project.)
+#
+# EVALUATE THE SAME WAY v9 AND v10 WERE: hybrid mode, residual-scale 0.10 (matching training),
+# match_base, N=30, against plain BT. Check self-crash rate (should stay 0, like v10) AND
+# WEZ-contact steps / damage dealt (the thing this run specifically targets, and where v10 was
+# 0/967 and 0.03/2.72 respectively) -- report BOTH, not just one, exactly as F34-COMPARE did.
+
+name: real_eagle_v11_residual
+script: train_curriculum
+
+output:
+  name: real_eagle
+  tag: v11_residual
+
+env:
+  observation_mode: custom
+  reward_module: student.my_reward
+  target_behavior_dll: AIP_BASE_target.dll
+  observation_module: student.my_observation_v2
+
+  # RESIDUAL TRAINING -- scale UNCHANGED from v10 (0.10, proven safe: 0/30 self-crashes).
+  # See the file header (4.1 F34/F35) for what changed instead (damage_scale, via
+  # curriculum.stages_module below, NOT here).
+  #     final_action = BT_action + residual_scale * policy_action
+  # student/residual_training_wrapper.py, verified algebraically identical to the inference
+  # composition (StudentHybridProvider) by scripts/verify_residual_wrapper.py.
+  #
+  # bt_dll is the OWNSHIP-side name, deliberately NOT target_behavior_dll: Windows loads a DLL
+  # once per resolved path, so sharing one file with the opponent would share its static
+  # blackboard state too -- the same reason AIP_BASE.dll and AIP_BASE_target.dll are two files.
+  #
+  # IMPORTANT: my_submission.py's shipping RESIDUAL_SCALE is still 0.35 (v9's value; neither v9
+  # nor v10 was adopted). If a v11 bundle is ever deployed, set RESIDUAL_SCALE=0.10 there to
+  # match what this policy was actually trained for.
+  residual_training:
+    enabled: true
+    bt_dll: AIP_BASE.dll
+    residual_scale: 0.10
+
+curriculum:
+  # THE ONE CHANGE IN THIS FILE relative to v10: a curriculum wrapper module that raises
+  # damage_scale 20.0 -> 60.0 on stages 6-15 only. See student/my_curriculum_residual_v2.py's
+  # own module docstring for the full mechanism and the verification that ran against it.
+  stages_module: student.my_curriculum_residual_v2
+
+algo:
+  name: sac
+  framework: torch
+  lr: 3.0e-4
+  gamma: 0.997
+  train_batch_size: 256
+  minibatch_size: 256
+  tau: 0.005
+  target_entropy: auto
+  replay_buffer_capacity: 300000
+  mlp:
+    enabled: true
+    fcnet_hiddens: [256, 256]
+    fcnet_activation: relu
+    head_fcnet_hiddens: []
+    head_fcnet_activation: relu
+
+runtime:
+  # Kept from v5-v10: remote workers hit msgpack-OOM / concat_episode races on this box.
+  num_env_runners: 0
+  # Safe: resumes v11's OWN state file if interrupted and relaunched. Keyed by output.tag, so it
+  # can never pick up v10 or earlier. Do NOT point an earlier tag at this file.
+  resume: true
+
+policy_probe:
+  enabled: true
+  interval: 10
+  steps: 4
+  print: true
+
+engagement_log:
+  enabled: true
+  interval: 100
+  steps: 400
+  episodes: 1
+  print: true
+
+notes: >
+  real_eagle v11_residual (2026-08-19). THIRD residual-training attempt (4.1 F34/F35).
+  residual_scale unchanged from v10 (0.10, proven to eliminate the self-crash instability v9 had
+  at 0.35). The one variable changed: damage_scale raised 20.0 -> 60.0 on stages 6-15
+  (habfm_beam_merge through full_dogfight) via student.my_curriculum_residual_v2, testing the
+  hypothesis that v10's zero-WEZ-contact result came from the policy free-riding on dense
+  per-step pursuit/position shaping reward that pays out from geometry alone, independent of the
+  residual's own contribution -- while damage_scale, the one term requiring actual conversion,
+  was left at the same value every non-residual campaign uses. Stages 0-5 are byte-identical to
+  v10. This hypothesis is reasoned from the reward code, not a re-test of a prior measurement the
+  way v10's scale change was -- treat the outcome as genuine new evidence, not a near-certain
+  fix. Evaluate the same way as v9 and v10 (hybrid mode, scale 0.10, match_base, N=30 vs BT);
+  report both self-crash rate and WEZ-contact/damage, not just one. Trains against the F25-fixed
+  BT (17 nodes across 5 gate blocks) -- not comparable to v1-v8. Expect ~49 min per stage, ~22h
+  total.
