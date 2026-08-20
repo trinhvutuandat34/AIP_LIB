@@ -48,6 +48,7 @@ from student.inference_providers import (
 # DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. See the
 # module docstring for the two client fragilities this guards against (COMPETITION_RULES Sec8).
 from student.controller_providers import GLimitedProvider, VPTrackingProvider
+from student.live_frame_fix import LiveVerticalFrameProvider
 from student.g_limiter import G_LIMIT
 from student.submission_resilience import ResilientActionProvider, supervise_client
 
@@ -119,8 +120,14 @@ def build_action_provider(args, effective_observation_mode: str):
     The sim enforces no structural limit and hands out up to 14.86 G against a 9 G airframe, so
     anything tuned against that locally diverges from a server that clamps.
     """
+    # LiveVerticalFrameProvider is INSIDE the limiter: it corrects the context the provider
+    # reads (Unreal sends state[2] as up-positive altitude, every consumer indexes it as NED
+    # Down), whereas the limiter post-processes the action. See student/live_frame_fix.py.
     return GLimitedProvider(
-        _build_action_provider_raw(args, effective_observation_mode), limit_g=G_LIMIT
+        LiveVerticalFrameProvider(
+            _build_action_provider_raw(args, effective_observation_mode)
+        ),
+        limit_g=G_LIMIT,
     )
 
 

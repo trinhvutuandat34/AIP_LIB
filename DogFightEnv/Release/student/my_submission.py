@@ -95,6 +95,7 @@ from student.controller_providers import (
     VPTrackingProvider,
 )
 from student.g_limiter import G_LIMIT
+from student.live_frame_fix import LiveVerticalFrameProvider
 from student.submission_resilience import ResilientActionProvider, supervise_client
 
 
@@ -222,7 +223,12 @@ def build_action_provider():
     기체는 G를 제한하는 실제 서버에서 다르게 움직이며, 그 차이는 로컬 평가가 아니라 경기
     당일에 드러난다. student/g_limiter.py 참고.
     """
-    return GLimitedProvider(_build_action_provider_raw(), limit_g=G_LIMIT)
+    # Unreal은 state[2]를 위쪽이 양수인 고도로 보내지만 모든 소비자는 이를 NED Down으로
+    # 읽는다. LiveVerticalFrameProvider가 리미터 안쪽에서 그 부호를 바로잡는다.
+    # student/live_frame_fix.py 참고.
+    return GLimitedProvider(
+        LiveVerticalFrameProvider(_build_action_provider_raw()), limit_g=G_LIMIT
+    )
 
 def _build_action_provider_raw():
     if MODE == "bt":
