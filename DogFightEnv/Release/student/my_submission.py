@@ -401,7 +401,12 @@ def main():
             )
 
         try:
-            supervise_client(make_client)
+            # activity= arms the server-silence watchdog (2026-08-21, F40). 경고만 하고
+            # 재접속은 하지 않는다 (silence_reconnect_sec 기본 0.0) -- 주최측 기준
+            # 클라이언트(unreal_bt_client.exe --server-timeout-sec)도 "Warn (log only)"이다.
+            # 서버 침묵은 45초 실측에서 재접속도 경고도 없이 무시됐다. 근거는
+            # student/submission_resilience.py의 _silence_watchdog 참고.
+            supervise_client(make_client, activity=action_provider, silence_warn_sec=5.0)
         finally:
             action_provider.close()
             print(f"[{TEAM_NAME}] 클라이언트 종료")

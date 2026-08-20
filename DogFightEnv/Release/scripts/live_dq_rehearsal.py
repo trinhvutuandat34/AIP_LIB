@@ -18,6 +18,14 @@ thread that blocks/unblocks outbound UDP to server-ip:server-port via `netsh adv
 (temporary rule, always removed on exit -- including on Ctrl-C or a crash) so the client
 experiences a genuine connection loss, not a stubbed one.
 
+    *** --induce-faults IS A NO-OP AGAINST 127.0.0.1 (2026-08-21, F40). ***
+    Windows Firewall does not filter loopback traffic, so the netsh rule blocks nothing when
+    the server is local. The 2026-08-20 18:34 run passed 3 fault cycles with fallback_calls=0
+    and disconnects=0 -- impossible had the wire actually dropped -- which is how this was
+    caught. Use --induce-faults ONLY against a server on another host. For a local fault test
+    use scripts/_dq_loopback_server.py --silence-every-sec/--silence-for-sec, which creates a
+    real outage server-side and needs no firewall and no elevation.
+
 Uses MODE="vptrack" -- the actual shipping submission path (student/controller_providers.py,
 no RL bundle) -- via student.my_submission.build_action_provider(), so this rehearses the exact
 provider stack that ships, not a synthetic stand-in. BT_RULE_XML / BT_DLL are left at
@@ -163,6 +171,11 @@ def main() -> None:
     ap.add_argument("--block-sec", type=float, default=8.0)
     ap.add_argument("--unblock-sec", type=float, default=20.0)
     ap.add_argument("--fault-cycles", type=int, default=3)
+    ap.add_argument("--silence-warn-sec", type=float, default=5.0,
+                    help="Warn after this long with no PlaneInfo from the server (0=off).")
+    ap.add_argument("--silence-reconnect-sec", type=float, default=0.0,
+                    help="Force a reconnect after this long silent, once frames have flowed "
+                         "(0=off). See student/submission_resilience.py._silence_watchdog.")
     args = ap.parse_args()
 
     stamp = time.strftime("%Y%m%d_%H%M%S")
@@ -228,7 +241,11 @@ def main() -> None:
             fault_thread.start()
 
         supervisor_thread = threading.Thread(
-            target=supervise_client, args=(make_client,), kwargs={"log": log}, daemon=True,
+            target=supervise_client, args=(make_client,),
+            kwargs={"log": log, "activity": action_provider,
+                    "silence_warn_sec": args.silence_warn_sec,
+                    "silence_reconnect_sec": args.silence_reconnect_sec},
+            daemon=True,
         )
         supervisor_thread.start()
 

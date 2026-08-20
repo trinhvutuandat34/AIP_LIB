@@ -66,6 +66,18 @@ def parse_args():
     parser.add_argument("--command-delay-sec", type=float, default=0.0, help="Delay before replying with CMD after both PlaneInfo packets are ready.")
     parser.add_argument("--recv-timeout-sec", type=float, default=0.2, help="UDP socket receive timeout.")
     parser.add_argument(
+        "--server-silence-warn-sec", type=float, default=5.0,
+        help="Warn when the server has sent no PlaneInfo for this long (0=off). Matches the "
+             "organizers' unreal_bt_client.exe --server-timeout-sec, which is warn-only.",
+    )
+    parser.add_argument(
+        "--server-silence-reconnect-sec", type=float, default=0.0,
+        help="Force a reconnect after this many seconds of server silence, but ONLY once frames "
+             "have already flowed (0=off, the default). Off by default because a long "
+             "inter-episode pause is indistinguishable from a dropout without a measured "
+             "baseline, and a needless reconnect is itself a DQ risk (RULES Sec 8).",
+    )
+    parser.add_argument(
         "--action-repeat",
         type=int,
         default=6,
@@ -221,7 +233,15 @@ def main():
             )
 
         try:
-            supervise_client(make_client)
+            # activity= arms the server-silence watchdog (2026-08-21, F40): a silent server is
+            # invisible to supervise_client on its own, because client.py:242-243 turns silence
+            # into an infinite `continue`. See student/submission_resilience.py.
+            supervise_client(
+                make_client,
+                activity=action_provider,
+                silence_warn_sec=args.server_silence_warn_sec,
+                silence_reconnect_sec=args.server_silence_reconnect_sec,
+            )
         finally:
             action_provider.close()
 
