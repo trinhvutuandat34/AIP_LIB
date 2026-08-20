@@ -260,8 +260,33 @@ def _build_action_provider_raw():
     #       아니라 코드가 값을 정해야 합니다.
     # 되돌리려면: throttle_control=False (또는 이 인자를 제거).
     if MODE == "vptrack":
-        print(f"[{TEAM_NAME}] VP 트래킹 백엔드 사용 (RL 없음): {BT_DLL} (throttle_control=True)")
-        return VPTrackingProvider(dll_name=BT_DLL, throttle_control=True)
+        # ENGAGEMENT ENVELOPE WIDENED TO 4000m/60deg (2026-08-20). This is a single, LOCKED
+        # submission used for both the mandatory >50% cutoff gate AND every prelim match --
+        # there is no separate resubmission window, so this one config has to serve both.
+        #
+        # The 50% cutoff bar is a hard, one-shot, unappealable gate (missing it means not
+        # advancing at all), so it gets weighted more heavily than a marginal prelim edge.
+        # Measured, cutoff N=100: standard 2500m/45deg = 76% win / 73% earned (CI ~[67,83]);
+        # 4000m/60deg = 100% win / 95% earned (CI ~[96,100]) -- a materially larger safety
+        # margin against a gate we cannot retry.
+        #
+        # Verified this does NOT cost real-match performance, via the peer rig (never trust
+        # a symmetric measurement): match_base win rate matches or slightly exceeds the
+        # standard config on two independent seeds (43.3/46.7% vs 43.3%, both seed 0 and
+        # seed 1000), and obfm_defensive win rate is IDENTICAL (23.3% both) with damage
+        # taken barely moving (0.577 vs 0.550). The real cost is confined to match_base
+        # specifically: damage taken roughly doubles there (~0.48-0.53 vs 0.23) because the
+        # wider envelope holds the terminal law engaged longer -- it does not change whether
+        # we win, only the margin. See COMPETITION_PLAN.md 4.1 (envelope-margin analysis,
+        # 2026-08-20) for the full numbers before changing this again.
+        #
+        # Revert: drop engage_range_m/engage_los_deg to return to 2500m/45deg.
+        print(f"[{TEAM_NAME}] VP 트래킹 백엔드 사용 (RL 없음): {BT_DLL} "
+              f"(throttle_control=True, engage=4000m/60deg)")
+        return VPTrackingProvider(
+            dll_name=BT_DLL, throttle_control=True,
+            engage_range_m=4000.0, engage_los_deg=60.0,
+        )
 
     # BUNDLE_DIR 가드 (2026-08-11): 여기 도달했다는 것은 MODE가 rl/hybrid* 계열이라는
     # 뜻이고, 그러려면 RL 번들이 반드시 있어야 합니다. 예전처럼 자리표시자 경로를 남겨두면
