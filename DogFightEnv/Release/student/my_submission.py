@@ -187,7 +187,15 @@ AI_TYPE = AIType.Fusion    # MODE="hybrid"이므로 RL 단일이 아닌 Fusion�
 HEARTBEAT_SEC = 1.0
 COMMAND_DELAY_SEC = 0.0
 RECV_TIMEOUT_SEC = 0.2
-ACTION_REPEAT = 6          # 학습 step_ratio=6과 맞춰 6개 PlaneInfo pair마다 새 policy 호출
+ACTION_REPEAT = 1          # 2026-08-20 6->1. 규칙의 60Hz 응답/0.1667s 패널티는 "판단 주기"가
+# 아니라 "판단 1회당 연산 시간" 제한이며(대회 룰 슬라이드 자체 각주: "1/60초로 판단 안 내려도
+# 되지만 조종명령은 꼭 60Hz로 답해야 함"), ProviderCommandPolicy.compute_command는 action-repeat
+# 값과 무관하게 매 tick CMD를 보낸다(캐시든 신규 계산이든). 6은 RL 학습 step_ratio=6과 맞추기
+# 위한 값이었는데, MODE="vptrack"은 학습된 적이 없으므로 맞출 대상이 없다. 실측
+# VPTrackingProvider.compute_action worst-of-5000 = 0.611ms, 166.7ms 예산의 1/272 -- 어떤
+# action-repeat 값에서도 여유. RL/hybrid 번들을 다시 실을 경우 그 모드는 자기 학습
+# step_ratio에 맞춰 6으로 되돌릴 것 (모드별 결정, 전역 규칙 아님). See
+# LIVE_INFERENCE_FRAME_BUGS.md Sec7, COMPETITION_RULES.md Sec4.
 DEBUG_ACTION_REPEAT = False
 
 # 번들 건전성 게이트 (2026-08-01 추가): RL 번들 가중치에 NaN/Inf가 있으면 실전에 내보내지
