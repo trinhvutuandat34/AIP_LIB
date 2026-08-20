@@ -18,28 +18,26 @@
 
 ---
 
-## Read this before anything below: the tree does not currently run
+## Status (updated 2026-08-20): the fix below landed 2026-08-13 and the tree runs
 
-**`COMPETITION_PLAN.md` 4.1 F25 (2026-08-11, ROOT CAUSE):** BehaviorTree.CPP builds a control
-node (`<Sequence>`/`<Fallback>`) with **zero children** whenever it carries a `name=` attribute.
-17 of the 20 composite nodes in this file are named and therefore build empty; only the 3
-anonymous ones (children counts 1/8/9) build correctly. An empty `Sequence` returns SUCCESS
-immediately; an empty `Fallback` returns FAILURE immediately. **The only nodes confirmed to have
-ever executed across this project's history are `Gate0_ClimbToSafeAltitude` and
-`Tail_SingleSideOffset`** — both bare leaves that don't depend on a named wrapper. Every gate
-described below is therefore a description of **intended, doctrine-driven behavior once the fix
-lands** (dropping `name=` from the 17 control nodes — XML-only, no rebuild), not a description of
-what the tree does today. The fix is deliberately held until the current `v8` RL campaign
-finishes, because `v8` trains against this exact tree as its opponent.
+**Superseded — kept for history.** This section originally warned the tree described below did
+not execute at all. **`COMPETITION_PLAN.md` 4.1 F25 (2026-08-11, ROOT CAUSE, fixed 2026-08-13,
+commit `5412a79`):** BehaviorTree.CPP builds a control node (`<Sequence>`/`<Fallback>`) with
+**zero children** whenever it carries a `name=` attribute. 17 of the 20 composite nodes in this
+file were named and therefore built empty; only the 3 anonymous ones (children counts 1/8/9) built
+correctly, so the only nodes confirmed to have ever executed pre-fix were
+`Gate0_ClimbToSafeAltitude` and `Tail_SingleSideOffset`. **The fix (dropping `name=` from the 17
+control nodes, XML-only) is applied and verified by gate-trace instrumentation**: all 17 maneuver
+nodes across all five gate blocks now execute where exactly 2 ever had. Every gate described below
+is therefore live, current behavior, not a forward-looking description — with one further update
+since: Gate 1's Jink branch gained an own-ATA<90° carve-out on 2026-08-20 (see below), fixing a
+capability hole F25 revealed (`Task_Evade` was starved).
 
-**Also open, found the same day (F23):** even with `Gate2p5_GunSolutionHold` manually removed to
-let `Gate2_BeamMerge` become reachable, its conditions read as satisfied (HCA 180°>120°, own ATA
-90.9°∈[45,150], distance 608<2500) yet the gate still returns FAILURE — combined with
-`Gun_OwnATA_Lt8` passing at 91° when it demands <8°, F23's working hypothesis is that
-`DECO_AngleOffCheck`/`DECO_LOSCheck`'s `UpDown` comparison sense may be **inverted** relative to
-how every gate in this file is written. If true, that changes the meaning of most gates below,
-not just Gate 2. Unresolved as of this writing — check `COMPETITION_PLAN.md` for F23's current
-status before treating any specific threshold direction below as confirmed-correct.
+**F23's inverted-`UpDown`-sense hypothesis (open as of the original writing) is refuted, not
+confirmed.** The `Gate2_BeamMerge` FAILURE it observed was a symptom of the F25 bug (the gate's own
+wrapper was one of the 17 empty-building nodes), not an inverted comparison operator — F25's root
+cause fully explains the observation without needing to invert any gate's meaning. Treat threshold
+directions below as written and confirmed-correct.
 
 ---
 
@@ -94,7 +92,7 @@ competition-scenario audits:
 
 ```
 Gate1_Notch_NotHeadOn:        HCA < 150°  →  Task_Notch
-Gate1_JinkingTurn_NotHeadOn:  HCA < 150°, own ATA ≥ 8°  →  Task_JinkingTurn
+Gate1_JinkingTurn_NotHeadOn:  HCA < 150°, own ATA ≥ 8°, own ATA < 90°  →  Task_JinkingTurn
 Gate1_TheBreak_NotHeadOn:     HCA < 150°, own ATA ≥ 8°  →  Task_Evade  ("The Break")
 ```
 
@@ -107,6 +105,23 @@ genuine near-head-on merge now defers to Gate 2 instead.
 with no angular awareness, so the instant a maneuvering defender's nose sweeps through the
 attacker's forward hemisphere, Gate 1 yanks the nose off an in-hand gun shot. `Task_Evade`'s
 class name is kept for history — it implements "The Break," not a generic evade.
+
+**Why the own-ATA<90° carve-out on Jink only (2026-08-20, `Gate1_Jink_NotDefensive_OwnATA_Lt90`):**
+`Task_JinkingTurn` (`AIP_DCS/BehaviorTree/BT_Content/Task/Task_JinkingTurn.cpp`) has no exit
+condition beyond sight/range — it always returns `SUCCESS` once triggered — so as the first live
+branch above it always won this Fallback whenever both Jink and Break were eligible, and
+`Task_Evade` was structurally unreachable in that overlap. Measured on `obfm_defensive` (opponent
+at our six, i.e. own ATA→180°): **1W/0D/29L, 27.51 damage taken, median min-ATA 174.2°**
+(`COMPETITION_PLAN.md` 4.1 F26-DEFENSIVE) — pointed away from the threat the whole fight because
+Jink, not Break, was flying it. A broader fix (reordering Break above Jink, gated on the
+*target's* ATA/range) was tried and reverted — it fixed this but lost `match_base` 2:1 on the peer
+rig (F26-GATE1-REJECTED). This carve-out is that postmortem's named refinement instead: gate Jink
+on **our own** ATA. At own ATA ≥ 90° the bandit is outside our forward hemisphere — genuinely
+behind our 3-9 line — so Jink's Sequence now fails there and the Fallback drops through to the
+unchanged `Gate1_TheBreak` Sequence below. Below ATA=90° (neutral/offensive fights), Jink is
+unaffected — same priority as before. Verified via the peer rig, shipping (`throttle_control=True`)
+config: `obfm_defensive` win+draw share 3.3%→40.0%, damage taken −40%; `match_base` unchanged
+within noise (13W/11D/6L vs a 14W/11D/5L control) — see F37-GATE1-DEFENSIVE-FIX for full numbers.
 
 ## Gate 2 — Merge & neutral-fight detection (`Gate2_MergeAndNeutralFight`, a `Fallback`)
 

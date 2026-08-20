@@ -196,6 +196,25 @@
                      shot instead of defending; the failure mode was being too passive. Tune 8
                      against the geometry trace; revert = delete this one DECO_LOSCheck. -->
                 <DECO_LOSCheck name="Gate1_Jink_NotGunSolution_OwnATA_Ge8" UpDown="Greater" InputLOS="8" Which="Own" BB="{BB}"/>
+                <!-- DEFENSIVE CARVE-OUT (2026-08-20, XML-only, NO rebuild). F26-DEFENSIVE found
+                     Task_JinkingTurn has no exit condition beyond sight/range, so it wins this
+                     Fallback unconditionally whenever both this and Gate1_TheBreak below are
+                     eligible -- Task_Evade ("The Break") was structurally unreachable, and
+                     obfm_defensive measured 1W/0D/29L, 27.51 damage taken, median min-ATA 174.2
+                     (pointed away the whole fight). F26-GATE1-REJECTED already tried the broad
+                     fix (reordering Evade above Jink, gated on the TARGET's ATA/range) and
+                     reverted it: it fixed obfm_defensive but lost match_base 2:1 on the peer rig
+                     (kills 4->1, damage dealt 7.71->4.43) because it also stole neutral fights
+                     the jink was winning fine. This is that postmortem's own named, until-now-
+                     untested refinement: gate Jink on OUR OWN ATA instead of reordering anything.
+                     Own ATA >= 90 means the bandit is outside our forward hemisphere -- genuinely
+                     behind our 3-9 line -- so this check FAILS, the Jink Sequence fails, and the
+                     Fallback drops through to the unmodified Gate1_TheBreak Sequence below, whose
+                     own HCA/ATA guards are already trivially satisfied at that geometry. Below
+                     ATA=90 (neutral/offensive fights), Jink is completely unaffected -- same
+                     priority as today. Revert: delete this one DECO_LOSCheck. See
+                     COMPETITION_PLAN.md 4.1 F26-GATE1-REJECTED, F26-DEFENSIVE. -->
+                <DECO_LOSCheck name="Gate1_Jink_NotDefensive_OwnATA_Lt90" UpDown="Less" InputLOS="90" Which="Own" BB="{BB}"/>
                 <Task_JinkingTurn name="Gate1_JinkingTurn" BB="{BB}"/>
               </Sequence>
               <Sequence>
