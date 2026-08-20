@@ -136,12 +136,9 @@ def verify(peer_dir: Path) -> int:
 
     print(f"with the peer XML removed: {ok_n} tree(s) initialised, {bad_n} failed")
     if ok_n >= 1 and bad_n >= 1:
-        print("Episode 0 reads the peer's own directory.")
-        print()
-        print("  !! THIS DOES NOT LICENSE A MULTI-EPISODE A/B. The peer's rules stop applying")
-        print("     from episode 1 onward (COMPETITION_PLAN.md 4.1 F18) -- this check runs")
-        print("     --episodes 1, which is the one episode that works. An N>1 run through this")
-        print("     rig is UNMEASURED, not null, and it fails silently.")
+        print("Episode 0 reads the peer's own directory. Rig verified for this peer dir.")
+        print("(F18's 'stops applying after episode 1' concern was refuted by F20 -- see this")
+        print(" module's docstring -- so this --verify=1 check licenses full N>1 A/B runs too.)")
         return 0
     print("NOT VERIFIED: the peer is not reading its own XML. Any A/B through this rig would be")
     print("symmetric and meaningless. Do not trust results until this passes.")
