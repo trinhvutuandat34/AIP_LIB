@@ -97,6 +97,7 @@ shipped mode is `vptrack`; revisit before shipping any bundle-backed mode.
 from __future__ import annotations
 
 import math
+import os
 
 import numpy as np
 
@@ -153,11 +154,23 @@ class LiveVerticalFrameProvider(ActionProvider):
     pass-through in the local sim and in eval.
     """
 
-    def __init__(self, inner: ActionProvider, enabled: bool = True) -> None:
+    # Escape hatch so the fix can be A/B'd end-to-end (scripts/loopback_live_dryrun.py runs the
+    # unfixed control this way). A test that cannot be made to FAIL proves nothing -- without a
+    # control, "the commands varied" is not evidence the correction was applied. Never set this
+    # in a submission: it restores the 110,700x range error measured in
+    # scripts/verify_live_frame_fix.py.
+    _DISABLE_ENV = "DOGFIGHT_DISABLE_LIVE_FRAME_FIX"
+
+    def __init__(self, inner: ActionProvider, enabled: bool | None = None) -> None:
         self.inner = inner
+        if enabled is None:
+            enabled = os.environ.get(self._DISABLE_ENV, "0") in ("0", "", "false", "False")
         self.enabled = bool(enabled)
         self.corrected_steps = 0
         self.passthrough_steps = 0
+        if not self.enabled:
+            print(f"[live_frame_fix] DISABLED via {self._DISABLE_ENV} -- diagnostic only, "
+                  "the native BT will see a ~110,700x wrong range. Never ship this.")
 
     # Keep the wrapper transparent: _iter_bt_providers(), GLimitedProvider and the resilience
     # wrappers all reach through to the real provider by attribute.

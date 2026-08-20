@@ -46,6 +46,7 @@ Boundary: `src/dogfight/**` untouched -- same idiom and reason as the OBFM/HABFM
 from __future__ import annotations
 
 import math
+import os
 
 import gymnasium as gym
 import numpy as np
@@ -63,7 +64,21 @@ TIEBREAK_SEPARATION_M = 3048.0
 TIEBREAK_LOS_DEG = 0.0
 
 # PROVISIONAL -- not pinned by the deck ("차후 공개").
-MATCH_ALTITUDE_M = 4572.0
+#
+# OVERRIDABLE VIA DOGFIGHT_MATCH_ALTITUDE_M (added 2026-08-20), because this number being an
+# ASSUMPTION rather than a measurement turns out to matter enormously. Real MT_PlaneInfo captured
+# from an actual server (logs/unreal_packets/, 13,708 airborne frames) reports altitudes of
+# 0-1067 m, median 604 m -- NOT 4572 m. That band sits almost entirely BELOW
+# Task_ClimbToSafeAltitude's SAFE_ALTITUDE_TRIGGER_M of 914 m, and that node is Gate 0, the
+# outer Fallback's top priority: when it fires it aims +5000 m straight up, firewalls the
+# throttle, returns SUCCESS, and every tactical gate beneath it is never evaluated. 65% of those
+# real airborne frames are below the trigger.
+#
+# Local eval has never been able to see this, because every local scenario spawns at 4572-7000 m
+# where Gate 0 simply never fires. Set this env var to reproduce the real altitude regime:
+#     DOGFIGHT_MATCH_ALTITUDE_M=600 python scripts/eval_v5_vs_bt.py --scenario-mode match_base ...
+# See LIVE_INFERENCE_FRAME_BUGS.md and COMPETITION_PLAN.md 4.1 F38.
+MATCH_ALTITUDE_M = float(os.environ.get("DOGFIGHT_MATCH_ALTITUDE_M", "4572.0"))
 MATCH_SPEED_MPS = 200.0
 
 
