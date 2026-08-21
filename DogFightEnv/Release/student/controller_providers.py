@@ -104,6 +104,23 @@ RADTODEG = 180.0 / np.pi
 ENGAGE_RANGE_M = float(os.environ.get("DOGFIGHT_VPTRACK_RANGE_M", "2500.0"))
 ENGAGE_LOS_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_LOS_DEG", "45.0"))
 
+# ---- THE SHIPPED COMBAT CONFIG -- single source of truth (2026-08-21, F44) -------------
+# The class defaults above are the ORIGINAL sweep champion and are deliberately left alone:
+# they are what every historical measurement in the register was taken at, so changing them
+# would silently re-interpret old results. What actually ships is different, and it lived only
+# as literals inside student/my_submission.py -- which meant `run_unreal_inference.py --mode
+# vptrack` built a bare VPTrackingProvider and silently flew 2500m/45deg/throttle-off: the
+# pre-F29/F39 config, measured at 13.3% against the cutoff where the shipped one scores 100%
+# (N=100). Same flag, same mode name, an order-of-magnitude different aircraft.
+#
+# Both live entry points now take these, so the two cannot drift apart:
+#   throttle  -- F29, adopted on 3 seeds; losses fell in every one (8->5,5,4)
+#   4000/60   -- F39-ENVELOPE-MARGIN; 100% win / 95% earned vs cutoff at N=100, and unlike
+#                4000/45 it costs nothing on the peer rig (match_base 46.7% vs 43.3%)
+SHIP_ENGAGE_RANGE_M = 4000.0
+SHIP_ENGAGE_LOS_DEG = 60.0
+SHIP_THROTTLE_CONTROL = True
+
 # ---- Gains ----------------------------------------------------------------------------
 K_ROLL = 1.0
 K_PITCH = 1.0

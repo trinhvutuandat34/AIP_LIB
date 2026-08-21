@@ -21,21 +21,27 @@ C:\Users\Administrator\anaconda3\envs\aip\python.exe        # or: conda activate
 
 ---
 
-## ⚠ 1. THE TRAP: `run_unreal_inference.py --mode vptrack` is NOT the shipping config
+## 1. `vptrack` now defaults to the shipped config everywhere (fixed 2026-08-21, F44)
 
-`_build_action_provider_raw` builds a bare `VPTrackingProvider(dll_name=...)`, so it takes the
-module defaults — **2500 m / 45° / throttle OFF**. That is the pre-F29/F39 config that scores
-**13.3 %** against the cutoff. The shipping config (**4000 m / 60° + throttle**, 100 % vs cutoff,
-N=100) is set *explicitly* only in `student/my_submission.py`.
+**This used to be a trap and no longer is.** `run_unreal_inference.py --mode vptrack` built a
+bare `VPTrackingProvider`, so it silently flew the class defaults — 2500 m / 45° / throttle OFF,
+the pre-F29/F39 config measured at **13.3 %** against the cutoff where the shipped one scores
+**100 %** (N=100). Same mode name, an order-of-magnitude different aircraft.
 
-**For a real match, run `my_submission.py`.** If you must use `run_unreal_inference.py`, force the
-envelope with env vars first:
+The shipped values now live in `student/controller_providers.py` as
+`SHIP_ENGAGE_RANGE_M` / `SHIP_ENGAGE_LOS_DEG` / `SHIP_THROTTLE_CONTROL`, and **both live entry
+points read them**, so they cannot drift apart. Verified by constructing the provider from each
+path and comparing: `4000.0 / 60.0 / True` on both.
+
+Override for experiments (defaults are the shipped values):
 
 ```powershell
-$env:DOGFIGHT_VPTRACK_THROTTLE = "1"
-$env:DOGFIGHT_VPTRACK_RANGE_M  = "4000"
-$env:DOGFIGHT_VPTRACK_LOS_DEG  = "60"
+--vptrack-range-m 2500 --vptrack-los-deg 45 --vptrack-throttle 0     # pre-F29 behaviour
 ```
+
+The `DOGFIGHT_VPTRACK_RANGE_M` / `_LOS_DEG` / `_THROTTLE` env vars still work and still shift the
+*class* defaults, which is what `eval_v5_vs_bt.py`'s per-side flags key off. The CLI flags above
+are the clearer lever for live runs.
 
 ---
 
@@ -44,8 +50,8 @@ $env:DOGFIGHT_VPTRACK_LOS_DEG  = "60"
 No CLI flags; configured by module constants + env vars.
 
 ```powershell
-$env:DOGFIGHT_SERVER_IP  = "<announced IP>"
-$env:DOGFIGHT_SERVER_PORT = "<announced port>"
+$env:DOGFIGHT_SERVER_IP  = "127.0.0.1"
+$env:DOGFIGHT_SERVER_PORT = "9999"
 python student\my_submission.py
 ```
 
@@ -57,7 +63,7 @@ watchdog. The packet monitor is **on** by default here.
 
 ## 3. LIVE — `run_unreal_inference.py`, all five modes
 
-Common flags: `--server-ip <IP> --server-port <PORT> --team-name real_eagle
+Common flags: `--server-ip 127.0.0.1 --server-port 9999 --team-name real_eagle
 --action-repeat 1 --packet-monitor`
 
 Modes are exactly: `bt` | `vptrack` | `rl` | `hybrid` | `hybrid_vptrack`.
@@ -65,27 +71,27 @@ Modes are exactly: `bt` | `vptrack` | `rl` | `hybrid` | `hybrid_vptrack`.
 ```powershell
 # --- bt : native behaviour tree only -------------------------------------------------
 python run_unreal_inference.py --mode bt --team-name real_eagle `
-  --server-ip <IP> --server-port <PORT> --action-repeat 1 --packet-monitor
+  --server-ip 127.0.0.1 --server-port 9999 --action-repeat 1 --packet-monitor
 
-# --- vptrack : BT tactics + terminal pointing law (SET THE ENV VARS IN 1 FIRST) -------
+# --- vptrack : BT tactics + terminal pointing law (SHIPPED config by default since F44) --
 python run_unreal_inference.py --mode vptrack --team-name real_eagle `
-  --server-ip <IP> --server-port <PORT> --action-repeat 1 --packet-monitor
+  --server-ip 127.0.0.1 --server-port 9999 --action-repeat 1 --packet-monitor
 
 # --- rl : pure policy (needs a bundle + matching observation config) ------------------
 python run_unreal_inference.py --mode rl --team-name real_eagle `
-  --server-ip <IP> --server-port <PORT> --action-repeat 1 --packet-monitor `
+  --server-ip 127.0.0.1 --server-port 9999 --action-repeat 1 --packet-monitor `
   --bundle-dir artifacts\curriculum\real_eagle\v12_standalone\stage_15_full_dogfight\final_bundle `
   --observation-mode custom --observation-module student.my_observation_v2
 
 # --- hybrid : BT + scale*RL (residual | blend | switch) -------------------------------
 python run_unreal_inference.py --mode hybrid --hybrid-mode residual --residual-scale 0.10 `
-  --team-name real_eagle --server-ip <IP> --server-port <PORT> --action-repeat 1 --packet-monitor `
+  --team-name real_eagle --server-ip 127.0.0.1 --server-port 9999 --action-repeat 1 --packet-monitor `
   --bundle-dir artifacts\curriculum\real_eagle\v10_residual\stage_15_full_dogfight\final_bundle `
   --observation-mode custom --observation-module student.my_observation_v2
 
 # --- hybrid_vptrack : vptrack as the secondary instead of raw BT ----------------------
 python run_unreal_inference.py --mode hybrid_vptrack --hybrid-mode residual --residual-scale 0.10 `
-  --team-name real_eagle --server-ip <IP> --server-port <PORT> --action-repeat 1 --packet-monitor `
+  --team-name real_eagle --server-ip 127.0.0.1 --server-port 9999 --action-repeat 1 --packet-monitor `
   --bundle-dir artifacts\curriculum\real_eagle\v10_residual\stage_15_full_dogfight\final_bundle `
   --observation-mode custom --observation-module student.my_observation_v2
 ```

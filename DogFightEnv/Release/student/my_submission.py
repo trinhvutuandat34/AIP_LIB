@@ -91,6 +91,9 @@ from student.inference_providers import (
 # DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. Guards the two
 # no-edit-client fragilities that risk a competition-day disconnect/DQ (COMPETITION_RULES Sec8).
 from student.controller_providers import (
+    SHIP_ENGAGE_LOS_DEG,
+    SHIP_ENGAGE_RANGE_M,
+    SHIP_THROTTLE_CONTROL,
     EnvelopeGatedHybridProvider,
     GLimitedProvider,
     VPTrackingProvider,
@@ -300,11 +303,18 @@ def _build_action_provider_raw():
         # 2026-08-20) for the full numbers before changing this again.
         #
         # Revert: drop engage_range_m/engage_los_deg to return to 2500m/45deg.
+        #
+        # 2026-08-21 (F44): 값 자체는 그대로이고, 리터럴 대신
+        # controller_providers.SHIP_* 상수를 참조하도록만 바꿨다. 이 값들이 여기에만
+        # 있었기 때문에 run_unreal_inference.py --mode vptrack은 클래스 기본값
+        # (2500m/45deg/throttle off = 컷오프 13.3%)으로 조용히 날고 있었다. 이제 두
+        # 진입점이 같은 상수를 읽으므로 서로 어긋날 수 없다.
         print(f"[{TEAM_NAME}] VP 트래킹 백엔드 사용 (RL 없음): {BT_DLL} "
-              f"(throttle_control=True, engage=4000m/60deg)")
+              f"(throttle_control={SHIP_THROTTLE_CONTROL}, "
+              f"engage={SHIP_ENGAGE_RANGE_M:.0f}m/{SHIP_ENGAGE_LOS_DEG:.0f}deg)")
         return VPTrackingProvider(
-            dll_name=BT_DLL, throttle_control=True,
-            engage_range_m=4000.0, engage_los_deg=60.0,
+            dll_name=BT_DLL, throttle_control=SHIP_THROTTLE_CONTROL,
+            engage_range_m=SHIP_ENGAGE_RANGE_M, engage_los_deg=SHIP_ENGAGE_LOS_DEG,
         )
 
     # BUNDLE_DIR 가드 (2026-08-11): 여기 도달했다는 것은 MODE가 rl/hybrid* 계열이라는

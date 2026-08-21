@@ -47,7 +47,13 @@ from student.inference_providers import (
 )
 # DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. See the
 # module docstring for the two client fragilities this guards against (COMPETITION_RULES Sec8).
-from student.controller_providers import GLimitedProvider, VPTrackingProvider
+from student.controller_providers import (
+    SHIP_ENGAGE_LOS_DEG,
+    SHIP_ENGAGE_RANGE_M,
+    SHIP_THROTTLE_CONTROL,
+    GLimitedProvider,
+    VPTrackingProvider,
+)
 from student.live_frame_fix import LiveVerticalFrameProvider
 from student.g_limiter import G_LIMIT
 from student.submission_resilience import (
@@ -69,6 +75,19 @@ def parse_args():
     parser.add_argument("--heartbeat-sec", type=float, default=1.0, help="Heartbeat interval in seconds.")
     parser.add_argument("--command-delay-sec", type=float, default=0.0, help="Delay before replying with CMD after both PlaneInfo packets are ready.")
     parser.add_argument("--recv-timeout-sec", type=float, default=0.2, help="UDP socket receive timeout.")
+    parser.add_argument(
+        "--vptrack-range-m", type=float, default=SHIP_ENGAGE_RANGE_M,
+        help=f"vptrack engagement range (default {SHIP_ENGAGE_RANGE_M:.0f} m -- the SHIPPED value).",
+    )
+    parser.add_argument(
+        "--vptrack-los-deg", type=float, default=SHIP_ENGAGE_LOS_DEG,
+        help=f"vptrack engagement LOS half-angle (default {SHIP_ENGAGE_LOS_DEG:.0f} deg -- SHIPPED).",
+    )
+    parser.add_argument(
+        "--vptrack-throttle", type=int, choices=[0, 1], default=int(SHIP_THROTTLE_CONTROL),
+        help=f"vptrack range-based throttle control (default {int(SHIP_THROTTLE_CONTROL)} -- SHIPPED). "
+             "Pass 0 for the pre-F29 behaviour.",
+    )
     parser.add_argument(
         "--server-silence-warn-sec", type=float, default=5.0,
         help="Warn when the server has sent no PlaneInfo for this long (0=off). Matches the "
@@ -155,7 +174,16 @@ def _build_action_provider_raw(args, effective_observation_mode: str):
     # Live-parity safe -- it reads ownship_state/target_state, which unreal/policies.py
     # populates on the live path exactly as single_agent_env.py does locally.
     if args.mode == "vptrack":
-        return VPTrackingProvider(dll_name=args.bt_dll)
+        # Defaults to the SHIPPED config, not the class defaults (F44). Previously this built a
+        # bare VPTrackingProvider and silently flew 2500m/45deg/throttle-off -- the pre-F29/F39
+        # config, 13.3% against the cutoff where the shipped one scores 100%. Constants live in
+        # controller_providers so this and my_submission.py cannot drift apart.
+        return VPTrackingProvider(
+            dll_name=args.bt_dll,
+            throttle_control=args.vptrack_throttle,
+            engage_range_m=args.vptrack_range_m,
+            engage_los_deg=args.vptrack_los_deg,
+        )
 
     if args.bundle_dir is None:
         raise ValueError("--bundle-dir is required for rl and hybrid modes")
