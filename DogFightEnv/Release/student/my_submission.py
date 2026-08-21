@@ -50,6 +50,7 @@ same pass, so local validation via run_local_dogfight.py actually exercises what
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 # Force UTF-8 on stdout/stderr (2026-08-06). THIS FILE IS THE COMPETITION ENTRY POINT and it
@@ -103,10 +104,24 @@ from student.submission_resilience import ResilientActionProvider, supervise_cli
 # TODO: 아래 설정을 팀에 맞게 수정하세요.
 # =============================================================================
 
-TEAM_NAME = "real_eagle"
-SERVER_IP = "221.151.77.208"   # TODO: 운영 공지로 최신 서버 IP 확정 필요 -- startup_command.txt의
-                                # 10.185.16.247(사설/연습망으로 추정)과 다름; 최신 공지 전까지 확정 아님
-SERVER_PORT = 9999
+TEAM_NAME = os.environ.get("DOGFIGHT_TEAM_NAME", "real_eagle")
+
+# ⚑ 제출본은 월요일에 잠기고 재제출이 없다(4.1 F39-ONE-SHOT-SUBMISSION). 그런데 공식 서버
+# 주소는 아직 공개되지 않았고(4.1 F27), 기록에 남은 후보 IP는 전부 팀원 개인 장비다. 즉
+# **주소가 제출 마감 이후에 공지될 수 있는데, 그때 이 파일은 이미 잠겨 있다.**
+# 그래서 상수를 그대로 두되 환경변수로 덮어쓸 수 있게 한다 -- 잠긴 제출본을 수정하지 않고도
+# 실행 시점에 올바른 주소를 넣을 수 있다. 환경변수가 없으면 동작은 종전과 100% 동일하다.
+#
+#     set DOGFIGHT_SERVER_IP=<공지된 IP>
+#     set DOGFIGHT_SERVER_PORT=<공지된 포트>
+#     python student\my_submission.py
+#
+# 포트도 같이 덮어써야 한다: 9999는 COMPETITION_RULES.md에 근거가 없고, 실제로 기록된 연결
+# 테스트 2건은 모두 6666을 썼다(4.1 F27).
+# 주소가 틀리면 조용히 실패한다 -- 소켓은 열리고 하트비트도 나가지만 프레임이 0장이다.
+# 2026-08-21 실측(4.1 F40-SILENCE-BLIND). 이제 최소한 경고는 뜬다.
+SERVER_IP = os.environ.get("DOGFIGHT_SERVER_IP", "221.151.77.208")
+SERVER_PORT = int(os.environ.get("DOGFIGHT_SERVER_PORT", "9999"))
 
 # 사용할 백엔드 모드 선택: "rl" | "bt" | "vptrack" | "hybrid" | "hybrid_vptrack" | "hybrid_gated"
 #
