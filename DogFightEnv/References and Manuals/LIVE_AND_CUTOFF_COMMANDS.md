@@ -169,7 +169,18 @@ our side is G-limited, so leaving the opponent unlimited would let it pull G we 
 Sweep job names: `bt`, `vptrack_2200_35`, `vptrack_2000_45`, `vptrack_throttle`,
 `vptrack_defensive`, `vptrack_corner`, `thr_corner`, `thr_defensive`, `thr_corner_def`,
 `thr_2200_35`, `thr_2000_45`, `env_r4000_l60`, `env_r6000_l90`, `env_r4000_l45`, `env_r2500_l90`,
-`rl_v10`, `hybrid_v10`, `hybridvp_v10`, `hybridgated_v10`.
+`rl_v10`, `hybrid_v10`, `hybridvp_v10`, `hybridgated_v10`, `rl_v12`, `hybridgated_v12` (added
+2026-08-21, F45 — `rl_v10`/`hybridgated_v10` run `v10_residual`, trained AS a residual; `rl_v12`/
+`hybridgated_v12` run `v12_standalone`, the only campaign trained standalone against the live
+tree, so it is the correct bundle for the plain `rl` mode).
+
+**N=50 result against the real cutoff binary, all modes (F45, 2026-08-21):**
+`env_r6000_l90` 100.0%/100.0% (0 self-crashes either side) · `env_r4000_l60` **(ships)**
+100.0%/**96.0%** · `hybridgated_v10` 14.0% · `bt` alone 6.0%/4.0% · `rl_v12` 4.0%/**0.0%** ·
+`hybridvp_v10` 2.0% · `hybrid_v10` **0.0%**. `env_r6000_l90` edges the shipped config here but
+costs real `match_base` performance (F37-WIDE-ENVELOPE-SCOPE) — the cutoff score was never what
+decided that choice. Every RL/hybrid mode reproduces the F31/F34/F43 self-crash pattern
+(`ownship altitude below min`) against an opponent that is not our own BT.
 
 **Reading `summarize_cutoff`:** `env%` is the env's own verdict; `rule%` re-adjudicates the
 altitude floor the way RULES Sec 5 states it (the env books a *target* below-floor as a draw but
