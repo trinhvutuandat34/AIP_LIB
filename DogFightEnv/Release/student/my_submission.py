@@ -97,7 +97,11 @@ from student.controller_providers import (
 )
 from student.g_limiter import G_LIMIT
 from student.live_frame_fix import LiveVerticalFrameProvider
-from student.submission_resilience import ResilientActionProvider, supervise_client
+from student.submission_resilience import (
+    ResilientActionProvider,
+    run_with_setup_retry,
+    supervise_client,
+)
 
 
 # =============================================================================
@@ -377,6 +381,15 @@ def main():
     print(f"=== {TEAM_NAME} 경진대회 클라이언트 시작 ===")
     print(f"서버: {SERVER_IP}:{SERVER_PORT}")
     print(f"모드: {MODE}")
+    # 셋업(_run_once) 전체를 재시도로 감싼다 (2026-08-21, F42). supervise_client는 클라이언트가
+    # 생긴 뒤부터만 보호한다 -- Rule XML 활성화/DLL 로드/관측 모듈 import는 그 앞에서 맨몸으로
+    # 실행되고, 여기서 한 번 실패하면 프로세스가 그대로 종료되어 "접속 실패"(규정 8절 실격
+    # 경로)가 된다. 갓 압축 해제한 DLL을 백신이 스캔하며 잠그는 상황이 대표적이며, 이런 실패는
+    # 몇 초 뒤 재시도하면 성공하는 종류다. student/submission_resilience.py 참고.
+    run_with_setup_retry(_run_once)
+
+
+def _run_once():
     if MODE in {"bt", "hybrid"}:
         print(f"BT DLL/XML: {BT_DLL} / {BT_RULE_XML}")
 

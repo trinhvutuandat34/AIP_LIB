@@ -50,7 +50,11 @@ from student.inference_providers import (
 from student.controller_providers import GLimitedProvider, VPTrackingProvider
 from student.live_frame_fix import LiveVerticalFrameProvider
 from student.g_limiter import G_LIMIT
-from student.submission_resilience import ResilientActionProvider, supervise_client
+from student.submission_resilience import (
+    ResilientActionProvider,
+    run_with_setup_retry,
+    supervise_client,
+)
 
 # python run_unreal_inference.py --mode rl --bundle-dir artifacts\models\team01\v1 --team-name team01
 # python run_unreal_inference.py --mode bt --team-name team01
@@ -198,6 +202,15 @@ def parse_ai_type(value: str) -> AIType:
 
 def main():
     args = parse_args()
+    # Argument parsing stays outside the retry: a bad CLI flag is a permanent fault that should
+    # fail fast and loudly, not spin. Everything after it -- module import, rule-XML activation,
+    # DLL load -- is retried, because those failures are transient in the one environment that
+    # matters (a freshly extracted package on a machine we do not control). F42, see
+    # student/submission_resilience.py::run_with_setup_retry.
+    run_with_setup_retry(lambda: _run_once(args))
+
+
+def _run_once(args):
     observation_hook = load_observation_hook(args.observation_module) if args.observation_module else None
     effective_observation_mode = observation_hook["mode"] if observation_hook else args.observation_mode
     with activate_rule_xml(args.bt_rule_xml, ROOT):

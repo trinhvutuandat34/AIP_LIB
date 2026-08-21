@@ -124,6 +124,52 @@ class ResilientActionProvider(ActionProvider):
             pass
 
 
+def run_with_setup_retry(build_and_run, *, max_backoff_sec: float = 10.0, log=print) -> None:
+    """Retry the whole build-and-run sequence, so a transient SETUP failure cannot end the run.
+
+    (2026-08-21, F42.) supervise_client() protects everything from the moment the client exists
+    -- but it is only reached after the rule XML is activated, the BT DLL is loaded and the
+    observation module is imported. Every one of those runs BARE in main(). Measured: with the
+    DLL momentarily unavailable, build_action_provider() raises FileNotFoundError, main() exits,
+    and the process is simply gone. It never connects, and COMPETITION_RULES Sec 8 makes failing
+    to connect a DQ path -- the same outcome the resilience layer above exists to prevent, just
+    one step earlier in the sequence where nothing was watching.
+
+    Why this is worth guarding rather than theoretical: the submission is extracted from a zip
+    minutes before it runs, on a machine we do not control. Windows Defender scans a freshly
+    written .dll on first access and can hold it briefly; an extract may still be flushing; a
+    slow or virus-scanned volume can stall the first open. All of those are transient by
+    definition -- they succeed on a retry seconds later -- and all of them currently kill the
+    submission permanently.
+
+    Retries indefinitely and deliberately: a permanent fault (a genuinely missing file) is then
+    loudly and repeatedly reported while the operator can still fix it in place, and the run
+    recovers by itself when they do. Exiting instead converts a fixable problem into a silent
+    forfeit. KeyboardInterrupt always ends the loop.
+
+    build_and_run must do the FULL sequence -- setup AND supervise_client -- because the rule-XML
+    context manager has to stay open for the lifetime of the run. It returns only on a clean
+    shutdown.
+    """
+    backoff = 1.0
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            build_and_run()
+            return
+        except KeyboardInterrupt:
+            log("[resilience] KeyboardInterrupt during setup -> stopping")
+            return
+        except Exception as exc:
+            log(f"[resilience] SETUP FAILED on attempt {attempt} "
+                f"({type(exc).__name__}: {exc}) -- retrying in {backoff:.1f}s. "
+                f"The submission has NOT connected yet; fix the cause and it will recover.")
+            traceback.print_exc()
+        time.sleep(backoff)
+        backoff = min(backoff * 2.0, max_backoff_sec)
+
+
 def _silence_watchdog(client, activity, *, warn_sec: float, reconnect_sec: float,
                       stop_event: "threading.Event", log) -> None:
     """Watch for SERVER SILENCE -- the one disconnect mode the supervisor cannot see.
