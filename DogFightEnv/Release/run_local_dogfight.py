@@ -99,34 +99,6 @@ def _vptrack_kwargs(range_m, los_deg, throttle, defensive=None, corner=None,
     return kw
 
 
-def _build_provider_raw(
-    side: str,
-    backend: str,
-    bundle_dir: str | None,
-    bt_dll: str,
-    policy_id: str,
-    hybrid_mode: str,
-    alpha: float,
-    residual_scale: float,
-    observation_mode: str = "",
-    observation_module: str = "",
-    vptrack_range_m: float | None = None,
-    vptrack_los_deg: float | None = None,
-    vptrack_throttle: bool | None = None,
-    vptrack_defensive: bool | None = None,
-    vptrack_corner: bool | None = None,
-    vptrack_roll_taper: float | None = None,
-):
-    if backend == "fixed":
-        return None
-    if backend == "bt":
-        return BTActionProvider(dll_name=bt_dll)
-    if backend == "vptrack":
-        # Native BT for tactics/throttle, student-space control law for terminal pointing.
-        # See student/controller_providers.py for the measured defect this bypasses.
-        return VPTrackingProvider(dll_name=bt_dll, **_vptrack_kwargs(
-            vptrack_range_m, vptrack_los_deg, vptrack_throttle, vptrack_defensive, vptrack_corner,
-            vptrack_roll_taper))
 _HYBRID_ON_VPTRACK = ("hybrid_vptrack", "hybrid_gated")
 
 
@@ -159,6 +131,34 @@ def resolve_vptrack_floor(backend, range_m, los_deg, throttle):
     return range_m, los_deg, throttle
 
 
+def _build_provider_raw(
+    side: str,
+    backend: str,
+    bundle_dir: str | None,
+    bt_dll: str,
+    policy_id: str,
+    hybrid_mode: str,
+    alpha: float,
+    residual_scale: float,
+    observation_mode: str = "",
+    observation_module: str = "",
+    vptrack_range_m: float | None = None,
+    vptrack_los_deg: float | None = None,
+    vptrack_throttle: bool | None = None,
+    vptrack_defensive: bool | None = None,
+    vptrack_corner: bool | None = None,
+    vptrack_roll_taper: float | None = None,
+):
+    if backend == "fixed":
+        return None
+    if backend == "bt":
+        return BTActionProvider(dll_name=bt_dll)
+    if backend == "vptrack":
+        # Native BT for tactics/throttle, student-space control law for terminal pointing.
+        # See student/controller_providers.py for the measured defect this bypasses.
+        return VPTrackingProvider(dll_name=bt_dll, **_vptrack_kwargs(
+            vptrack_range_m, vptrack_los_deg, vptrack_throttle, vptrack_defensive, vptrack_corner,
+            vptrack_roll_taper))
     if backend in ("hybrid_vptrack", "hybrid_gated"):
         vptrack_range_m, vptrack_los_deg, vptrack_throttle = resolve_vptrack_floor(
             backend, vptrack_range_m, vptrack_los_deg, vptrack_throttle)
