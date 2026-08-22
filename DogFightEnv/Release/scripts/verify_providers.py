@@ -63,16 +63,23 @@ _CASES = {
         "vptrack_range_m": 4000.0, "vptrack_los_deg": 60.0, "vptrack_throttle": True,
     },
     "rl": {"bundle_dir": str(_BUNDLE)},
+    "cutoff": {},
 }
 
 
 def verify_every_backend_builds() -> None:
     print("Every backend builds a real (non-None) ActionProvider:")
+    cases = dict(_CASES)
     if not _BUNDLE.exists():
         print(f"  [SKIP] bundle-backed cases -- {_BUNDLE} not found on this machine")
-        cases = {"bt": _CASES["bt"], "vptrack": _CASES["vptrack"]}
-    else:
-        cases = _CASES
+        for _b in ("hybrid", "hybrid_vptrack", "hybrid_gated", "rl"):
+            cases.pop(_b, None)
+    try:
+        import cutoff_provider
+        cutoff_provider.default_exe_path()
+    except Exception as exc:
+        print(f"  [SKIP] cutoff -- binary not found on this machine ({exc})")
+        cases.pop("cutoff", None)
 
     import run_local_dogfight as rld
 

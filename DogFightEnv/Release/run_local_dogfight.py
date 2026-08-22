@@ -9,10 +9,10 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent   # Release/ 루트
 SRC = ROOT / "src"
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+SCRIPTS = ROOT / "scripts"
+for _p in (ROOT, SRC, SCRIPTS):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 from DogFightEnvWrapper import DogFightWrapper
 from dogfight.ai.bt_action_provider import BTActionProvider
@@ -41,11 +41,42 @@ from student.controller_providers import (
     SHIP_THROTTLE_CONTROL,
 )
 
+# The organizers' real cutoff binary as a live opponent (2026-08-22). cutoff_provider.py runs
+# unreal_bt_client.exe as a subprocess and speaks the real wire protocol to it, so this is the
+# actual binary, not a reimplementation. cutoff_provider.py itself is left untouched -- it is
+# also the historical baseline for scripts/eval_vs_cutoff.py, which stays reproducible this way.
+#
+# THE VERTICAL-AXIS FIX (F54) IS APPLIED HERE, ALWAYS, WITH NO OPT-OUT. The unpatched provider
+# sends the local sim's NED-down z straight through as PlaneInfo altitude, which the real Unreal
+# wire sends up-positive -- an inverted vertical axis that means the cutoff can barely perceive
+# ownship at all (measured: win rate 100% -> 12% once corrected, cutoff_provider.py's own
+# module docstring and COMPETITION_PLAN.md 4.1 F54 have the full derivation). Since this is a
+# NEW capability with no prior measurement history to keep reproducible, there is no reason to
+# ship the known-wrong default; scripts/eval_vs_cutoff.py's uncorrected form remains available
+# separately for anyone who specifically wants to reproduce the pre-F54 numbers.
+from cutoff_provider import CutoffProvider
+
+
+def _cutoff_plane_fields_zfix(state):
+    """CutoffProvider._plane_fields with F54's correction: z sent up-positive, matching the
+    real Unreal wire, instead of the local sim's NED-down convention."""
+    import numpy as _np
+    s = _np.asarray(state, dtype=_np.float64)
+    s = _np.nan_to_num(s, nan=0.0, posinf=0.0, neginf=0.0)
+    return (
+        [float(s[0]), float(s[1]), -float(s[2])],
+        [float(s[3]), float(s[4]), float(s[5])],
+        [float(s[6]), float(s[7]), float(s[8])],
+    )
+
+
+CutoffProvider._plane_fields = staticmethod(_cutoff_plane_fields_zfix)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run local dogfight simulation between two inference backends.")
-    parser.add_argument("--ownship-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated", "fixed"], required=True)
-    parser.add_argument("--target-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated", "fixed"], required=True)
+    parser.add_argument("--ownship-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated", "fixed", "cutoff"], required=True)
+    parser.add_argument("--target-backend", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated", "fixed", "cutoff"], required=True)
     parser.add_argument("--ownship-bundle-dir")
     parser.add_argument("--target-bundle-dir")
     parser.add_argument("--ownship-bt-dll", default="AIP_BASE.dll")
@@ -171,6 +202,13 @@ def _build_provider_raw(
 ):
     if backend == "fixed":
         return None
+    if backend == "cutoff":
+        # Force sides follow this project's standing convention (ownship=1, target=2), matching
+        # ProviderCommandPolicy elsewhere -- own_force_side is THIS seat, target_force_side the
+        # other one, so the cutoff's own BT blackboard reads the fight from its own perspective
+        # regardless of which seat it is placed in.
+        own_side, enemy_side = (1, 2) if side == "ownship" else (2, 1)
+        return CutoffProvider(own_force_side=own_side, target_force_side=enemy_side)
     if backend == "bt":
         return BTActionProvider(dll_name=bt_dll)
     if backend == "vptrack":
