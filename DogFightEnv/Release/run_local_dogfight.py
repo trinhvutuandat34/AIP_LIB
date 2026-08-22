@@ -62,6 +62,26 @@ def parse_args():
     parser.add_argument("--episode-step-limit", type=int, default=18000)
     parser.add_argument("--min-altitude", type=float, default=300.0)
     parser.add_argument("--save-log", action="store_true", help="Save tacview CSV log after the episode.")
+    # Per-side vptrack overrides (2026-08-22). Added because this entry point had NO CLI surface
+    # for them at all -- vptrack always fell back to VPTrackingProvider's CLASS defaults
+    # (2500 m / 45 deg / throttle off), never the shipped 4000/60/throttle-on config, with no
+    # flag able to reach it. Same failure shape as F44 (run_unreal_inference.py silently flying
+    # the pre-F29/F39 config); this is a third entry point that had the identical gap. Mirrors
+    # scripts/eval_v5_vs_bt.py's flags exactly, so a command that works there works here too.
+    for _side in ("ownship", "target"):
+        parser.add_argument(f"--{_side}-vptrack-range-m", type=float, default=None,
+                           help=f"{_side} vptrack engagement range (class default 2500 m).")
+        parser.add_argument(f"--{_side}-vptrack-los-deg", type=float, default=None,
+                           help=f"{_side} vptrack engagement LOS half-angle (class default 45 deg).")
+        parser.add_argument(f"--{_side}-vptrack-throttle", type=int, choices=[0, 1], default=None,
+                           help=f"{_side} vptrack range/throttle control (class default off).")
+        parser.add_argument(f"--{_side}-vptrack-defensive", type=int, choices=[0, 1], default=None,
+                           help=f"{_side} defensive break when losing the gun duel (default off).")
+        parser.add_argument(f"--{_side}-vptrack-corner", type=int, choices=[0, 1], default=None,
+                           help=f"{_side} hold corner speed for peak turn rate (default off).")
+        parser.add_argument(f"--{_side}-vptrack-roll-taper", type=float, default=None,
+                           help=f"{_side} taper ROLL by pointing-error magnitude (0 = off, "
+                                f"the shipped default -- F47 measured non-zero values harmful).")
     return parser.parse_args()
 
 
@@ -247,6 +267,15 @@ def main():
         residual_scale=args.residual_scale,
         observation_mode=effective_observation_mode,
         observation_module=args.observation_module,
+        vptrack_range_m=args.ownship_vptrack_range_m,
+        vptrack_los_deg=args.ownship_vptrack_los_deg,
+        vptrack_throttle=(None if args.ownship_vptrack_throttle is None
+                         else bool(args.ownship_vptrack_throttle)),
+        vptrack_defensive=(None if args.ownship_vptrack_defensive is None
+                          else bool(args.ownship_vptrack_defensive)),
+        vptrack_corner=(None if args.ownship_vptrack_corner is None
+                       else bool(args.ownship_vptrack_corner)),
+        vptrack_roll_taper=args.ownship_vptrack_roll_taper,
     )
     target_provider = build_provider(
         side="target",
@@ -259,6 +288,15 @@ def main():
         residual_scale=args.residual_scale,
         observation_mode=effective_observation_mode,
         observation_module=args.observation_module,
+        vptrack_range_m=args.target_vptrack_range_m,
+        vptrack_los_deg=args.target_vptrack_los_deg,
+        vptrack_throttle=(None if args.target_vptrack_throttle is None
+                         else bool(args.target_vptrack_throttle)),
+        vptrack_defensive=(None if args.target_vptrack_defensive is None
+                          else bool(args.target_vptrack_defensive)),
+        vptrack_corner=(None if args.target_vptrack_corner is None
+                       else bool(args.target_vptrack_corner)),
+        vptrack_roll_taper=args.target_vptrack_roll_taper,
     )
 
     with activate_rule_xml(args.bt_rule_xml, ROOT):
