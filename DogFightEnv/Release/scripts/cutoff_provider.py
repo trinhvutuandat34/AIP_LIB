@@ -25,10 +25,15 @@ Approximate, and it matters when reading results:
     `StepWithPlaneData`, not the full 51-float FDM the local BT path gets. That is a property of
     the real interface, so the cutoff is not disadvantaged here; but our own side, run locally,
     IS getting richer input than it would in a real match. Local numbers are optimistic for us.
-  * The binary defaults to `--action-repeat 6` (the 0.1 s response-time rule), so it re-ticks its
-    tree at 10 Hz. This env calls providers every 60 Hz frame. Our side therefore decides 6x more
-    often than the cutoff locally, which it would NOT in a real match where both hold 6 frames.
-    Use `action_repeat=1` to remove that asymmetry and bound its size.
+  * The binary defaults to `--action-repeat 6` (its own choice, not a rule), so it re-ticks its
+    tree at 10 Hz. This env calls providers every 60 Hz frame, so our side decides 6x more often
+    than the cutoff here. CORRECTED 2026-08-22: this bullet used to claim that asymmetry "would
+    NOT" exist in a real match. It would. COMPETITION_RULES Sec 4 (re-read 2026-08-20) makes the
+    60 Hz answer-rate and the 0.1667 s per-decision compute cap two separate rules, and neither
+    mandates action-repeat 6; the shipped submission sets `ACTION_REPEAT = 1`. So the local rig
+    reproduces the real decision-rate relationship rather than flattering us, and the cutoff
+    results should not be discounted for it. Use `action_repeat=1` to measure the cutoff without
+    its own self-imposed handicap.
 
 The binary is restarted per episode, mirroring `_recycle_native_bts()`: its tree carries state
 (CoolTimer, blackboard) and episodes must stay independent.

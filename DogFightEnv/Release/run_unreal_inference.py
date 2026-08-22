@@ -47,10 +47,20 @@ from student.inference_providers import (
 )
 # DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. See the
 # module docstring for the two client fragilities this guards against (COMPETITION_RULES Sec8).
-from student.controller_providers import GLimitedProvider, VPTrackingProvider
-from student.live_frame_fix import LiveVerticalFrameProvider
+from student.controller_providers import (
+    SHIP_ENGAGE_LOS_DEG,
+    SHIP_ENGAGE_RANGE_M,
+    SHIP_THROTTLE_CONTROL,
+    GLimitedProvider,
+    VPTrackingProvider,
+)
+from student.live_frame_fix import COMPLETE_LIVE_STATE, LiveVerticalFrameProvider
 from student.g_limiter import G_LIMIT
-from student.submission_resilience import ResilientActionProvider, supervise_client
+from student.submission_resilience import (
+    ResilientActionProvider,
+    run_with_setup_retry,
+    supervise_client,
+)
 
 # python run_unreal_inference.py --mode rl --bundle-dir artifacts\models\team01\v1 --team-name team01
 # python run_unreal_inference.py --mode bt --team-name team01
@@ -66,6 +76,19 @@ def parse_args():
     parser.add_argument("--command-delay-sec", type=float, default=0.0, help="Delay before replying with CMD after both PlaneInfo packets are ready.")
     parser.add_argument("--recv-timeout-sec", type=float, default=0.2, help="UDP socket receive timeout.")
     parser.add_argument(
+        "--vptrack-range-m", type=float, default=SHIP_ENGAGE_RANGE_M,
+        help=f"vptrack engagement range (default {SHIP_ENGAGE_RANGE_M:.0f} m -- the SHIPPED value).",
+    )
+    parser.add_argument(
+        "--vptrack-los-deg", type=float, default=SHIP_ENGAGE_LOS_DEG,
+        help=f"vptrack engagement LOS half-angle (default {SHIP_ENGAGE_LOS_DEG:.0f} deg -- SHIPPED).",
+    )
+    parser.add_argument(
+        "--vptrack-throttle", type=int, choices=[0, 1], default=int(SHIP_THROTTLE_CONTROL),
+        help=f"vptrack range-based throttle control (default {int(SHIP_THROTTLE_CONTROL)} -- SHIPPED). "
+             "Pass 0 for the pre-F29 behaviour.",
+    )
+    parser.add_argument(
         "--server-silence-warn-sec", type=float, default=5.0,
         help="Warn when the server has sent no PlaneInfo for this long (0=off). Matches the "
              "organizers' unreal_bt_client.exe --server-timeout-sec, which is warn-only.",
@@ -80,7 +103,7 @@ def parse_args():
     parser.add_argument(
         "--action-repeat",
         type=int,
-        default=6,
+        default=None,
         help=(
             "Number of completed own/enemy PlaneInfo pairs to hold each action. "
             "Use 6 to match Release training step_ratio=6; use 1 for per-packet policy calls."
@@ -126,6 +149,48 @@ def parse_args():
     return parser.parse_args()
 
 
+# Shipped action-repeat is per MODE, not global (2026-08-20 / COMPETITION_RULES Sec 4). The
+# 60 Hz answer rate and the 0.1667 s compute-latency cap are separate rules, and
+# ProviderCommandPolicy sends a CMD every tick regardless. So action-repeat only exists to match
+# a TRAINED policy's own step_ratio: `vptrack`/`bt` were never trained and ship at 1 (which is
+# what student/my_submission.py sets); a bundle-backed mode keeps 6 to match its training.
+#
+# This defaulted to a flat 6 until 2026-08-22, so `run_unreal_inference.py --mode vptrack` decided
+# at 10 Hz where the submission decides at 60 Hz -- the same entry-point drift F44 fixed for the
+# engagement envelope, one field over.
+_SHIPPED_ACTION_REPEAT = {"bt": 1, "vptrack": 1}
+
+
+def resolve_action_repeat(args) -> int:
+    if args.action_repeat is not None:
+        return int(args.action_repeat)
+    return _SHIPPED_ACTION_REPEAT.get(args.mode, 6)
+
+
+_BUNDLE_BACKED_MODES = {"rl", "hybrid", "hybrid_vptrack", "hybrid_gated"}
+
+
+def _observation_rebuild(mode, observation_mode, observation_module):
+    """Rebuild the observation from the CORRECTED live states, for bundle-backed modes only.
+
+    `policies.py` computes `context.observation` from the raw wire state before the provider is
+    called, so a policy would otherwise read altitude as -4572 m (live frame fix bug 1, see
+    student/live_frame_fix.py). `vptrack`/`bt` ignore the observation entirely, so they get None
+    here and their path is byte-identical to before.
+    """
+    if mode not in _BUNDLE_BACKED_MODES:
+        return None
+    from GeoMathUtil import GeometryInfo
+    from dogfight.envs.observation import build_observation
+
+    geometry = GeometryInfo()
+    hook = load_observation_hook(observation_module) if observation_module else None
+    if hook is not None:
+        fn = hook["build_observation"]
+        return lambda own, tgt: fn(own, tgt, geometry, None)
+    return lambda own, tgt: build_observation(observation_mode, own, tgt, geometry)
+
+
 def build_action_provider(args, effective_observation_mode: str):
     """Live inference provider, wrapped in the 10 G limiter (see student/g_limiter.py).
 
@@ -135,9 +200,25 @@ def build_action_provider(args, effective_observation_mode: str):
     # LiveVerticalFrameProvider is INSIDE the limiter: it corrects the context the provider
     # reads (Unreal sends state[2] as up-positive altitude, every consumer indexes it as NED
     # Down), whereas the limiter post-processes the action. See student/live_frame_fix.py.
+    # ORDERING. Normally the limiter is OUTSIDE the frame fix: it only post-processes the action,
+    # and the state fields it reads (VX/VY/VZ, SIM_TIME) were never corrected anyway. With
+    # COMPLETE_LIVE_STATE on, the limiter MUST sit INSIDE, because the whole point is that it now
+    # reads the completed state the wrapper produces. See live_frame_fix.py bug 3.
+    rebuild = _observation_rebuild(
+        args.mode, effective_observation_mode, args.observation_module
+    )
+    if COMPLETE_LIVE_STATE:
+        return LiveVerticalFrameProvider(
+            GLimitedProvider(
+                _build_action_provider_raw(args, effective_observation_mode),
+                limit_g=G_LIMIT,
+            ),
+            observation_rebuild=rebuild,
+        )
     return GLimitedProvider(
         LiveVerticalFrameProvider(
-            _build_action_provider_raw(args, effective_observation_mode)
+            _build_action_provider_raw(args, effective_observation_mode),
+            observation_rebuild=rebuild,
         ),
         limit_g=G_LIMIT,
     )
@@ -151,7 +232,16 @@ def _build_action_provider_raw(args, effective_observation_mode: str):
     # Live-parity safe -- it reads ownship_state/target_state, which unreal/policies.py
     # populates on the live path exactly as single_agent_env.py does locally.
     if args.mode == "vptrack":
-        return VPTrackingProvider(dll_name=args.bt_dll)
+        # Defaults to the SHIPPED config, not the class defaults (F44). Previously this built a
+        # bare VPTrackingProvider and silently flew 2500m/45deg/throttle-off -- the pre-F29/F39
+        # config, 13.3% against the cutoff where the shipped one scores 100%. Constants live in
+        # controller_providers so this and my_submission.py cannot drift apart.
+        return VPTrackingProvider(
+            dll_name=args.bt_dll,
+            throttle_control=args.vptrack_throttle,
+            engage_range_m=args.vptrack_range_m,
+            engage_los_deg=args.vptrack_los_deg,
+        )
 
     if args.bundle_dir is None:
         raise ValueError("--bundle-dir is required for rl and hybrid modes")
@@ -198,6 +288,15 @@ def parse_ai_type(value: str) -> AIType:
 
 def main():
     args = parse_args()
+    # Argument parsing stays outside the retry: a bad CLI flag is a permanent fault that should
+    # fail fast and loudly, not spin. Everything after it -- module import, rule-XML activation,
+    # DLL load -- is retried, because those failures are transient in the one environment that
+    # matters (a freshly extracted package on a machine we do not control). F42, see
+    # student/submission_resilience.py::run_with_setup_retry.
+    run_with_setup_retry(lambda: _run_once(args))
+
+
+def _run_once(args):
     observation_hook = load_observation_hook(args.observation_module) if args.observation_module else None
     effective_observation_mode = observation_hook["mode"] if observation_hook else args.observation_mode
     with activate_rule_xml(args.bt_rule_xml, ROOT):
@@ -213,7 +312,7 @@ def main():
             observation_fn=observation_hook["build_observation"] if observation_hook else None,
             ownship_force_side=args.ownship_force_side,
             target_force_side=args.target_force_side,
-            action_repeat=args.action_repeat,
+            action_repeat=resolve_action_repeat(args),
             debug_action_repeat=args.debug_action_repeat,
         )
 

@@ -29,7 +29,16 @@ _OUT = _ROOT / "artifacts" / "eval"
 # The bundle declares obs_mode real_eagle15 / observation_module student.my_observation_v2, and
 # `verify_bundle_observation` rejects a mismatch, so the module has to be passed explicitly.
 _BUNDLE = "artifacts/curriculum/real_eagle/v10_residual/stage_15_full_dogfight/final_bundle"
+# v12_standalone completed 2026-08-21 (status=completed, 16/16 stages, 7,298 iters). It is the
+# only campaign ever trained STANDALONE against the live F25-fixed tree, so it is the right
+# bundle for the `rl` mode; v10 above was trained as a residual and is the right one for the
+# hybrid modes. (The comment above predates v12 and describes v11 as the newest -- superseded.)
+_BUNDLE_V12 = "artifacts/curriculum/real_eagle/v12_standalone/stage_15_full_dogfight/final_bundle"
 _OBS = ["--observation-module", "student.my_observation_v2"]
+# Residual scale is a property of the BUNDLE, not a sweep knob: v10_residual was trained at
+# 0.10 and v12_standalone is not a residual at all. `--residual-scale` defaults to 0.35, so
+# every hybrid job here was scoring v10 off-label until 2026-08-22 (F48). Pass it explicitly.
+_SCALE_V10 = ["--residual-scale", "0.10"]
 
 JOBS: dict[str, list[str]] = {
     "bt":                     ["--ownship-backend", "bt"],
@@ -70,9 +79,18 @@ JOBS: dict[str, list[str]] = {
                                "--ownship-vptrack-range-m", "2500", "--ownship-vptrack-los-deg", "90"],
 
     "rl_v10":                 ["--ownship-backend", "rl", "--ownship-bundle-dir", _BUNDLE] + _OBS,
-    "hybrid_v10":             ["--ownship-backend", "hybrid", "--ownship-bundle-dir", _BUNDLE] + _OBS,
-    "hybridvp_v10":           ["--ownship-backend", "hybrid_vptrack", "--ownship-bundle-dir", _BUNDLE] + _OBS,
-    "hybridgated_v10":        ["--ownship-backend", "hybrid_gated", "--ownship-bundle-dir", _BUNDLE] + _OBS,
+    "hybrid_v10":             ["--ownship-backend", "hybrid", "--ownship-bundle-dir", _BUNDLE] + _OBS + _SCALE_V10,
+    "hybridvp_v10":           ["--ownship-backend", "hybrid_vptrack", "--ownship-bundle-dir", _BUNDLE] + _OBS + _SCALE_V10,
+    "hybridgated_v10":        ["--ownship-backend", "hybrid_gated", "--ownship-bundle-dir", _BUNDLE] + _OBS + _SCALE_V10,
+
+    # v12_standalone (2026-08-21, completed 16/16). Added because _BUNDLE above is v10_residual,
+    # which was trained AS A RESIDUAL -- running it in standalone `rl` mode is off-label, and
+    # every mode deserves the bundle actually trained for it. v12 is the only completed campaign
+    # trained standalone against the live F25-fixed tree, so it is the correct bundle for `rl`.
+    # Expect it to lose: F43 measured it at 0W / 20-of-30 self-crash / 0 WEZ steps vs our own BT.
+    # It is here so "all modes vs the cutoff" is actually all modes, not so it might win.
+    "rl_v12":                 ["--ownship-backend", "rl", "--ownship-bundle-dir", _BUNDLE_V12] + _OBS,
+    "hybridgated_v12":        ["--ownship-backend", "hybrid_gated", "--ownship-bundle-dir", _BUNDLE_V12] + _OBS,
 }
 
 

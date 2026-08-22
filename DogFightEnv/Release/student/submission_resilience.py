@@ -54,8 +54,14 @@ class ResilientActionProvider(ActionProvider):
     def __init__(self, inner: ActionProvider, neutral: "np.ndarray | None" = None):
         self._inner = inner
         self._last: "np.ndarray | None" = None
+        # Throttle is 1.0, not 0.0 (2026-08-22). This vector is only reached if the provider
+        # fails BEFORE it has ever succeeded -- i.e. on the first frames of a match -- and
+        # np.zeros() commands ENGINE IDLE there. The no-edit client makes the same call for the
+        # same situation: ProviderCommandPolicy.compute_command returns throttle_cmd=1.0 while
+        # the plane snapshots are still invalid (src/dogfight/unreal/policies.py). Matching it
+        # keeps a start-of-match hiccup from parking us at idle.
         self._neutral = (
-            np.zeros(4, dtype=np.float32) if neutral is None
+            np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32) if neutral is None
             else np.asarray(neutral, dtype=np.float32).reshape(-1)
         )
         self._error_count = 0
@@ -68,11 +74,40 @@ class ResilientActionProvider(ActionProvider):
         # whether the provider then handled it.
         self._call_count = 0
         self._last_call_monotonic: "float | None" = None
+        # Per-CONNECTION baseline (2026-08-22). call_count/last_call_monotonic are cumulative
+        # since CONSTRUCTION, and supervise_client deliberately reuses one provider across
+        # reconnects (rebuilding it would reload the model). Without a baseline the watchdog on
+        # attempt N measures silence against attempt N-1's last frame -- see mark_connection().
+        self._connection_call_base = 0
+        self._connection_started_monotonic = time.monotonic()
 
     @property
     def call_count(self) -> int:
         """Number of frames the server has driven through us since construction."""
         return self._call_count
+
+    def mark_connection(self) -> None:
+        """Start a new per-connection window. Called by supervise_client on every attempt.
+
+        WHY (2026-08-22, measured). supervise_client starts a FRESH _silence_watchdog per connect
+        attempt but hands it the SAME provider. Cumulative counters then make a brand-new socket
+        look like a long-silent one: with a 12 s outage and silence_reconnect_sec=10, the watchdog
+        on the new connection logged "server silent for 12.5s -> forcing reconnect" within 1.5 s of
+        connecting, before a single frame could arrive -- an unbounded reconnect loop, and
+        COMPETITION_RULES Sec 8 disqualifies for repeated network instability. Reproduced in
+        scripts/verify_resilience.py::check_silence_watchdog_resets_per_connection.
+        """
+        self._connection_call_base = self._call_count
+        self._connection_started_monotonic = time.monotonic()
+
+    @property
+    def connection_call_count(self) -> int:
+        """Frames received since the CURRENT connection started."""
+        return self._call_count - self._connection_call_base
+
+    @property
+    def connection_started_monotonic(self) -> float:
+        return self._connection_started_monotonic
 
     @property
     def last_call_monotonic(self) -> "float | None":
@@ -124,6 +159,52 @@ class ResilientActionProvider(ActionProvider):
             pass
 
 
+def run_with_setup_retry(build_and_run, *, max_backoff_sec: float = 10.0, log=print) -> None:
+    """Retry the whole build-and-run sequence, so a transient SETUP failure cannot end the run.
+
+    (2026-08-21, F42.) supervise_client() protects everything from the moment the client exists
+    -- but it is only reached after the rule XML is activated, the BT DLL is loaded and the
+    observation module is imported. Every one of those runs BARE in main(). Measured: with the
+    DLL momentarily unavailable, build_action_provider() raises FileNotFoundError, main() exits,
+    and the process is simply gone. It never connects, and COMPETITION_RULES Sec 8 makes failing
+    to connect a DQ path -- the same outcome the resilience layer above exists to prevent, just
+    one step earlier in the sequence where nothing was watching.
+
+    Why this is worth guarding rather than theoretical: the submission is extracted from a zip
+    minutes before it runs, on a machine we do not control. Windows Defender scans a freshly
+    written .dll on first access and can hold it briefly; an extract may still be flushing; a
+    slow or virus-scanned volume can stall the first open. All of those are transient by
+    definition -- they succeed on a retry seconds later -- and all of them currently kill the
+    submission permanently.
+
+    Retries indefinitely and deliberately: a permanent fault (a genuinely missing file) is then
+    loudly and repeatedly reported while the operator can still fix it in place, and the run
+    recovers by itself when they do. Exiting instead converts a fixable problem into a silent
+    forfeit. KeyboardInterrupt always ends the loop.
+
+    build_and_run must do the FULL sequence -- setup AND supervise_client -- because the rule-XML
+    context manager has to stay open for the lifetime of the run. It returns only on a clean
+    shutdown.
+    """
+    backoff = 1.0
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            build_and_run()
+            return
+        except KeyboardInterrupt:
+            log("[resilience] KeyboardInterrupt during setup -> stopping")
+            return
+        except Exception as exc:
+            log(f"[resilience] SETUP FAILED on attempt {attempt} "
+                f"({type(exc).__name__}: {exc}) -- retrying in {backoff:.1f}s. "
+                f"The submission has NOT connected yet; fix the cause and it will recover.")
+            traceback.print_exc()
+        time.sleep(backoff)
+        backoff = min(backoff * 2.0, max_backoff_sec)
+
+
 def _silence_watchdog(client, activity, *, warn_sec: float, reconnect_sec: float,
                       stop_event: "threading.Event", log) -> None:
     """Watch for SERVER SILENCE -- the one disconnect mode the supervisor cannot see.
@@ -166,20 +247,32 @@ def _silence_watchdog(client, activity, *, warn_sec: float, reconnect_sec: float
             return
         now = time.monotonic()
         last = activity.last_call_monotonic
-        if activity.call_count == 0:
+        # Per-connection, not per-process: a reconnect must not inherit the previous socket's
+        # last-frame timestamp. mark_connection() moves both baselines; providers without it
+        # (any other activity object) fall back to the cumulative counters as before.
+        fresh = getattr(activity, "connection_call_count", None)
+        if fresh is not None:
+            if fresh == 0:
+                last = None
+            started = getattr(activity, "connection_started_monotonic", now)
+        else:
+            fresh = activity.call_count
+            started = now
+        if fresh == 0:
             # Never heard from the server at all. Warn on a slow cadence, never reconnect.
             if warn_sec > 0 and now - warned_at >= max(warn_sec, 5.0):
                 warned_at = now
                 log(f"[resilience] WARNING: no frames from server yet "
                     f"({getattr(client, 'server_ip', '?')}:{getattr(client, 'server_port', '?')}) "
-                    f"-- connected but never received a PlaneInfo. Check SERVER_IP/port and "
+                    f"-- connected but never received a PlaneInfo on this connection. Check "
+                    f"SERVER_IP/port and "
                     f"that the match has started.")
             continue
-        silence = now - (last if last is not None else now)
+        silence = now - (last if last is not None else started)
         if warn_sec > 0 and silence >= warn_sec and now - warned_at >= warn_sec:
             warned_at = now
             log(f"[resilience] WARNING: server silent for {silence:.1f}s "
-                f"after {activity.call_count} frames")
+                f"after {fresh} frames on this connection")
         if reconnect_sec > 0 and silence >= reconnect_sec:
             log(f"[resilience] server silent for {silence:.1f}s (>= {reconnect_sec:.1f}s) "
                 f"-> forcing reconnect")
@@ -219,6 +312,8 @@ def supervise_client(make_client, *, max_backoff_sec: float = 5.0, log=print,
                 f"[resilience] connect attempt {attempt} -> "
                 f"{getattr(client, 'server_ip', '?')}:{getattr(client, 'server_port', '?')}"
             )
+            if activity is not None and hasattr(activity, "mark_connection"):
+                activity.mark_connection()
             if activity is not None and (silence_warn_sec > 0 or silence_reconnect_sec > 0):
                 watchdog = threading.Thread(
                     target=_silence_watchdog, args=(client, activity),

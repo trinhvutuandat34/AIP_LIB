@@ -246,6 +246,68 @@ def verify_sustained_faults() -> None:
         SR.time.sleep = real_sleep
 
 
+def verify_silence_watchdog_resets_per_connection() -> None:
+    """A reconnect must not inherit the PREVIOUS connection's last-frame timestamp.
+
+    supervise_client() starts a fresh _silence_watchdog per connect attempt but deliberately
+    reuses ONE provider across reconnects (rebuilding it would reload the model). Before
+    2026-08-22 the watchdog read the provider's cumulative call_count/last_call_monotonic, so on
+    attempt N it measured silence against attempt N-1's last frame. Measured: a 12 s outage with
+    silence_reconnect_sec=10 made the watchdog tear the NEW connection down 1.5 s after it
+    opened, before any frame could arrive -- an unbounded reconnect loop, and
+    COMPETITION_RULES Sec 8 disqualifies for repeated network instability.
+    """
+    import threading
+    import time
+
+    print()
+    print("Silence watchdog -- per-connection window")
+
+    class Nice(ActionProvider):
+        def compute_action(self, context):
+            return ActionResult(action=np.zeros(4, dtype=np.float32), source="x", info={})
+
+        def reset(self, context=None):
+            pass
+
+        def close(self):
+            pass
+
+    class FakeClient:
+        server_ip, server_port = "127.0.0.1", 9999
+
+    provider = ResilientActionProvider(Nice())
+    ctx = ActionContext(sim=None, opponent_sim=None, ownship_state=None,
+                        target_state=None, observation=None, info={})
+    for _ in range(120):
+        provider.compute_action(ctx)
+
+    # Pretend the outage + backoff already happened, without actually sleeping for it.
+    provider._last_call_monotonic = time.monotonic() - 12.0
+    provider.mark_connection()
+    provider._connection_started_monotonic = time.monotonic()
+
+    stop = threading.Event()
+    logs: list[str] = []
+    watchdog = threading.Thread(
+        target=SR._silence_watchdog, args=(FakeClient(), provider),
+        kwargs={"warn_sec": 5.0, "reconnect_sec": 10.0, "stop_event": stop, "log": logs.append},
+        daemon=True,
+    )
+    watchdog.start()
+    time.sleep(1.5)          # about how long a real handshake takes before the first PlaneInfo
+    stop.set()
+    watchdog.join(timeout=2.0)
+
+    check("a fresh connection is not torn down by the previous connection's silence",
+          not any("forcing reconnect" in line for line in logs),
+          f"{len(logs)} log line(s)")
+    check("mark_connection() zeroes the per-connection frame count",
+          provider.connection_call_count == 0,
+          f"connection_call_count={provider.connection_call_count}, "
+          f"call_count={provider.call_count}")
+
+
 def main() -> int:
     print("=" * 72)
     print("Pre-submission resilience check (no server required)")
@@ -253,6 +315,7 @@ def main() -> int:
     verify_provider()
     verify_supervisor()
     verify_sustained_faults()
+    verify_silence_watchdog_resets_per_connection()
     print("\n" + "=" * 72)
     if FAILURES:
         print(f"FAILED {len(FAILURES)} check(s): {', '.join(FAILURES)}")

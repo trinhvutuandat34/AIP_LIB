@@ -104,8 +104,54 @@ RADTODEG = 180.0 / np.pi
 ENGAGE_RANGE_M = float(os.environ.get("DOGFIGHT_VPTRACK_RANGE_M", "2500.0"))
 ENGAGE_LOS_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_LOS_DEG", "45.0"))
 
+# ---- THE SHIPPED COMBAT CONFIG -- single source of truth (2026-08-21, F44) -------------
+# The class defaults above are the ORIGINAL sweep champion and are deliberately left alone:
+# they are what every historical measurement in the register was taken at, so changing them
+# would silently re-interpret old results. What actually ships is different, and it lived only
+# as literals inside student/my_submission.py -- which meant `run_unreal_inference.py --mode
+# vptrack` built a bare VPTrackingProvider and silently flew 2500m/45deg/throttle-off: the
+# pre-F29/F39 config, measured at 13.3% against the cutoff where the shipped one scores 100%
+# (N=100). Same flag, same mode name, an order-of-magnitude different aircraft.
+#
+# Both live entry points now take these, so the two cannot drift apart:
+#   throttle  -- F29, adopted on 3 seeds; losses fell in every one (8->5,5,4)
+#   4000/60   -- F39-ENVELOPE-MARGIN; 100% win / 95% earned vs cutoff at N=100, and unlike
+#                4000/45 it costs nothing on the peer rig (match_base 46.7% vs 43.3%)
+SHIP_ENGAGE_RANGE_M = 4000.0
+SHIP_ENGAGE_LOS_DEG = 60.0
+SHIP_THROTTLE_CONTROL = True
+
 # ---- Gains ----------------------------------------------------------------------------
 K_ROLL = 1.0
+# Taper the ROLL command by pointing-error MAGNITUDE below this many degrees. 0.0 = OFF, which
+# is the historical behaviour every register measurement was taken at, and remains the default.
+#
+# THE DEFECT IT ADDRESSES (measured 2026-08-22). `phi = atan2(az, el)` is a DIRECTION -- where
+# the error sits about the nose axis -- and carries no information about how BIG the error is.
+# `pitch` is scaled by `err_gain ~ los_deg / PROPORTIONAL_DIV` and so decays to ~0 as the
+# solution converges; `roll` has no such term, so as los_deg -> 0 both az and el vanish and
+# atan2() returns an essentially arbitrary angle. Measured over 20,914 in-envelope steps of
+# match_base self-play at the shipped 4000 m / 60 deg envelope, roll authority is INVERTED with
+# respect to error:
+#
+#     LOS band     steps   mean|roll|   frac |roll| > 0.5
+#      0.0-0.5 deg  5746      0.481          47.9%     <- on target, rolling hard
+#      1.0-2.0 deg  4948      0.460          19.2%
+#      5.0- 15 deg  1347      0.251          17.5%
+#       15- 60 deg  1061      0.045           0.0%     <- far off, barely rolling
+#
+#   Inside the actual scoring window (152.4-914.4 m AND LOS <= 1.0 deg): 375 steps,
+#   mean |roll| 0.561, and 18.9% of them at near-full-scale roll (> 0.9).
+#
+# i.e. the aircraft throws the gun line around at exactly the moment it must hold the pipper
+# inside the <=1 deg gate. That is consistent with this project's long-standing signature of
+# excellent MINIMUM ATA (0.014-0.024 deg) but poor DWELL, and with the three draws that
+# "reached the angle gate and scored nothing" (Sec 4.1, throttle rationale).
+#
+# The taper must NOT reach the large-error regime: roll being maximal at phi = 180 deg is the
+# whole point of this controller (it is what escapes Controller_CY's dead spot), so the gain is
+# 1.0 everywhere above ROLL_TAPER_DEG and only shrinks below it.
+ROLL_TAPER_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_ROLL_TAPER_DEG", "0.0"))
 K_PITCH = 1.0
 # Floor under the pitch alignment gate: pitch = -K * err_gain * max(cos(phi), PITCH_FLOOR).
 #
@@ -293,6 +339,7 @@ class VPTrackingProvider(BTActionProvider):
         self.corner_hold = bool(kwargs.pop("corner_hold", CORNER_HOLD))
         self.corner_kt = float(kwargs.pop("corner_kt", CORNER_KT))
         self.pitch_floor = float(kwargs.pop("pitch_floor", PITCH_FLOOR))
+        self.roll_taper_deg = float(kwargs.pop("roll_taper_deg", ROLL_TAPER_DEG))
         self.threat_ata_deg = float(kwargs.pop("threat_ata_deg", THREAT_ATA_DEG))
         super().__init__(*args, **kwargs)
         self._los_error_sum = 0.0
@@ -410,7 +457,11 @@ class VPTrackingProvider(BTActionProvider):
         # ROLL. Proportional to phi itself, NOT sin(phi). This is the whole fix: at phi = 180 deg
         # -- the old law's dead spot, where sin(phi) -> 0 and it commanded nothing -- this is
         # MAXIMAL, because 180 deg is the farthest the error can be from the pull plane.
-        roll_cmd = _clamp(K_ROLL * phi / np.pi, -1.0, 1.0)
+        roll_gain = (
+            1.0 if self.roll_taper_deg <= 0.0
+            else _clamp(los_deg / self.roll_taper_deg, 0.0, 1.0)
+        )
+        roll_cmd = _clamp(K_ROLL * roll_gain * phi / np.pi, -1.0, 1.0)
 
         # PITCH. Pull toward the target, scaled by how much of the error is already in the pull
         # plane. There is deliberately NO (1 - |UTAngle|/90) factor: that term is what made
@@ -437,6 +488,9 @@ class VPTrackingProvider(BTActionProvider):
         # commands rather than blending, because a half-committed break is the worst of both.
         if self.defensive_break and self._losing_gun_duel(own, tgt, rng, los_deg):
             self._break_steps += 1
+            # Deliberately UNTAPERED: this is a max-rate break, not a tracking command, and it
+            # only fires when we are losing the gun duel -- holding a steady pipper is exactly
+            # what we are trying to stop doing here.
             roll_cmd = _clamp(K_ROLL * phi / np.pi, -1.0, 1.0)
             pitch_cmd = -1.0
             rudder_cmd = 0.0          # uncoordinated rudder only slows the roll rate here

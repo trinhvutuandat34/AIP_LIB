@@ -91,13 +91,20 @@ from student.inference_providers import (
 # DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. Guards the two
 # no-edit-client fragilities that risk a competition-day disconnect/DQ (COMPETITION_RULES Sec8).
 from student.controller_providers import (
+    SHIP_ENGAGE_LOS_DEG,
+    SHIP_ENGAGE_RANGE_M,
+    SHIP_THROTTLE_CONTROL,
     EnvelopeGatedHybridProvider,
     GLimitedProvider,
     VPTrackingProvider,
 )
 from student.g_limiter import G_LIMIT
-from student.live_frame_fix import LiveVerticalFrameProvider
-from student.submission_resilience import ResilientActionProvider, supervise_client
+from student.live_frame_fix import COMPLETE_LIVE_STATE, LiveVerticalFrameProvider
+from student.submission_resilience import (
+    ResilientActionProvider,
+    run_with_setup_retry,
+    supervise_client,
+)
 
 
 # =============================================================================
@@ -238,6 +245,30 @@ STRICT_BUNDLE_HEALTH = False
 # =============================================================================
 
 
+_BUNDLE_BACKED_MODES = {"rl", "hybrid", "hybrid_vptrack", "hybrid_gated"}
+
+
+def _observation_rebuild(mode, observation_mode, observation_module):
+    """Rebuild the observation from the CORRECTED live states, for bundle-backed modes only.
+
+    `policies.py` computes `context.observation` from the raw wire state before the provider is
+    called, so a policy would otherwise read altitude as -4572 m (live frame fix bug 1, see
+    student/live_frame_fix.py). `vptrack`/`bt` ignore the observation entirely, so they get None
+    here and their path is byte-identical to before.
+    """
+    if mode not in _BUNDLE_BACKED_MODES:
+        return None
+    from GeoMathUtil import GeometryInfo
+    from dogfight.envs.observation import build_observation
+
+    geometry = GeometryInfo()
+    hook = load_observation_hook(observation_module) if observation_module else None
+    if hook is not None:
+        fn = hook["build_observation"]
+        return lambda own, tgt: fn(own, tgt, geometry, None)
+    return lambda own, tgt: build_observation(observation_mode, own, tgt, geometry)
+
+
 def build_action_provider():
     """실제 제출 경로. 아래 _build_action_provider_raw()의 결과를 10 G 리미터로 감싼다.
 
@@ -249,8 +280,21 @@ def build_action_provider():
     # Unreal은 state[2]를 위쪽이 양수인 고도로 보내지만 모든 소비자는 이를 NED Down으로
     # 읽는다. LiveVerticalFrameProvider가 리미터 안쪽에서 그 부호를 바로잡는다.
     # student/live_frame_fix.py 참고.
+    # ORDERING. Normally the limiter is OUTSIDE the frame fix: it only post-processes the action,
+    # and the state fields it reads (VX/VY/VZ, SIM_TIME) were never corrected anyway. With
+    # COMPLETE_LIVE_STATE on, the limiter MUST sit INSIDE, because the whole point is that it now
+    # reads the completed state the wrapper produces. See live_frame_fix.py bug 3.
+    rebuild = _observation_rebuild(MODE, OBSERVATION_MODE, OBSERVATION_MODULE)
+    if COMPLETE_LIVE_STATE:
+        return LiveVerticalFrameProvider(
+            GLimitedProvider(_build_action_provider_raw(), limit_g=G_LIMIT),
+            observation_rebuild=rebuild,
+        )
     return GLimitedProvider(
-        LiveVerticalFrameProvider(_build_action_provider_raw()), limit_g=G_LIMIT
+        LiveVerticalFrameProvider(
+            _build_action_provider_raw(), observation_rebuild=rebuild
+        ),
+        limit_g=G_LIMIT,
     )
 
 def _build_action_provider_raw():
@@ -296,11 +340,18 @@ def _build_action_provider_raw():
         # 2026-08-20) for the full numbers before changing this again.
         #
         # Revert: drop engage_range_m/engage_los_deg to return to 2500m/45deg.
+        #
+        # 2026-08-21 (F44): 값 자체는 그대로이고, 리터럴 대신
+        # controller_providers.SHIP_* 상수를 참조하도록만 바꿨다. 이 값들이 여기에만
+        # 있었기 때문에 run_unreal_inference.py --mode vptrack은 클래스 기본값
+        # (2500m/45deg/throttle off = 컷오프 13.3%)으로 조용히 날고 있었다. 이제 두
+        # 진입점이 같은 상수를 읽으므로 서로 어긋날 수 없다.
         print(f"[{TEAM_NAME}] VP 트래킹 백엔드 사용 (RL 없음): {BT_DLL} "
-              f"(throttle_control=True, engage=4000m/60deg)")
+              f"(throttle_control={SHIP_THROTTLE_CONTROL}, "
+              f"engage={SHIP_ENGAGE_RANGE_M:.0f}m/{SHIP_ENGAGE_LOS_DEG:.0f}deg)")
         return VPTrackingProvider(
-            dll_name=BT_DLL, throttle_control=True,
-            engage_range_m=4000.0, engage_los_deg=60.0,
+            dll_name=BT_DLL, throttle_control=SHIP_THROTTLE_CONTROL,
+            engage_range_m=SHIP_ENGAGE_RANGE_M, engage_los_deg=SHIP_ENGAGE_LOS_DEG,
         )
 
     # BUNDLE_DIR 가드 (2026-08-11): 여기 도달했다는 것은 MODE가 rl/hybrid* 계열이라는
@@ -377,6 +428,15 @@ def main():
     print(f"=== {TEAM_NAME} 경진대회 클라이언트 시작 ===")
     print(f"서버: {SERVER_IP}:{SERVER_PORT}")
     print(f"모드: {MODE}")
+    # 셋업(_run_once) 전체를 재시도로 감싼다 (2026-08-21, F42). supervise_client는 클라이언트가
+    # 생긴 뒤부터만 보호한다 -- Rule XML 활성화/DLL 로드/관측 모듈 import는 그 앞에서 맨몸으로
+    # 실행되고, 여기서 한 번 실패하면 프로세스가 그대로 종료되어 "접속 실패"(규정 8절 실격
+    # 경로)가 된다. 갓 압축 해제한 DLL을 백신이 스캔하며 잠그는 상황이 대표적이며, 이런 실패는
+    # 몇 초 뒤 재시도하면 성공하는 종류다. student/submission_resilience.py 참고.
+    run_with_setup_retry(_run_once)
+
+
+def _run_once():
     if MODE in {"bt", "hybrid"}:
         print(f"BT DLL/XML: {BT_DLL} / {BT_RULE_XML}")
 
