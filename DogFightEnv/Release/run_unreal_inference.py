@@ -51,6 +51,7 @@ from student.controller_providers import (
     SHIP_ENGAGE_LOS_DEG,
     SHIP_ENGAGE_RANGE_M,
     SHIP_THROTTLE_CONTROL,
+    EnvelopeGatedHybridProvider,
     GLimitedProvider,
     VPTrackingProvider,
 )
@@ -67,7 +68,7 @@ from student.submission_resilience import (
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run RL/BT/Hybrid inference and communicate with the Unreal AI server over UDP.")
-    parser.add_argument("--mode", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack"], required=True, help="Inference backend to use.")
+    parser.add_argument("--mode", choices=["rl", "bt", "vptrack", "hybrid", "hybrid_vptrack", "hybrid_gated"], required=True, help="Inference backend to use.")
     parser.add_argument("--server-ip", default="192.168.10.115", help="Unreal server IP address.")
     parser.add_argument("--server-port", type=int, default=9999, help="Unreal server UDP port.")
     parser.add_argument("--team-name", default="FDSA", help="Client team name sent to the Unreal server.")
@@ -261,14 +262,44 @@ def _build_action_provider_raw(args, effective_observation_mode: str):
     if args.mode == "rl":
         return rl_provider
 
-    bt_provider = (
-        VPTrackingProvider(dll_name=args.bt_dll)
-        if args.mode == "hybrid_vptrack"
-        else BTActionProvider(dll_name=args.bt_dll)
-    )
+    # hybrid_vptrack / hybrid_gated: the floor was previously built bare -- VPTrackingProvider
+    # with no range/los/throttle kwargs -- which silently uses the CLASS defaults (2500 m /
+    # 45 deg / throttle off), never the shipped config. Same defect shape as F48, in this entry
+    # point specifically: --vptrack-range-m/-los-deg/-throttle already default to the shipped
+    # values (see parse_args), but were never actually passed through to the hybrid floor.
+    # Fixed 2026-08-22: both hybrid modes now get the same fully-configured floor "vptrack"
+    # alone does, so a flagless run and a flagged run agree with each other by construction.
+    if args.mode in ("hybrid_vptrack", "hybrid_gated"):
+        vptrack_floor = VPTrackingProvider(
+            dll_name=args.bt_dll,
+            throttle_control=args.vptrack_throttle,
+            engage_range_m=args.vptrack_range_m,
+            engage_los_deg=args.vptrack_los_deg,
+        )
+        if args.mode == "hybrid_gated":
+            # Residual only during the approach; the floor passes through untouched during the
+            # shot, so the correction is structurally incapable of spoiling a firing solution.
+            # This is the mode F48 measured beating the shipped floor head to head (58.3% vs
+            # 35.0% pooled) -- it had no live path at all before this fix.
+            return EnvelopeGatedHybridProvider(
+                primary_provider=rl_provider,
+                secondary_provider=vptrack_floor,
+                mode=args.hybrid_mode,
+                alpha=args.alpha,
+                residual_scale=args.residual_scale,
+            )
+        return StudentHybridProvider(
+            primary_provider=rl_provider,
+            secondary_provider=vptrack_floor,
+            mode=args.hybrid_mode,
+            alpha=args.alpha,
+            residual_scale=args.residual_scale,
+        )
+
+    # hybrid: floor is the plain rule-based BT, not vptrack -- unaffected by the bug above.
     return StudentHybridProvider(
         primary_provider=rl_provider,
-        secondary_provider=bt_provider,
+        secondary_provider=BTActionProvider(dll_name=args.bt_dll),
         mode=args.hybrid_mode,
         alpha=args.alpha,
         residual_scale=args.residual_scale,
