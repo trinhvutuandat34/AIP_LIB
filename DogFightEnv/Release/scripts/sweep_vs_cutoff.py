@@ -35,6 +35,10 @@ _BUNDLE = "artifacts/curriculum/real_eagle/v10_residual/stage_15_full_dogfight/f
 # hybrid modes. (The comment above predates v12 and describes v11 as the newest -- superseded.)
 _BUNDLE_V12 = "artifacts/curriculum/real_eagle/v12_standalone/stage_15_full_dogfight/final_bundle"
 _OBS = ["--observation-module", "student.my_observation_v2"]
+# Residual scale is a property of the BUNDLE, not a sweep knob: v10_residual was trained at
+# 0.10 and v12_standalone is not a residual at all. `--residual-scale` defaults to 0.35, so
+# every hybrid job here was scoring v10 off-label until 2026-08-22 (F48). Pass it explicitly.
+_SCALE_V10 = ["--residual-scale", "0.10"]
 
 JOBS: dict[str, list[str]] = {
     "bt":                     ["--ownship-backend", "bt"],
@@ -75,9 +79,9 @@ JOBS: dict[str, list[str]] = {
                                "--ownship-vptrack-range-m", "2500", "--ownship-vptrack-los-deg", "90"],
 
     "rl_v10":                 ["--ownship-backend", "rl", "--ownship-bundle-dir", _BUNDLE] + _OBS,
-    "hybrid_v10":             ["--ownship-backend", "hybrid", "--ownship-bundle-dir", _BUNDLE] + _OBS,
-    "hybridvp_v10":           ["--ownship-backend", "hybrid_vptrack", "--ownship-bundle-dir", _BUNDLE] + _OBS,
-    "hybridgated_v10":        ["--ownship-backend", "hybrid_gated", "--ownship-bundle-dir", _BUNDLE] + _OBS,
+    "hybrid_v10":             ["--ownship-backend", "hybrid", "--ownship-bundle-dir", _BUNDLE] + _OBS + _SCALE_V10,
+    "hybridvp_v10":           ["--ownship-backend", "hybrid_vptrack", "--ownship-bundle-dir", _BUNDLE] + _OBS + _SCALE_V10,
+    "hybridgated_v10":        ["--ownship-backend", "hybrid_gated", "--ownship-bundle-dir", _BUNDLE] + _OBS + _SCALE_V10,
 
     # v12_standalone (2026-08-21, completed 16/16). Added because _BUNDLE above is v10_residual,
     # which was trained AS A RESIDUAL -- running it in standalone `rl` mode is off-label, and

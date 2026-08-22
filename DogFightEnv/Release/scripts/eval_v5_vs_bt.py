@@ -91,7 +91,16 @@ for _p in (ROOT, SRC):
 from DogFightEnvWrapper import DogFightWrapper
 from dogfight.ai.bt_rule_manager import activate_rule_xml
 from dogfight.ai.student_hooks import load_observation_hook
-from run_local_dogfight import build_provider, backend_to_env_mode
+from run_local_dogfight import (
+    backend_to_env_mode,
+    build_provider,
+    resolve_vptrack_floor,
+)
+from student.controller_providers import (
+    ENGAGE_LOS_DEG as VPT_LOS_DEFAULT,
+    ENGAGE_RANGE_M as VPT_RANGE_DEFAULT,
+    THROTTLE_CONTROL as VPT_THROTTLE_DEFAULT,
+)
 from student.inference_providers import require_healthy_bundle
 from student.obfm_scenario_wrapper import ObfmScenarioWrapper, OBFM_ALTITUDE_M, OBFM_SPEED_MPS
 from student.match_scenario_wrapper import (
@@ -714,6 +723,11 @@ def parse_args():
                        help=f"{_side} defensive break when losing the gun duel (default off).")
         p.add_argument(f"--{_side}-vptrack-corner", type=int, choices=[0, 1], default=None,
                        help=f"{_side} hold corner speed (~440 KTAS) for peak turn rate (default off).")
+        p.add_argument(f"--{_side}-vptrack-roll-taper", type=float, default=None,
+                       help=f"{_side}: taper the ROLL command by pointing-error magnitude "
+                            f"below this many degrees (0 = off, the shipped default). See "
+                            f"ROLL_TAPER_DEG in student/controller_providers.py for the "
+                            f"measured authority inversion this addresses.")
     p.add_argument("--match-los-deg", type=float, default=None,
                    help="Override each aircraft's LOS-off-nose for match_* modes. The "
                         "rounds-1-3 slide art supports two readings: 90 (antiparallel and "
@@ -743,6 +757,36 @@ def main():
     print(f"[eval] episodes={args.episodes}  obs_mode={effective_observation_mode}  obs_module={args.observation_module or '(builtin)'}")
     print(f"[eval] scenario={args.scenario_mode}")
     print(f"[eval] ownship bundle: {args.ownship_bundle_dir}")
+    # Log the composition parameters (2026-08-22). They were previously invisible in the
+    # artifact, and two of them silently defaulted in ways that changed what was measured:
+    # `--residual-scale` defaults to 0.35 while the v10 bundle was TRAINED at 0.10, and the
+    # `hybrid_vptrack` / `hybrid_gated` backends build their vptrack floor from the class
+    # defaults (2500 m / 45 deg / throttle off -- the pre-F29/F39 config, 13.3% vs the cutoff)
+    # unless the --{side}-vptrack-* flags are passed. Same failure shape as F44, one layer down:
+    # a run named after a mode, flying a different aircraft than the reader assumes.
+    for _s in ("ownship", "target"):
+        _b = getattr(args, f"{_s}_backend")
+        if _b in ("vptrack", "hybrid_vptrack", "hybrid_gated"):
+            # Resolved through the SAME helper build_provider uses, so the banner cannot
+            # disagree with the aircraft that is actually constructed (F48).
+            _r, _l, _t = resolve_vptrack_floor(
+                _b,
+                getattr(args, f"{_s}_vptrack_range_m"),
+                getattr(args, f"{_s}_vptrack_los_deg"),
+                getattr(args, f"{_s}_vptrack_throttle"),
+            )
+            _explicit = getattr(args, f"{_s}_vptrack_range_m") is not None
+            _rt = getattr(args, f"{_s}_vptrack_roll_taper")
+            _src = "explicit" if _explicit else (
+                "shipped default" if _b in ("hybrid_vptrack", "hybrid_gated") else "class default")
+            print(f"[eval] {_s} vptrack floor: "
+                  f"range={_r if _r is not None else VPT_RANGE_DEFAULT} "
+                  f"los={_l if _l is not None else VPT_LOS_DEFAULT} "
+                  f"throttle={int(_t) if _t is not None else int(VPT_THROTTLE_DEFAULT)} "
+                  f"roll_taper={_rt if _rt is not None else 0.0} ({_src})")
+        if _b in ("hybrid", "hybrid_vptrack", "hybrid_gated"):
+            print(f"[eval] {_s} hybrid composition: mode={args.hybrid_mode} "
+                  f"residual_scale={args.residual_scale} alpha={args.alpha}")
     print(f"[eval] alpha schedule (deg): {alpha_plan}")
     print(f"[eval] out-csv: {out_csv}")
     if args.dry_run:
@@ -765,6 +809,7 @@ def main():
                            else bool(args.ownship_vptrack_defensive)),
         vptrack_corner=(None if args.ownship_vptrack_corner is None
                         else bool(args.ownship_vptrack_corner)),
+        vptrack_roll_taper=args.ownship_vptrack_roll_taper,
     )
     # Capture vp_valid so a SAFE_VP zero substitution is distinguishable from a genuine zero
     # aimpoint. Wrapping is transparent; see VPProbe.
@@ -784,6 +829,7 @@ def main():
                            else bool(args.target_vptrack_defensive)),
         vptrack_corner=(None if args.target_vptrack_corner is None
                         else bool(args.target_vptrack_corner)),
+        vptrack_roll_taper=args.target_vptrack_roll_taper,
     )
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)

@@ -123,6 +123,35 @@ SHIP_THROTTLE_CONTROL = True
 
 # ---- Gains ----------------------------------------------------------------------------
 K_ROLL = 1.0
+# Taper the ROLL command by pointing-error MAGNITUDE below this many degrees. 0.0 = OFF, which
+# is the historical behaviour every register measurement was taken at, and remains the default.
+#
+# THE DEFECT IT ADDRESSES (measured 2026-08-22). `phi = atan2(az, el)` is a DIRECTION -- where
+# the error sits about the nose axis -- and carries no information about how BIG the error is.
+# `pitch` is scaled by `err_gain ~ los_deg / PROPORTIONAL_DIV` and so decays to ~0 as the
+# solution converges; `roll` has no such term, so as los_deg -> 0 both az and el vanish and
+# atan2() returns an essentially arbitrary angle. Measured over 20,914 in-envelope steps of
+# match_base self-play at the shipped 4000 m / 60 deg envelope, roll authority is INVERTED with
+# respect to error:
+#
+#     LOS band     steps   mean|roll|   frac |roll| > 0.5
+#      0.0-0.5 deg  5746      0.481          47.9%     <- on target, rolling hard
+#      1.0-2.0 deg  4948      0.460          19.2%
+#      5.0- 15 deg  1347      0.251          17.5%
+#       15- 60 deg  1061      0.045           0.0%     <- far off, barely rolling
+#
+#   Inside the actual scoring window (152.4-914.4 m AND LOS <= 1.0 deg): 375 steps,
+#   mean |roll| 0.561, and 18.9% of them at near-full-scale roll (> 0.9).
+#
+# i.e. the aircraft throws the gun line around at exactly the moment it must hold the pipper
+# inside the <=1 deg gate. That is consistent with this project's long-standing signature of
+# excellent MINIMUM ATA (0.014-0.024 deg) but poor DWELL, and with the three draws that
+# "reached the angle gate and scored nothing" (Sec 4.1, throttle rationale).
+#
+# The taper must NOT reach the large-error regime: roll being maximal at phi = 180 deg is the
+# whole point of this controller (it is what escapes Controller_CY's dead spot), so the gain is
+# 1.0 everywhere above ROLL_TAPER_DEG and only shrinks below it.
+ROLL_TAPER_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_ROLL_TAPER_DEG", "0.0"))
 K_PITCH = 1.0
 # Floor under the pitch alignment gate: pitch = -K * err_gain * max(cos(phi), PITCH_FLOOR).
 #
@@ -310,6 +339,7 @@ class VPTrackingProvider(BTActionProvider):
         self.corner_hold = bool(kwargs.pop("corner_hold", CORNER_HOLD))
         self.corner_kt = float(kwargs.pop("corner_kt", CORNER_KT))
         self.pitch_floor = float(kwargs.pop("pitch_floor", PITCH_FLOOR))
+        self.roll_taper_deg = float(kwargs.pop("roll_taper_deg", ROLL_TAPER_DEG))
         self.threat_ata_deg = float(kwargs.pop("threat_ata_deg", THREAT_ATA_DEG))
         super().__init__(*args, **kwargs)
         self._los_error_sum = 0.0
@@ -427,7 +457,11 @@ class VPTrackingProvider(BTActionProvider):
         # ROLL. Proportional to phi itself, NOT sin(phi). This is the whole fix: at phi = 180 deg
         # -- the old law's dead spot, where sin(phi) -> 0 and it commanded nothing -- this is
         # MAXIMAL, because 180 deg is the farthest the error can be from the pull plane.
-        roll_cmd = _clamp(K_ROLL * phi / np.pi, -1.0, 1.0)
+        roll_gain = (
+            1.0 if self.roll_taper_deg <= 0.0
+            else _clamp(los_deg / self.roll_taper_deg, 0.0, 1.0)
+        )
+        roll_cmd = _clamp(K_ROLL * roll_gain * phi / np.pi, -1.0, 1.0)
 
         # PITCH. Pull toward the target, scaled by how much of the error is already in the pull
         # plane. There is deliberately NO (1 - |UTAngle|/90) factor: that term is what made
@@ -454,6 +488,9 @@ class VPTrackingProvider(BTActionProvider):
         # commands rather than blending, because a half-committed break is the worst of both.
         if self.defensive_break and self._losing_gun_duel(own, tgt, rng, los_deg):
             self._break_steps += 1
+            # Deliberately UNTAPERED: this is a max-rate break, not a tracking command, and it
+            # only fires when we are losing the gun duel -- holding a steady pipper is exactly
+            # what we are trying to stop doing here.
             roll_cmd = _clamp(K_ROLL * phi / np.pi, -1.0, 1.0)
             pitch_cmd = -1.0
             rudder_cmd = 0.0          # uncoordinated rudder only slows the roll rate here
