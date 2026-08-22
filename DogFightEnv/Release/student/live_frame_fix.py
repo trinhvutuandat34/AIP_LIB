@@ -80,6 +80,38 @@ point, the inverse is closed-form and exact -- verified by round-trip on real ca
 with `BaseLLA.Z=0` means Z was never run through the lat/lon math on either path.
 
 --------------------------------------------------------------------------------------------
+BUG 3 -- INCOMPLETE LIVE STATE VECTOR (affects `student/g_limiter.py`, i.e. the 10 G limiter
+that wraps EVERY backend on both the eval path and the submission path). Found 2026-08-22.
+--------------------------------------------------------------------------------------------
+
+`plane_info_to_state()` fills state indices **0..8 and nothing else**; the local sim
+(`FighterSim.py:224`) also fills `StateIndex.SIM_TIME` (state[41]). `GLimiter.observe()` derives
+load factor as specific force from a velocity difference and takes dt from SIM_TIME. Live, that
+is 0.0 on every frame, so `dt = 0.0`, the `dt < MIN_DT` guard returns early on every call,
+`last_n` never leaves its 1.0 initial value, and the limiter clamps nothing, ever.
+
+Measured (`scripts/probe_live_g_limiter.py`), identical ~12 G pull driven through both state
+shapes:
+
+    LOCAL (SIM_TIME filled)      measured_n = 12.958   clamped 97.5%   pitch -1.00 -> -0.77
+    LIVE  (SIM_TIME never filled) measured_n =  1.000   clamped  0.0%   pitch -1.00 -> -1.00
+
+So every N=30/N=50/N=100 figure in COMPETITION_PLAN.md 4.1 was produced by a G-LIMITED aircraft
+and the submission flies an UNLIMITED one -- exactly the train/deploy divergence
+`student/g_limiter.py` was written to prevent, reintroduced one layer down.
+
+Second, smaller defect on the same code: `GLimiter._vel_neu` reads VZ as NED-down and negates
+it, but the live wire sends velocity.z UP-positive (`logs/unreal_packets/
+rx_packets_20260514_155232_15208.jsonl`: corr(pitch, vz) = +0.84, corr(dz, vz) = +0.73), so the
+vertical term would enter the acceleration estimate sign-flipped even with dt repaired.
+
+Fix (OPT-IN, default off -- see COMPLETE_LIVE_STATE): on the live path only, also negate
+state[8] (VZ) alongside state[2], and fill state[41] from a monotonic clock. Then wrap the
+G limiter INSIDE this provider rather than outside it, so it reads the completed state.
+`build_action_provider()` in both entry points does the wrapping; the ordering matters and is
+commented there.
+
+--------------------------------------------------------------------------------------------
 BOUNDARY & SCOPE
 --------------------------------------------------------------------------------------------
 
@@ -87,17 +119,30 @@ BOUNDARY & SCOPE
 boundary (`src/dogfight/**`, team policy 2026-07-14). This wrapper is the sanctioned route:
 student-space, installed at the provider construction site in the entry scripts.
 
-Corrects `ownship_state`/`target_state` (bug 1) and `info["my_plane_data"]`/
-`info["target_plane_data"]` (bug 2). Does NOT rebuild `context.observation`, which `policies.py`
-computes from the uncorrected state before the provider is called -- so RL and hybrid modes
-remain affected by bug 1 on the observation vector specifically. Acceptable only because the
-shipped mode is `vptrack`; revisit before shipping any bundle-backed mode.
+Corrects `ownship_state`/`target_state` (bug 1), `info["my_plane_data"]`/
+`info["target_plane_data"]` (bug 2), and -- since 2026-08-22 -- `context.observation` as well,
+when an `observation_rebuild` callable is supplied.
+
+THE OBSERVATION GAP, and why it was worth closing. `policies.py` builds the observation from the
+UNCORRECTED state before the provider is ever called, so a bundle-backed mode received bug 1
+straight through on its feature vector: `student/my_observation_v2` reads altitude as
+`-state[D]`, which live yields **-4572 m** instead of +4572 m, and the vertical component of the
+relative-position triple flips sign with it. Two of fifteen features wrong, one of them far
+outside the range it was normalised against. That is not a rounding error -- it means **no local
+measurement of any bundle-backed mode transfers to the live server**, which in turn means the
+hybrid modes could not be evaluated as submission candidates at all.
+
+It stayed open while `MODE="vptrack"` shipped, because that mode ignores `context.observation`
+entirely. It became decision-relevant when F48 showed `hybrid_gated`, composed correctly, beats
+the shipped floor head to head. Wiring is per-mode: the entry points pass `observation_rebuild`
+only for bundle-backed modes, so the shipped `vptrack` path is byte-identical to before.
 """
 
 from __future__ import annotations
 
 import math
 import os
+import time
 
 import numpy as np
 
@@ -106,6 +151,12 @@ from dogfight.ai.native_bt import OPlaneData
 
 # Hardcoded in AIP_DCS/BehaviorTree/CPPBehaviorTree.h:18-19 -- must match exactly, it is the
 # origin the native BT's own LLAtoCartesian() call uses, not a value we get to choose.
+# Opt-in (2026-08-22, bug 3). OFF by default so the submission's flight behaviour is bit-identical
+# to every historical measurement unless the team turns this on deliberately. Turning it ON makes
+# the LIVE path match the EVAL path (a working 10 G limiter), which is the direction that removes
+# a divergence rather than adding one. Set DOGFIGHT_LIVE_STATE_COMPLETE=1.
+COMPLETE_LIVE_STATE = os.environ.get("DOGFIGHT_LIVE_STATE_COMPLETE", "0") not in ("0", "", "false", "False")
+
 _ORI_LAT = 37.91455691666666
 _ORI_LON = 128.18188127777776
 
@@ -161,8 +212,16 @@ class LiveVerticalFrameProvider(ActionProvider):
     # scripts/verify_live_frame_fix.py.
     _DISABLE_ENV = "DOGFIGHT_DISABLE_LIVE_FRAME_FIX"
 
-    def __init__(self, inner: ActionProvider, enabled: bool | None = None) -> None:
+    def __init__(self, inner: ActionProvider, enabled: bool | None = None,
+                 complete_state: bool | None = None, observation_rebuild=None) -> None:
         self.inner = inner
+        # observation_rebuild(corrected_own, corrected_tgt) -> np.ndarray, or None to leave
+        # context.observation alone. Only bundle-backed modes need it; see the module docstring.
+        self.observation_rebuild = observation_rebuild
+        self.observation_rebuild_failures = 0
+        self.complete_state = (COMPLETE_LIVE_STATE if complete_state is None
+                               else bool(complete_state))
+        self._t0 = None
         if enabled is None:
             enabled = os.environ.get(self._DISABLE_ENV, "0") in ("0", "", "false", "False")
         self.enabled = bool(enabled)
@@ -178,17 +237,28 @@ class LiveVerticalFrameProvider(ActionProvider):
         return getattr(self.__dict__["inner"], name)
 
     def reset(self, context: ActionContext | None = None) -> None:
+        # Per-episode, same argument as GLimiter.reset(): a clock that carries across a reset
+        # yields one bogus dt on the first step of the next episode.
+        self._t0 = None
         return self.inner.reset(context)
 
     def close(self) -> None:
         return self.inner.close()
 
-    @staticmethod
-    def _flip_vertical(state):
+    def _flip_vertical(self, state):
         if state is None:
             return None
         flipped = np.array(state, dtype=np.float64, copy=True)
         flipped[2] = -flipped[2]
+        if self.complete_state:
+            # Bug 3. VZ carries the same up-positive convention as position z on the wire, and
+            # every consumer reads it as NED-down -- same inversion, one index over.
+            flipped[8] = -flipped[8]
+            # SIM_TIME is never populated live. A monotonic clock is the honest substitute: the
+            # only consumer differentiates with it, and the wire has no simulation clock to read.
+            if self._t0 is None:
+                self._t0 = time.monotonic()
+            flipped[41] = time.monotonic() - self._t0
         return flipped
 
     def compute_action(self, context: ActionContext) -> ActionResult:
@@ -206,12 +276,30 @@ class LiveVerticalFrameProvider(ActionProvider):
         if isinstance(tgt_pd, OPlaneData):
             info["target_plane_data"] = _corrected_plane_data(tgt_pd)
 
+        own = self._flip_vertical(context.ownship_state)
+        tgt = self._flip_vertical(context.target_state)
+
+        observation = context.observation
+        if self.observation_rebuild is not None and own is not None and tgt is not None:
+            try:
+                observation = np.asarray(
+                    self.observation_rebuild(own, tgt), dtype=np.float32
+                )
+            except Exception as exc:
+                # A rebuild failure must never end a match: fall back to the platform's own
+                # vector, which is wrong on two features but finite and correctly shaped.
+                self.observation_rebuild_failures += 1
+                if self.observation_rebuild_failures <= 3:
+                    print(f"[live_frame_fix] observation rebuild failed "
+                          f"({type(exc).__name__}: {exc}) -- using the uncorrected vector",
+                          flush=True)
+
         corrected = ActionContext(
             sim=context.sim,
             opponent_sim=context.opponent_sim,
-            ownship_state=self._flip_vertical(context.ownship_state),
-            target_state=self._flip_vertical(context.target_state),
-            observation=context.observation,
+            ownship_state=own,
+            target_state=tgt,
+            observation=observation,
             info=info,
         )
         result = self.inner.compute_action(corrected)

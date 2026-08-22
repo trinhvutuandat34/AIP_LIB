@@ -54,7 +54,7 @@ from student.controller_providers import (
     GLimitedProvider,
     VPTrackingProvider,
 )
-from student.live_frame_fix import LiveVerticalFrameProvider
+from student.live_frame_fix import COMPLETE_LIVE_STATE, LiveVerticalFrameProvider
 from student.g_limiter import G_LIMIT
 from student.submission_resilience import (
     ResilientActionProvider,
@@ -103,7 +103,7 @@ def parse_args():
     parser.add_argument(
         "--action-repeat",
         type=int,
-        default=6,
+        default=None,
         help=(
             "Number of completed own/enemy PlaneInfo pairs to hold each action. "
             "Use 6 to match Release training step_ratio=6; use 1 for per-packet policy calls."
@@ -149,6 +149,48 @@ def parse_args():
     return parser.parse_args()
 
 
+# Shipped action-repeat is per MODE, not global (2026-08-20 / COMPETITION_RULES Sec 4). The
+# 60 Hz answer rate and the 0.1667 s compute-latency cap are separate rules, and
+# ProviderCommandPolicy sends a CMD every tick regardless. So action-repeat only exists to match
+# a TRAINED policy's own step_ratio: `vptrack`/`bt` were never trained and ship at 1 (which is
+# what student/my_submission.py sets); a bundle-backed mode keeps 6 to match its training.
+#
+# This defaulted to a flat 6 until 2026-08-22, so `run_unreal_inference.py --mode vptrack` decided
+# at 10 Hz where the submission decides at 60 Hz -- the same entry-point drift F44 fixed for the
+# engagement envelope, one field over.
+_SHIPPED_ACTION_REPEAT = {"bt": 1, "vptrack": 1}
+
+
+def resolve_action_repeat(args) -> int:
+    if args.action_repeat is not None:
+        return int(args.action_repeat)
+    return _SHIPPED_ACTION_REPEAT.get(args.mode, 6)
+
+
+_BUNDLE_BACKED_MODES = {"rl", "hybrid", "hybrid_vptrack", "hybrid_gated"}
+
+
+def _observation_rebuild(mode, observation_mode, observation_module):
+    """Rebuild the observation from the CORRECTED live states, for bundle-backed modes only.
+
+    `policies.py` computes `context.observation` from the raw wire state before the provider is
+    called, so a policy would otherwise read altitude as -4572 m (live frame fix bug 1, see
+    student/live_frame_fix.py). `vptrack`/`bt` ignore the observation entirely, so they get None
+    here and their path is byte-identical to before.
+    """
+    if mode not in _BUNDLE_BACKED_MODES:
+        return None
+    from GeoMathUtil import GeometryInfo
+    from dogfight.envs.observation import build_observation
+
+    geometry = GeometryInfo()
+    hook = load_observation_hook(observation_module) if observation_module else None
+    if hook is not None:
+        fn = hook["build_observation"]
+        return lambda own, tgt: fn(own, tgt, geometry, None)
+    return lambda own, tgt: build_observation(observation_mode, own, tgt, geometry)
+
+
 def build_action_provider(args, effective_observation_mode: str):
     """Live inference provider, wrapped in the 10 G limiter (see student/g_limiter.py).
 
@@ -158,9 +200,25 @@ def build_action_provider(args, effective_observation_mode: str):
     # LiveVerticalFrameProvider is INSIDE the limiter: it corrects the context the provider
     # reads (Unreal sends state[2] as up-positive altitude, every consumer indexes it as NED
     # Down), whereas the limiter post-processes the action. See student/live_frame_fix.py.
+    # ORDERING. Normally the limiter is OUTSIDE the frame fix: it only post-processes the action,
+    # and the state fields it reads (VX/VY/VZ, SIM_TIME) were never corrected anyway. With
+    # COMPLETE_LIVE_STATE on, the limiter MUST sit INSIDE, because the whole point is that it now
+    # reads the completed state the wrapper produces. See live_frame_fix.py bug 3.
+    rebuild = _observation_rebuild(
+        args.mode, effective_observation_mode, args.observation_module
+    )
+    if COMPLETE_LIVE_STATE:
+        return LiveVerticalFrameProvider(
+            GLimitedProvider(
+                _build_action_provider_raw(args, effective_observation_mode),
+                limit_g=G_LIMIT,
+            ),
+            observation_rebuild=rebuild,
+        )
     return GLimitedProvider(
         LiveVerticalFrameProvider(
-            _build_action_provider_raw(args, effective_observation_mode)
+            _build_action_provider_raw(args, effective_observation_mode),
+            observation_rebuild=rebuild,
         ),
         limit_g=G_LIMIT,
     )
@@ -254,7 +312,7 @@ def _run_once(args):
             observation_fn=observation_hook["build_observation"] if observation_hook else None,
             ownship_force_side=args.ownship_force_side,
             target_force_side=args.target_force_side,
-            action_repeat=args.action_repeat,
+            action_repeat=resolve_action_repeat(args),
             debug_action_repeat=args.debug_action_repeat,
         )
 

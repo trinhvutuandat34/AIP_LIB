@@ -99,7 +99,7 @@ from student.controller_providers import (
     VPTrackingProvider,
 )
 from student.g_limiter import G_LIMIT
-from student.live_frame_fix import LiveVerticalFrameProvider
+from student.live_frame_fix import COMPLETE_LIVE_STATE, LiveVerticalFrameProvider
 from student.submission_resilience import (
     ResilientActionProvider,
     run_with_setup_retry,
@@ -245,6 +245,30 @@ STRICT_BUNDLE_HEALTH = False
 # =============================================================================
 
 
+_BUNDLE_BACKED_MODES = {"rl", "hybrid", "hybrid_vptrack", "hybrid_gated"}
+
+
+def _observation_rebuild(mode, observation_mode, observation_module):
+    """Rebuild the observation from the CORRECTED live states, for bundle-backed modes only.
+
+    `policies.py` computes `context.observation` from the raw wire state before the provider is
+    called, so a policy would otherwise read altitude as -4572 m (live frame fix bug 1, see
+    student/live_frame_fix.py). `vptrack`/`bt` ignore the observation entirely, so they get None
+    here and their path is byte-identical to before.
+    """
+    if mode not in _BUNDLE_BACKED_MODES:
+        return None
+    from GeoMathUtil import GeometryInfo
+    from dogfight.envs.observation import build_observation
+
+    geometry = GeometryInfo()
+    hook = load_observation_hook(observation_module) if observation_module else None
+    if hook is not None:
+        fn = hook["build_observation"]
+        return lambda own, tgt: fn(own, tgt, geometry, None)
+    return lambda own, tgt: build_observation(observation_mode, own, tgt, geometry)
+
+
 def build_action_provider():
     """실제 제출 경로. 아래 _build_action_provider_raw()의 결과를 10 G 리미터로 감싼다.
 
@@ -256,8 +280,21 @@ def build_action_provider():
     # Unreal은 state[2]를 위쪽이 양수인 고도로 보내지만 모든 소비자는 이를 NED Down으로
     # 읽는다. LiveVerticalFrameProvider가 리미터 안쪽에서 그 부호를 바로잡는다.
     # student/live_frame_fix.py 참고.
+    # ORDERING. Normally the limiter is OUTSIDE the frame fix: it only post-processes the action,
+    # and the state fields it reads (VX/VY/VZ, SIM_TIME) were never corrected anyway. With
+    # COMPLETE_LIVE_STATE on, the limiter MUST sit INSIDE, because the whole point is that it now
+    # reads the completed state the wrapper produces. See live_frame_fix.py bug 3.
+    rebuild = _observation_rebuild(MODE, OBSERVATION_MODE, OBSERVATION_MODULE)
+    if COMPLETE_LIVE_STATE:
+        return LiveVerticalFrameProvider(
+            GLimitedProvider(_build_action_provider_raw(), limit_g=G_LIMIT),
+            observation_rebuild=rebuild,
+        )
     return GLimitedProvider(
-        LiveVerticalFrameProvider(_build_action_provider_raw()), limit_g=G_LIMIT
+        LiveVerticalFrameProvider(
+            _build_action_provider_raw(), observation_rebuild=rebuild
+        ),
+        limit_g=G_LIMIT,
     )
 
 def _build_action_provider_raw():
