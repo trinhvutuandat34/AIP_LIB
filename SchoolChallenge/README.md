@@ -87,23 +87,57 @@ $ python3 tools/validate_local.py ../agents/agent.yaml
 OK
 ```
 
-**하지만 이 스크립트는 공식 검증기가 아니다.** `reference/scripts/run_match.py`
-는 받았지만, 그것이 import 하는 실제 엔진 패키지(`aircombat.engine.*`,
-`aircombat.tactics.*`, `aircombat.geometry.*`, `aircombat.control.*`,
-`aircombat.debrief.*` — `load_policy`/`make_pilot`/`Match`/`SCENARIOS` 등을
-담은 소스)는 이 세션에 없다. 즉 **CLI 래퍼는 있지만 그 래퍼가 돌리는 엔진
-본체가 없어서, 이 세션에서 실제 매치를 실행할 수는 없다.** `tools/validate_agent.py`
-도 마찬가지로 아직 못 받았다. 그래서:
+**하지만 이 스크립트는 공식 검증기가 아니다 — 그리고 SDK 전체(`aicombatsdk2v3.0.2.zip`,
+엔진 커밋 `2365ee6`)를 받은 지금도 이 세션에서는 공식 검증·매치 실행이 **불가능**하다.**
+이유는 확인했다: `aircombat/` 패키지 본체(`engine/`, `tactics/`, `geometry/`, `control/`,
+`guidance/`, `debrief/`, `fdm/`)가 소스가 아니라 `*.cp314-win_amd64.pyd` — **CPython
+3.14, Windows(win_amd64) ABI 전용 컴파일 바이너리**로 배포된다. `tools/validate_agent.py`
+도 `tools/selfcheck.py`도 결국 이 패키지를 `import`하므로 똑같이 막힌다(이 세션은
+Linux·Python 3.11). `pip install -r requirements.txt` 로 받는 `jsbsim`·`numpy` 등은
+비행 동역학·수치 라이브러리일 뿐, 트리 파서·판정·교리 계층은 전부 저 바이너리 안에
+있어서 우회할 방법이 없다 — 재컴파일할 소스가 없고, 대회 룰북 §11이 SDK 재배포·역
+분석성 우회 이용을 금지하기도 한다. 그래서 확인한 것과 확인 못하는 것을 분명히
+구분한다:
 
-- **제출 전 반드시** 로컬 SDK(엔진 패키지가 설치된 실제 환경)에서
-  `python tools/validate_agent.py agent.yaml` 로 공식 검증을 통과시킬 것.
-- **반드시** `python scripts/run_match.py --scenario duel --seed 42 --blue agent.yaml --red reference/examples/energy_fighter.yaml`
-  처럼 SDK 가 준 예제 아키타입들(`energy_fighter`/`textbook_headon`/`starter`)
-  을 상대로 자체 대전을 돌려 실제 거동(특히 High/Low Yo-Yo·브레이크가
-  의도대로 발동하는지, `--analyze` 로 WEZ·에너지 그래프까지)을 확인할 것 —
-  스키마 통과는 "제출이 거부되지 않는다"는 뜻이지 "잘 싸운다"는 뜻이 아니다.
-- 엔진 패키지(`aircombat/`) 소스를 이 세션에 전달할 수 있다면, 실제 매치를
-  이 환경에서 직접 돌려 검증할 수 있다 — 필요하면 알려달라.
+- **확인함**: `docs/RULEBOOK.md`·`REFERENCE.md`·`MEASURED_BEHAVIOR.md`·`agent.schema.json`
+  은 이 SDK 안의 사본과 우리가 이미 가진 `reference/` 사본이 **바이트 단위로 동일** —
+  앞서 참고한 어휘·룰이 최신이었다는 뜻이다. `agent.yaml` 은 이 SDK 의 정본
+  `agent.schema.json` 기준으로도 `tools/validate_local.py` 통과를 재확인했다.
+- **확인 못함**: 실제 교전 결과(승/패/HP), High/Low Yo-Yo 발동 타이밍, doctrine
+  튜닝의 실제 효과 — 전부 컴파일된 엔진 안에서만 계산된다.
+
+**그래서 다음은 Windows·Python 3.14 환경(당신의 PC)에서 반드시 당신이 직접 돌려야
+한다** — SDK README 의 설치 순서 그대로:
+
+```bat
+py -3.14 -m venv .venv
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+python tools\selfcheck.py                          rem PASS 확인
+
+copy 이 저장소의 agents\agent.yaml my_agents\my_agent.yaml
+python tools\validate_agent.py my_agents\my_agent.yaml
+
+rem 우리가 저장한 예제 3종을 스파링 상대로 — energy_fighter/textbook_headon/starter
+python scripts\run_match.py --scenario duel --seed 42 ^
+  --blue my_agents\my_agent.yaml --red examples\energy_fighter.yaml --analyze
+python scripts\run_match.py --scenario perch_offense --seed 7 ^
+  --blue my_agents\my_agent.yaml --red examples\textbook_headon.yaml --analyze
+python scripts\run_match.py --scenario perch_defense --seed 7 ^
+  --blue my_agents\my_agent.yaml --red examples\textbook_headon.yaml --analyze
+python scripts\run_match.py --scenario neutral --seed 3 ^
+  --blue my_agents\my_agent.yaml --red examples\energy_fighter.yaml --analyze
+```
+
+네 시나리오(headon/perch_offense/perch_defense/neutral)를 다 돌려보는 게 중요하다 —
+룰북 §3 이 "한 국면만 잘하는 에이전트는 순위를 얻지 못한다"고 명시한다. `--analyze`
+가 남기는 `*_wez.png`/`*_energy.png`/`*_tactics.png` 로 이 트리의 요요·브레이크·CZ
+분기가 의도대로 발동하는지, G 여유를 못 쓰고 있는 구간은 없는지 눈으로 확인할 것.
+
+(참고: SDK README 는 `examples/` 아키타입을 7종이라 하는데, 이 zip 에는 4종
+— `doctrine_regulator`·`energy_fighter`·`starter`·`textbook_headon` — 만 들어
+있다. `attacker`·`two_circle` 등 나머지는 웹사이트 다운로드 페이지의 최신 SDK에
+있을 수 있다.)
 
 ## 제출 방법 — 직접 업로드는 이 세션이 할 수 없다
 
