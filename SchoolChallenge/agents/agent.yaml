@@ -77,21 +77,33 @@ selector:
   # (=더 극단적인 헤드온만) 오발동을 줄이고, merged 로 4,000ft 이내에서만
   # 발동시켜 원거리 오인 브레이크를 막는다. lag + 큰 lag_dist_ft·음의
   # aim_above_ft 로 각을 최대한 빼고, g_burst·g_full_ata_deg 로 선회율을 낸다.
+  #
+  # 2026-09-01 실측 강화. 40경기 배터리에서 `red_prime`(1승7패) 상대
+  # perch_defense 두 경기를 뜯어보니, 이 분기가 경기의 75~100%(225.3/300s,
+  # 13.8/25.8s)를 차지하면서도 BLUE 의 ATA 가 단 한 번도 100°대 밑으로
+  # 못 내려갔다 — "탈출 시도"만 계속하고 실제로 거리·각을 벌리지 못한 채
+  # 갇혀 있었다는 뜻. 옛 값(g_burst 0.85, aim_above_ft -300)은 aim_above_ft
+  # 가용 범위(±5,000)의 6%만 쓴 셈이라, 이미 lag 기하가 만드는 조준 오차에
+  # 얹는 추가 오차가 미미했다 — 하드덱 회피(§0)가 aim_above_ft ±4,500 로
+  # 오차를 확실히 키우는 것과 대조적으로 이 분기는 "생사가 걸린 국면"치고
+  # 소극적이었다. g_burst 를 상한(1.0)까지, aim_above_ft 크기를 5배(−1,500)
+  # 로 올려 조절기가 확실히 순간봉투 근처까지 당기게 한다. g_min(교리 1.5)
+  # 이 하한을 보장하므로 완전 무부하로 주저앉을 위험은 없다.
   - sequence:
       - condition: {name: foe_threat, aspect_deg: 130}
       - condition: {name: merged, range_ft: 4000}
       - action:
-          {pursuit: lag, lag_dist_ft: 4500, aim_above_ft: -300, g_burst: 0.85,
+          {pursuit: lag, lag_dist_ft: 4500, aim_above_ft: -1500, g_burst: 1.0,
            g_full_ata_deg: 30, name: defensive_break_nose}
 
   # ── 1b. 경로 기반 방어 — 적 기수는 아직 안 물었어도 비행경로가 나를 향함 ──
   # foe_path_threat 는 foe_threat 보다 더 이른 경보(속도벡터는 못 숨긴다).
-  # merged 대역을 살짝 넓혀(4,500ft) 조기 대응한다.
+  # merged 대역을 살짝 넓혀(4,500ft) 조기 대응한다. §1 과 같은 이유로 강화.
   - sequence:
       - condition: {name: foe_path_threat, vel_aa_deg: 140}
       - condition: {name: merged, range_ft: 4500}
       - action:
-          {pursuit: lag, lag_dist_ft: 4000, aim_above_ft: -250, g_burst: 0.8,
+          {pursuit: lag, lag_dist_ft: 4000, aim_above_ft: -1200, g_burst: 1.0,
            name: defensive_break_path}
 
   # ── 2. 부상 이탈 — 내 HP 가 낮고 적 경로가 여전히 나를 향할 때만 ──
