@@ -131,6 +131,36 @@ selector:
                   {pursuit: lag, lag_dist_ft: 2200, aim_above_ft: 800,
                    name: yoyo_climb}
 
+  # ── 4b. Low Yo-Yo — 각도 열세 회수 (AIP_DCS Task_LowYoYo 계승) ──
+  # High Yo-Yo(위)는 "이미 후방인데 너무 빠르게 붙는" 과접근 문제를 풀지만,
+  # Low Yo-Yo 는 반대 문제 — 아직 후방도 아니고 기수도 못 문 각도 열세(nose_far)
+  # 상태에서 접근율마저 없을 때, 조준점을 적 선회원 **아래**로 던져 중력으로
+  # 가속하며 안쪽으로 파고들어 각을 회수한다(BEM 4.4.6.2.3). 예제
+  # energy_fighter.yaml 의 low_yoyo 패턴을 우리 우선순위·범위 게이트에 맞춰
+  # 재조정했다. merged range_ft 게이트는 예제에 없던 추가 안전장치 — 원거리
+  # nose_far(예: 중립 초기 진입)에서 불필요하게 다이브하지 않도록 근접 선회전
+  # (4,000ft 이내)으로 국한한다. commit 은 High Yo-Yo 와 동일한 이유로 필수
+  # (임계값 근처 tick 반전 방지).
+  - commit:
+      name: low_yoyo
+      duration_s: 3.5
+      cooldown_s: 3.0
+      child:
+        selector:
+          - sequence:  # 국면2 — 컷이 먹혀 접근율이 붙으면 기동면으로 되당김
+              - condition: {name: closing, min_fps: 60}
+              - action:
+                  {pursuit: lead, lead_time_s: 1.2, aim_above_ft: 150,
+                   name: yoyo_low_pullup}
+          - sequence:  # 국면1 — 각 부족 + 접근율 없음 → 선회원 아래로 다이브 컷
+              - condition: nose_far
+              - condition: {name: merged, range_ft: 4000}
+              - inverter:
+                  condition: {name: closing, min_fps: 0}
+              - action:
+                  {pursuit: lead, lead_time_s: 1.4, aim_above_ft: -500,
+                   name: yoyo_low_divecut}
+
   # ── 5. 1-서클 파이트 — 반경 관리 (Task_OneCircleFight 계승) ──
   # 반대 방향 선회로 원 하나를 공유하는 국면은 반경이 승부다. 스로틀 직접
   # 제어는 없으므로 pure(조준 오차 최소=조절기가 자연히 낮은 G 를 냄)로
@@ -180,6 +210,19 @@ selector:
       - action:
           {pursuit: lag, mode: control_zone, cz_range_ft: 2400, lag_dist_ft: 2000,
            name: hold_control_zone}
+
+  # ── 8b. 존 진입 — 공세(OBFM) 국면인데 아직 CZ 밖 ──
+  # (textbook_headon.yaml 의 enter_control_zone 계승) is_offensive(내가 적 후미)
+  # 인데 in_control_zone 은 아직 거짓인 국면 — 존을 향해 수렴하되, 일반 lead
+  # 추격이 아니라 mode: control_zone(오버슈트 억제 조절기)으로 부드럽게
+  # 들어간다. hold_control_zone(위) 보다 아래 두는 이유는 selector 특성상
+  # 자연스럽다 — 이미 존 안이면 그쪽이 먼저 걸리고, 이 분기는 "아직 밖"인
+  # 경우에만 도달한다.
+  - sequence:
+      - condition: {name: is_offensive, aspect_deg: 55}
+      - action:
+          {pursuit: lag, mode: control_zone, cz_range_ft: 2500, lag_dist_ft: 1000,
+           name: enter_control_zone}
 
   # ── 9. 이탈 추격 — 적이 거리를 벌리며 도망 ──
   # (Task_LeadPursuit 의 원거리 추격 계승) max-G 리드로 따라잡는다.
