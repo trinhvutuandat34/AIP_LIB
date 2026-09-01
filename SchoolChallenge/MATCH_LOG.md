@@ -14,10 +14,10 @@
 ## 라운드 1 — 2026-09-01, 훈련센터 배터리 35경기 (수정 전 트리)
 
 상대: `red_reactive`·`red_phangman`·`red_extender`·`red_prime`·`red_adaptive`
-(대항군 5종 전부, 39/40경기 수신 — `red_adaptive` perch_defense 1경기만
-누락). 시나리오: headon/perch_offense/perch_defense/neutral.
+(대항군 5종 전부, **40/40경기 — 훈련센터 배터리 완주**). 시나리오:
+headon/perch_offense/perch_defense/neutral × 시드 2개.
 
-**전적: 11승 21패 7무 (승률 28%). 무접촉 쌍방패(최악의 결과) 7회.**
+**전적: 11승 22패 7무 (승률 28%). 무접촉 쌍방패(최악의 결과) 7회.**
 `tools/tally.py` 전체 출력은 세션 로그에 있다 — 상대별 요지만 남긴다.
 
 | 상대 | 전적(승-패-무) | 비고 |
@@ -26,7 +26,7 @@
 | `red_phangman` | 3–4–1 | 격추당함 1회(0–7.1) |
 | `red_reactive` | 2–4–2 | 무접촉 2회 |
 | `red_prime` | 1–7–0 | **무승부가 0** — 교전 자체는 일어나는데 압도적으로 진다. 채터링과 무관(하드덱 진입 0~2회인 완봉패 다수) |
-| `red_adaptive` | 1–6–0 | **역시 무승부 0** — `red_prime` 과 같은 패턴(항상 교전, 항상 패배) |
+| `red_adaptive` | 1–7–0 | **역시 무승부 0** — `red_prime` 과 같은 패턴(항상 교전, 항상 패배) |
 
 **같은 실패라도 상대에 따라 성격이 다르다.** `red_extender`/`red_reactive`
 는 채터링 때문에 못 따라잡아 무승부로 새는 유형이고, `red_prime`/`red_adaptive`
