@@ -1,0 +1,228 @@
+# yaml-language-server: $schema=../reference/agent.schema.json
+#
+# Boramae-1 — AI Pilot 경진대회(교내, ai-combat-core2) 제출용 행동트리
+#
+# 설계 원천: AIP_DCS(AIP_LIB 저장소)의 기존 BFM 자산 —
+#   Task_HighYoYoUp/Task_OneCircleFight/Task_LagPursuit/Task_LeadPursuit/
+#   Task_Evade("The Break")/Task_ClimbToSafeAltitude 등 — 을 이 SDK의
+#   조건/액션 어휘로 다시 옮긴 것. 그 프로젝트는 DLL+XML 제출의 다른 대회
+#   (AIP TGC 2026, Unreal)를 겨냥하므로 코드를 그대로 옮길 수 없고, 전술
+#   판단(언제 lead/lag/pure 를 쓰는가, 언제 요요·브레이크·존 유지로 전환하는가)
+#   만 재사용했다. 수치는 REFERENCE.md/MEASURED_BEHAVIOR.md/RULEBOOK.md 의
+#   실측·룰에 맞춰 새로 잡았다.
+#
+# 우선순위(위→아래, selector) 설계 근거:
+#   안전(하드덱→즉사 위협→치명 에너지) > 방어(코앞 총 위협) > 부상 이탈
+#   > 국면별 전술(요요/1서클/2서클/오버타임/사격창/존유지/추격/재조준/회복)
+#   > 기본 추격. 이 순서는 AIP_DCS 의 Fallback 순서
+#   (ClimbToSafeAltitude → JinkingTurn/Evade → HighYoYoUp → OneCircleFight/
+#   LagPursuit → LeadPursuit/Pure) 와 같은 원칙 — "못 날면 못 싸운다,
+#   못 피하면 못 이긴다" 를 이 SDK 조건으로 재현한 것이다.
+#
+# 제출 전 반드시 SDK 의 tools/validate_agent.py 로 재검증할 것 — 이 트리는
+# ../tools/validate_local.py (agent.schema.json 기준 로컬 사전 점검, 공식
+# 검증기 아님)로 통과를 확인했다.
+
+agent_name: Boramae1
+
+# doctrine: SDK 제공 예제(reference/examples/doctrine_regulator.yaml)가
+# scripts/sweep_doctrine.py 1,368경기 스윕에서 "단일 최선"으로 확인했다고
+# 명시한 3필드만 채택한다(그 예제의 나머지 4필드는 파일 자체가 "의도적으로
+# 최적이 아닌 값"이라 명시하므로 그대로 가져오지 않았다 — 우리 트리에는
+# 기본값을 둔다):
+#   g_min: 1.5           — 조절기가 조준 근접 구간에서 1G 로 주저앉는 것을
+#                           막는 하한. max_g 없이 추적을 유지하는 실질 방어선.
+#   energy_margin_lo: 75 — energy_advantage 판정을 hi(75)와 같은 값으로 좁혀
+#                           "비에너지 우세" 판정이 더 안정적으로 작동하게 한다.
+#   lv_above_ft: 500     — 리프트벡터를 조준점 바로 위로 좁혀 수직 과소산을
+#                           억제(요요·브레이크에서 에너지 낭비를 줄인다).
+# fighting_kts_lo 상향과 slant_ft_hi 축소는 같은 스윕에서 악화로 확인되어
+# 건드리지 않았다(둘 다 기본값 유지).
+doctrine:
+  g_min: 1.5
+  energy_margin_lo: 75.0
+  lv_above_ft: 500.0
+
+selector:
+
+  # ── 0. 하드덱 회피 — 절대 최우선(룰북 §5 1번: 위반 즉시 패, HP 우세 무시) ──
+  # floor_ft 를 기본(4000)보다 넉넉히 4500 으로, lookahead_s 3.5 로 강하 관성을
+  # 미리 감안한다(고속 강하 중 발동이 늦으면 회복해도 하드덱을 뚫는다 — 룰북
+  # 조건 설명 그대로). aim_above_ft 를 상한 근처(+4500)로 크게 주면 조절기가
+  # 그 오차만큼 자동으로 세게 당긴다(실측: aim_above 4000·3000ft 에서
+  # g_burst 0.8 = 7.2G, MEASURED_BEHAVIOR.md/RULEBOOK.md §10.1) — 여기선 그보다
+  # 더 큰 오프셋 + g_burst 0.9 로 하드덱 이탈을 확실히 한다.
+  - sequence:
+      - condition: {name: low_altitude, floor_ft: 4500, lookahead_s: 3.5}
+      - action: {pursuit: pure, g_burst: 0.9, aim_above_ft: 4500, name: recover_hard_deck}
+
+  # ── 1. 즉각 방어 브레이크 — 적이 내 정면에서 조준 중(코앞 총 위협) ──
+  # foe_threat 는 실속 없이 매 tick 재평가되므로 이 자체가 브레이크다(고전
+  # BT 의 Task_Evade="The Break" 자리). aspect_deg 를 기본(120)보다 좁혀
+  # (=더 극단적인 헤드온만) 오발동을 줄이고, merged 로 4,000ft 이내에서만
+  # 발동시켜 원거리 오인 브레이크를 막는다. lag + 큰 lag_dist_ft·음의
+  # aim_above_ft 로 각을 최대한 빼고, g_burst·g_full_ata_deg 로 선회율을 낸다.
+  - sequence:
+      - condition: {name: foe_threat, aspect_deg: 130}
+      - condition: {name: merged, range_ft: 4000}
+      - action:
+          {pursuit: lag, lag_dist_ft: 4500, aim_above_ft: -300, g_burst: 0.85,
+           g_full_ata_deg: 30, name: defensive_break_nose}
+
+  # ── 1b. 경로 기반 방어 — 적 기수는 아직 안 물었어도 비행경로가 나를 향함 ──
+  # foe_path_threat 는 foe_threat 보다 더 이른 경보(속도벡터는 못 숨긴다).
+  # merged 대역을 살짝 넓혀(4,500ft) 조기 대응한다.
+  - sequence:
+      - condition: {name: foe_path_threat, vel_aa_deg: 140}
+      - condition: {name: merged, range_ft: 4500}
+      - action:
+          {pursuit: lag, lag_dist_ft: 4000, aim_above_ft: -250, g_burst: 0.8,
+           name: defensive_break_path}
+
+  # ── 2. 부상 이탈 — 내 HP 가 낮고 적 경로가 여전히 나를 향할 때만 ──
+  # 적 HP 는 비노출이라 "이기는 교환인지"는 모른다. 그래도 내 HP 가 낮으면
+  # 정면 교환은 산술적으로 불리하다. 위협이 없는데 먼저 도망가진 않는다
+  # (무접촉 자체는 처벌 대상이 아니지만, 불필요한 이탈은 사격 기회를 버린다).
+  - sequence:
+      - condition: {name: low_health, hp: 30}
+      - condition: {name: foe_path_threat, vel_aa_deg: 115}
+      - action:
+          {pursuit: lag, lag_dist_ft: 4500, aim_above_ft: -300, g_burst: 0.6,
+           name: wounded_disengage}
+
+  # ── 3. 치명적 저속(실속 가드) — 100kt 10초 누적 = 즉시 패 ──
+  # 파이팅 속도 하한(교리 325)보다 훨씬 낮은 220kt 를 명시값으로 둬 교리
+  # 변경과 무관한 절대 하한을 만든다. g_burst 0 으로 지속봉투(Ps≥0, 에너지
+  # 보존)만 쓰고, lag + 음의 aim_above_ft 로 고도를 속도로 바꾼다. merged
+  # 9,000ft 게이트로 무한 이격(무접촉 쌍방패)을 막는다 — SDK 예제의
+  # energy_recover 존 게이트(8,000ft)보다 위기 상황이라 살짝 더 넓게 둔다.
+  - sequence:
+      - condition: {name: below_fighting_speed, kcas: 220}
+      - condition: {name: merged, range_ft: 9000}
+      - action:
+          {pursuit: lag, lag_dist_ft: 5000, aim_above_ft: -400, g_burst: 0.0,
+           name: critical_energy_recover}
+
+  # ── 4. High Yo-Yo — 과접근 관리 (AIP_DCS Task_HighYoYoUp 계승) ──
+  # REFERENCE.md 교범 예제(§ 노드·액션 예제 ③)와 같은 2국면 commit 패턴:
+  # 국면1(상승) 은 후방에서 빠르게 붙을 때 조준점을 위로 던져 수직으로
+  # 에너지를 소산하고, 국면2(재강하) 는 적이 아래로 지나고 접근율이
+  # 잦아든 정점에서 리드로 재공격한다. commit 없이 조건만 쓰면 임계값
+  # 근처에서 국면이 매 tick 뒤집혀 요요가 성립하지 않는다(교범 그대로).
+  # behind_foe 게이트가 둘 다에 있어야 헤드온 머지에서 오발동하지 않는다.
+  - commit:
+      name: high_yoyo
+      duration_s: 4.5
+      cooldown_s: 3.0
+      child:
+        selector:
+          - sequence:
+              - condition: {name: behind_foe, aspect_deg: 90}
+              - condition: {name: foe_below, min_ft: 700}
+              - inverter:
+                  condition: {name: closing, min_fps: 60}
+              - action:
+                  {pursuit: lead, lead_time_s: 1.4, aim_above_ft: -350,
+                   name: yoyo_reattack}
+          - sequence:
+              - condition: {name: behind_foe, aspect_deg: 90}
+              - condition: {name: overshoot_risk, closure_fps: 160, range_ft: 2200}
+              - action:
+                  {pursuit: lag, lag_dist_ft: 2200, aim_above_ft: 800,
+                   name: yoyo_climb}
+
+  # ── 5. 1-서클 파이트 — 반경 관리 (Task_OneCircleFight 계승) ──
+  # 반대 방향 선회로 원 하나를 공유하는 국면은 반경이 승부다. 스로틀 직접
+  # 제어는 없으므로 pure(조준 오차 최소=조절기가 자연히 낮은 G 를 냄)로
+  # 두는 대신, g_full_ata_deg 를 낮춰(=더 작은 오차에서도 포화) 짧은 반경을
+  # 만든다. track_* 로 근접 창에서 추적 G 를 확보한다.
+  - sequence:
+      - condition: one_circle
+      - condition: {name: merged, range_ft: 3000}
+      - action:
+          {pursuit: pure, g_burst: 0.6, g_full_ata_deg: 35, track_rng_ft: 2000,
+           track_ata_deg: 20, name: one_circle_radius}
+
+  # ── 5b. 2-서클 파이트 — 노즈-투-노즈 rate fight ──
+  # 같은 방향 선회는 반경이 아니라 기수 지향률(rate) 싸움이다. lead 로
+  # 미래점을 조준해 기수를 더 빨리 세운다.
+  - sequence:
+      - condition: two_circle
+      - condition: {name: merged, range_ft: 3000}
+      - action: {pursuit: lead, lead_time_s: 1.2, g_burst: 0.5, name: two_circle_rate}
+
+  # ── 6. 오버타임 압박 — 현장 단판 연장전 전용 ──
+  # OT 는 Gun WEZ 가 500–6,000ft·ATA<45°로 완화된다(룰북 §5 오버타임).
+  # REFERENCE.md 가 제시한 그대로 in_overtime + 완화된 in_gun_envelope 를
+  # 함께 게이트로 쓴다. OT 타이브레이크 1순위가 누적 조준시간이므로, 격추가
+  # 안 나도 이 분기가 자주 참이 되는 것 자체가 이득이다.
+  - sequence:
+      - condition: in_overtime
+      - condition: {name: in_gun_envelope, range_ft: 6000, ata_deg: 45}
+      - action:
+          {pursuit: pure, g_burst: 0.9, g_full_ata_deg: 25, track_rng_ft: 3000,
+           track_ata_deg: 30, name: overtime_press}
+
+  # ── 7. 사격창 — 좁은 ATA 우선(데미지는 거리가 아니라 ATA 계단, 룰북 §4) ──
+  # ATA<2° 가 <30° 보다 4배 아프다. 정규 시간에는 게이트를 좁게(ata_deg 20)
+  # 둬 "사거리 안" 이 아니라 "정말 맞고 있는" 상태에서만 이 분기를 타게 한다.
+  - sequence:
+      - condition: {name: in_gun_envelope, range_ft: 3000, ata_deg: 20}
+      - action:
+          {pursuit: pure, g_burst: 0.7, g_full_ata_deg: 25, track_rng_ft: 2500,
+           track_ata_deg: 20, name: gun_track_tight}
+
+  # ── 8. 컨트롤존 유지 — BEM 후방 2~3kft 존에서 오버슈트 없이 체류 ──
+  # (Task_LagPursuit/Task_OneCircleFight 의 "존 유지" 계승) mode: control_zone
+  # 일 때만 cz_range_ft 가 효과를 갖는다(교범 그대로).
+  - sequence:
+      - condition: in_control_zone
+      - action:
+          {pursuit: lag, mode: control_zone, cz_range_ft: 2400, lag_dist_ft: 2000,
+           name: hold_control_zone}
+
+  # ── 9. 이탈 추격 — 적이 거리를 벌리며 도망 ──
+  # (Task_LeadPursuit 의 원거리 추격 계승) max-G 리드로 따라잡는다.
+  - sequence:
+      - condition: {name: foe_extending, closure_fps: 0, range_ft: 6000}
+      - action:
+          {pursuit: lead, lead_time_s: 1.5, g_burst: 0.8, g_full_ata_deg: 30,
+           name: chase_extend}
+
+  # ── 10. 공세 압박 — 비에너지 우세 + 적 후방 점유 ──
+  - sequence:
+      - condition: {name: energy_advantage, min_ft: 200}
+      - condition: behind_foe
+      - action: {pursuit: lead, lead_time_s: 1.3, name: press_offense}
+
+  # ── 11. 경로 재정렬 — 기수는 물었는데 비행경로가 흘러나감(고AoA 드리프트) ──
+  - sequence:
+      - condition: {name: vel_nose_far, vel_ata_deg: 50}
+      - action: {pursuit: lead, lead_time_s: 1.0, name: path_realign}
+
+  # ── 12. 기수 회복 — 패스 직후 각이 크게 벌어진 일반 상황 ──
+  - sequence:
+      - condition: {name: nose_far, ata_deg: 55}
+      - action: {pursuit: lead, lead_time_s: 1.0, name: regain_nose}
+
+  # ── 13. 일반 에너지 회복 — 파이팅 속도 하한 미만(교리 연동) ──
+  # cooldown 으로 임계값 근처 chattering 을 막는다. merged 게이트로 이미
+  # 멀어진 상태에서 더 빼지 않는다(SDK 예제와 동일 패턴, 무접촉 방지).
+  - cooldown:
+      name: energy_recover
+      wait_s: 5.0
+      child:
+        sequence:
+          - condition: below_fighting_speed
+          - condition: {name: merged, range_ft: 8000}
+          - action:
+              {pursuit: lag, lag_dist_ft: 3500, aim_above_ft: -250,
+               name: energy_recover}
+
+  # ── 14. 헤드온/중립 머지 안정 — HABFM 국면, 안정 노즈온 추적 ──
+  - sequence:
+      - condition: is_head_on
+      - action: {pursuit: pure, mode: stable, g_full_ata_deg: 40, name: merge_stable}
+
+  # ── 15. 기본 추격 — 위 분기 어디에도 안 걸리면 순정 추격 ──
+  - action: {pursuit: pure, name: default_chase}
