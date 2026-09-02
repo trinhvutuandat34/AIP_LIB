@@ -15,9 +15,22 @@ $env:DOGFIGHT_SERVER_PORT = "<공지된 포트>"
 python student\my_submission.py
 ```
 
-`python`은 **`aip` conda 환경**이어야 한다
-(`C:\Users\Administrator\anaconda3\envs\aip\python.exe`). 기본 `python`은 anaconda3 base라
-`pymap3d`가 없어 즉시 죽는다.
+`python`은 **`aip` conda 환경**이어야 한다. 기본 `python`은 anaconda3 base라 `pymap3d`가 없어
+즉시 죽는다.
+
+**경로는 장비마다 다르다 — 당일에 찾지 말고 미리 확정할 것** (2026-09-02 실측):
+
+| 출처 | 경로 | 이 장비에 존재? |
+|---|---|---|
+| **이 저장소가 있는 장비 (실측)** | `C:\Users\user\.conda\envs\aip\python.exe` | **O** |
+| 이 문서에 적혀 있던 값 | `C:\Users\Administrator\anaconda3\envs\aip\python.exe` | X |
+| `CLAUDE.md` 의 값 | `C:\Users\USER\anaconda3\envs\aip\python.exe` | X |
+
+`anaconda3` 가 아니라 `.conda` 이고 사용자명도 다르다. 실행 전에 한 번 확인한다:
+
+```powershell
+& "C:\Users\user\.conda\envs\aip\python.exe" -c "import pymap3d, torch; print('ok')"
+```
 
 ---
 
@@ -109,8 +122,29 @@ DLL/Rule XML/관측 모듈 로드에 실패하는 중이다. **프로세스는 �
 - **RL/hybrid 모드로 바꾸지 말 것.** 12개 캠페인 전부 쓸 만한 bundle을 내지 못했고,
   hybrid는 아무것도 안 하는 것보다 나쁘다고 실측됐다(§4.1 F36-HYBRID-VERDICT).
   `MODE="vptrack"`, `BUNDLE_DIR=None`이 정답이다.
-- **컨트롤러 파라미터를 바꾸지 말 것.** 4000 m / 60° + throttle은 컷오프 게이트를
-  N=100에서 100% 통과한 설정이다(F39-ENVELOPE-MARGIN).
+- **컨트롤러 파라미터를 바꾸지 말 것 — 현행 값은 `6000 m / 90° + throttle` 이다
+  (2026-09-03, F56 로 변경됨).** 종전 `4000/60` 의 근거였던 F39-ENVELOPE-MARGIN
+  ("N=100에서 100% 통과")은 **F54 로 무효**다 — 수직축이 뒤집힌 채 전달된, 수직으로
+  눈먼 컷오프를 상대로 낸 수치였다. 피드를 바로잡고 **전 모드를 N=50으로 재측정**한
+  결과:
+
+  | 엔벨로프 | 가한 피해 | rule% | 피해 수지 |
+  |---|---|---|---|
+  | 2500/45 · 4000/45 | 0.000 | 0.0% | 음수 |
+  | 2500/90 | 0.014 | 0.0% | 음수 |
+  | 4000/60 (종전) | 0.122 | 12.0% | −0.046 |
+  | **6000/90 (현행)** | **0.282** | **28.0%** | **+0.004** |
+
+  나머지 13개 설정(throttle·corner·defensive·2200/35·2000/45 등)은 **피해량이 전부
+  정확히 0.000** 이었다 — 사격 자체가 성립하지 않는 좁은 엔벨로프 안에서 노브만
+  돌리고 있었던 것이다. 또한 `4000/60` 을 고른 실제 근거였던 **피어 리그도 다시
+  돌렸다**(match_base, N=50, 6000/90 대 4000/60): **17승 13무 18패, 격추 11 대 12** —
+  통계적으로 동률이며, F37 의 "wide envelope 이 match_base 성능을 깎는다"는 주장은
+  **재현되지 않았다**. 한쪽 상대에겐 확실히 우세, 다른 쪽엔 무차별이라 채택했다.
+
+  **되돌리려면** `student/controller_providers.py` 의 `SHIP_ENGAGE_RANGE_M` /
+  `SHIP_ENGAGE_LOS_DEG` 를 `4000.0` / `60.0` 으로 되돌리면 된다. 두 진입점 모두 이
+  상수를 읽으므로 그 외 수정할 곳은 없다(F44).
 - **네트워크가 불안하다고 재접속을 반복하지 말 것.** 2회 불안정이 실격이다.
 
 ---

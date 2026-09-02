@@ -115,10 +115,43 @@ ENGAGE_LOS_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_LOS_DEG", "45.0"))
 #
 # Both live entry points now take these, so the two cannot drift apart:
 #   throttle  -- F29, adopted on 3 seeds; losses fell in every one (8->5,5,4)
-#   4000/60   -- F39-ENVELOPE-MARGIN; 100% win / 95% earned vs cutoff at N=100, and unlike
-#                4000/45 it costs nothing on the peer rig (match_base 46.7% vs 43.3%)
-SHIP_ENGAGE_RANGE_M = 4000.0
-SHIP_ENGAGE_LOS_DEG = 60.0
+#   6000/90   -- F56 (2026-09-03). SUPERSEDES 4000/60. See below.
+#
+# WHY 6000/90, AND WHY THE OLD JUSTIFICATION FOR 4000/60 IS VOID.
+#
+# 4000/60 was adopted on F39-ENVELOPE-MARGIN: "100% win / 95% earned vs cutoff at N=100, and
+# unlike 4000/45 it costs nothing on the peer rig (match_base 46.7% vs 43.3%)". **The first half
+# of that is void** -- F54 found the cutoff had been fed an INVERTED VERTICAL AXIS, so every
+# pre-fix cutoff number was scored against an opponent that was blind in the vertical. With the
+# feed corrected (folded into scripts/cutoff_provider.py 2026-09-02), all 15 runnable modes were
+# re-scored at N=50:
+#
+#     envelope     damage dealt   rule%     differential
+#     2500/45          0.000       0.0%       negative
+#     4000/45          0.000       0.0%       negative
+#     2500/90          0.014       0.0%       negative
+#     4000/60          0.122      12.0%        -0.046
+#     6000/90          0.282      28.0%        +0.004   <- only non-negative one in the sweep
+#
+# Every other config -- including every throttle/corner/defensive/2200-35/2000-45 variant --
+# dealt LITERALLY ZERO damage. The gradient is entirely envelope width, both axes must widen
+# together, and it has not turned over: 6000/90 is the widest ever tested and the best.
+#
+# **The second half of F39's justification was re-tested rather than assumed**, because the peer
+# rig -- not the cutoff -- is what originally picked 4000/60. Head to head on match_base, N=50,
+# seed 0, ownship 6000/90 vs target 4000/60, both with throttle: **17W/13D/18L, 11 kills vs 12
+# deaths**. A 1-episode margin where 1 sigma is ~3.4 episodes -- a dead heat. F37's "costs real
+# match_base performance" DOES NOT REPRODUCE.
+#
+# Net: strictly better against one opponent, statistically indistinguishable against the other.
+# The real trade is VARIANCE -- 6000/90 converts draws into decisive results in both directions
+# (against the cutoff 4000/60 times out 43 of 50). For a BO3 where a draw advances nobody,
+# against a field we are the underdog in, that is the correct direction.
+#
+# TO REVERT: set these two back to 4000.0 / 60.0. Nothing else changes -- both live entry points
+# read these constants, which is the F44 single-source-of-truth guarantee.
+SHIP_ENGAGE_RANGE_M = 6000.0
+SHIP_ENGAGE_LOS_DEG = 90.0
 SHIP_THROTTLE_CONTROL = True
 
 # ---- Gains ----------------------------------------------------------------------------
