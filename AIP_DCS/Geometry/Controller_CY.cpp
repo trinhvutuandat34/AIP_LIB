@@ -117,7 +117,16 @@ StickValue StickController::GetStick(Vector3 MyLocation_FNED, Vector3 MyRotation
 
 	// 롤커멘드 생성 부분
 
-	float UpVector2Proj_TV_Angle = std::acos(UpVector.dot(Proj_TV / Proj_TV.length()));
+	// Computed once and reused below (was called a second time further down) -- this is a hot
+	// per-tick path and the two call sites always read the same Proj_TV, so the sqrt was pure
+	// waste. Kept as double (Vector3::length()'s real return type -- the original second call
+	// site narrowed it to float) so the acos() below still divides by the exact same precision
+	// the pre-fix code did; narrowing to float here measurably shifted UpVector2Proj_TV_Angle
+	// (verified in Geometry/tests/verify_controller_proj_tv_fix.cpp) even though it's immaterial
+	// once >0-clamped for the second use below.
+	double Proj_TV_Length = Proj_TV.length();
+
+	float UpVector2Proj_TV_Angle = std::acos(UpVector.dot(Proj_TV / Proj_TV_Length));
 	float UTAngle;
 	float LOS = std::acos(ForwardVector.dot((TargetLocation - Mylocation)) / (TargetLocation - Mylocation).length()) * RADTODEG;
 
@@ -138,8 +147,6 @@ StickValue StickController::GetStick(Vector3 MyLocation_FNED, Vector3 MyRotation
 	{
 		LOS = 0;
 	}
-
-	float Proj_TV_Length = Proj_TV.length();
 
 	if(Proj_TV_Length <= 0)
 	{

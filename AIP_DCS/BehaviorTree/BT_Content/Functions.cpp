@@ -11,8 +11,22 @@ namespace BTFunc
 	{
 		if (tempString != nullptr && BT_Text != nullptr)
 		{
-			if (tempString->length() > 910)
-				tempString->clear();
+			static const size_t MAX_TEMP_LEN = 910;
+			if (tempString->length() > MAX_TEMP_LEN)
+			{
+				// Keep the most recent MAX_TEMP_LEN characters instead of wiping the whole
+				// trace -- a truncated-but-useful log beats a silently blank one. Drop up to
+				// the first newline inside that window so the kept text starts on a clean
+				// entry boundary (AddNodeExcute terminates every entry with "\n") rather than
+				// mid-line.
+				size_t start = tempString->length() - MAX_TEMP_LEN;
+				size_t firstNewline = tempString->find('\n', start);
+				if (firstNewline != std::string::npos && firstNewline + 1 < tempString->length())
+				{
+					start = firstNewline + 1;
+				}
+				tempString->erase(0, start);
+			}
 
 			BT_Text->clear();
 
