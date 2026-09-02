@@ -84,7 +84,13 @@ namespace BTFunc
 	{
 		Vector3 toTarget = BB->TargetLocaion_Cartesian - BB->MyLocation_Cartesian;
 		Vector3 dir = BB->MyUpVector.cross(toTarget);
-		if (dir.dot(BB->MyRightVector) < 0.0)
+		// dir is one of the two directions perpendicular to the line-of-sight; canonicalize
+		// against MyForwardVector (not MyRightVector) so we keep whichever of dir/-dir needs
+		// the smaller heading change from where the nose is already pointed -- that's the
+		// "shorter turn" this function is named for. Dotting against MyRightVector instead is a
+		// scalar-triple-product identity for toTarget's fore/aft component, not its left/right
+		// component, so it could never tell a left-offset target from a right-offset one.
+		if (dir.dot(BB->MyForwardVector) < 0.0)
 		{
 			dir = -dir;
 		}
