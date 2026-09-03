@@ -50,6 +50,7 @@ from student.inference_providers import (
 from student.controller_providers import (
     SHIP_ENGAGE_LOS_DEG,
     SHIP_ENGAGE_RANGE_M,
+    SHIP_HARD_DECK_M,
     SHIP_THROTTLE_CONTROL,
     EnvelopeGatedHybridProvider,
     GLimitedProvider,
@@ -85,6 +86,11 @@ def parse_args():
         help=f"vptrack engagement LOS half-angle (default {SHIP_ENGAGE_LOS_DEG:.0f} deg -- SHIPPED).",
     )
     parser.add_argument(
+        "--vptrack-hard-deck", type=float, default=SHIP_HARD_DECK_M,
+        help=f"altitude (m) below which the controller hands back to the BT so Gate 0 can climb "
+             f"(default {SHIP_HARD_DECK_M:.0f} m -- the SHIPPED value; 0 disables).",
+    )
+    p.add_argument(
         "--vptrack-throttle", type=int, choices=[0, 1], default=int(SHIP_THROTTLE_CONTROL),
         help=f"vptrack range-based throttle control (default {int(SHIP_THROTTLE_CONTROL)} -- SHIPPED). "
              "Pass 0 for the pre-F29 behaviour.",
@@ -241,6 +247,7 @@ def _build_action_provider_raw(args, effective_observation_mode: str):
             dll_name=args.bt_dll,
             throttle_control=args.vptrack_throttle,
             engage_range_m=args.vptrack_range_m,
+            hard_deck_m=args.vptrack_hard_deck,
             engage_los_deg=args.vptrack_los_deg,
         )
 
@@ -274,6 +281,7 @@ def _build_action_provider_raw(args, effective_observation_mode: str):
             dll_name=args.bt_dll,
             throttle_control=args.vptrack_throttle,
             engage_range_m=args.vptrack_range_m,
+            hard_deck_m=args.vptrack_hard_deck,
             engage_los_deg=args.vptrack_los_deg,
         )
         if args.mode == "hybrid_gated":

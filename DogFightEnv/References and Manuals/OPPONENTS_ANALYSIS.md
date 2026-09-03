@@ -211,3 +211,79 @@ own ATA 45–150°, dist < 2500 m) fires at it as designed.
    roughly a quarter-turn, not a half-turn, to bring guns to bear, so
    time-to-first-shot is short and the one-circle/two-circle choice is made
    almost immediately. That is the window in which GoGoSSung has been hit.
+
+---
+
+## Scouting intake — how a dossier becomes a sparring partner
+
+Scouting is only worth the effort if it changes what we fly against. This
+section is the pipeline: **observed telemetry → inferred behaviour → archetype
+parameters → a config the league can actually run.** Fill the block below for
+each new team; do not reason ad hoc.
+
+### The per-team block
+
+```
+### <Team name>
+**Scouted:** <date> · **Source:** <n> matches, <what kind of footage> ·
+**Record observed:** <W-L-D, and note if the sample is wins only>
+
+| Observable                  | Value | How read |
+|---|---|---|
+| Mean health retained        |       | HUD health bar at match end |
+| Time to first damage        |       | footage clock MINUS pre-roll (see clock caveat) |
+| Longest scoreless stretch   |       |  |
+| Hits per scoring window     |       | 1 = one-and-done, >1 = salvo |
+| Engagement ranges observed  |       | convert to ft and check against the §6.2 band |
+| Vertical vs flat kills      |       |  |
+
+**Inferred behaviour:** <2-4 sentences>
+**Archetype:** <roster row below> · **Confidence:** <high/med/low>
+**Sparring parameters:** <the exact CLI flags>
+```
+
+> **Check the mechanism against `COMPETITION_RULES.md` before acting on it.**
+> This is not boilerplate — the first revision of this file read gun-WEZ damage
+> events as missile shots in a **guns-only** competition, and credited the
+> opponent with a "Battle Phase" gate that is the competition's own clock-driven
+> cone widening. Two of six counter-tactics briefed for things that do not
+> exist. Telemetry is data; mechanism is interpretation.
+
+### Archetype roster
+
+Every archetype is parameterisation of code we already have — no new
+controller. `mirror`/`sniper`/`aggressor` are built from `VPTrackingProvider`
+via the per-side flags on `scripts/eval_v5_vs_bt.py`.
+
+| Archetype | Represents | Built from |
+|---|---|---|
+| `cutoff` | the extend-and-clock type; refuses the re-merge and wins on accumulated damage | organizers' binary via `scripts/cutoff_provider.py` |
+| `mirror` | a peer at our level | our own shipped config on the target side |
+| `sniper` | patient, engages rarely, retains health | narrow envelope: `--target-vptrack-range-m 2500 --target-vptrack-los-deg 45 --target-vptrack-throttle 1` |
+| `aggressor` | forces decisive merges, trades freely | wide envelope + deck guard: `--target-vptrack-range-m 6000 --target-vptrack-los-deg 120 --target-vptrack-hard-deck 1000` |
+| `bt_only` | rule-based floor | `--target-backend bt` |
+
+**Why these five.** They span the axis that actually decides our matches —
+willingness to trade damage. `cutoff` sits at one end (declines trades, banks
+the clock), `aggressor` at the other, `sniper` trades rarely but only on
+favourable terms. A config tuned against one of these is not tuned against the
+others, which is the whole reason for a roster rather than a single benchmark.
+
+### GoGoSSung → `sniper` (worked example)
+
+**Archetype:** `sniper` · **Confidence: low — this is a hypothesis, not a
+replica.** Everything known about GoGoSSung comes from broadcast footage of
+five of its wins. The mapping rests on three observations: 96.5% mean health
+retained (it is rarely in a position to be shot), 80–136 s scoreless stretches
+in three of five games (it declines low-percentage shots), and multi-hit
+salvos once it has an angle (it commits fully when it does engage). A narrow
+engagement envelope reproduces the first two; nothing we have reproduces the
+third.
+
+**Label it as an analogue in every results table.** A league row reading
+"beat `sniper` 60%" must never be read as "beat GoGoSSung 60%".
+
+**What would raise confidence:** any footage of GoGoSSung *losing* or under
+sustained pressure. The current sample is five wins — pure survivorship bias,
+and it tells us nothing about what happens when someone gets inside its
+envelope early, which is the one thing that has worked (M5, t≈10–12 s).

@@ -1,10 +1,20 @@
 """Run every ownship backend (and the vptrack tuning variants) against the cutoff, in parallel.
 
 Each job is an independent process: its own JSBSim DLL load, its own cutoff binary on its own
-ephemeral loopback port. Nothing is shared, so jobs are safe to run concurrently -- with one
-exception, which is why no job here passes --bt-rule-xml: activate_rule_xml() copies over the
-single live Rule_forTraining.xml that BOTH aircraft read, so a job that switched rules would
-change every other job running at the time.
+ephemeral loopback port. Two things ARE shared, though, and the original "nothing is shared"
+claim here was wrong:
+
+  1. Rule_forTraining.xml -- activate_rule_xml() copies over the single live file that BOTH
+     aircraft read, which is why no job here passes --bt-rule-xml.
+  2. aircraft/f16/f16_init.xml -- JSBSimWrapper rewrites it on EVERY env construction, from a
+     module-relative path, so cwd isolation does not help. Its FileLock serialises our own
+     writes but not the handle the native DLL holds past Init(). At --jobs 6 this lost the
+     env_r8000_l90 arm at episode 7/50 (OSError 22). JSBSimWrapper now retries that write, and
+     failed jobs are relaunched once below -- but treat a non-zero rc as a real result to
+     investigate, not noise.
+
+Note also that running any job REWRITES that init file in the working tree, undoing F7's
+confirmed competition spawn preset. Check `git status DogFightEnv/Release/aircraft/` afterwards.
 
     python scripts/sweep_vs_cutoff.py --episodes 30 --jobs 4
     python scripts/summarize_cutoff.py "artifacts/eval/cutoff_*.csv"
@@ -78,6 +88,54 @@ JOBS: dict[str, list[str]] = {
     "env_r2500_l90":          ["--ownship-backend", "vptrack", "--ownship-vptrack-throttle", "1",
                                "--ownship-vptrack-range-m", "2500", "--ownship-vptrack-los-deg", "90"],
 
+    # PUSH THE GRADIENT (2026-09-03, F56). The envelope sweep never turned over: damage dealt
+    # goes 2500/45 -> 0.000, 4000/45 -> 0.000, 2500/90 -> 0.014, 4000/60 -> 0.122,
+    # 6000/90 -> 0.282, and 6000/90 was simply the widest thing anyone had tried. These three
+    # find the actual optimum instead of a boundary. LOS past 90 deg means the controller
+    # engages targets in its REAR hemisphere -- physically odd, which is exactly why it is
+    # worth a measurement rather than an assumption. No clamp exists on either field.
+    "env_r8000_l90":          ["--ownship-backend", "vptrack", "--ownship-vptrack-throttle", "1",
+                               "--ownship-vptrack-range-m", "8000", "--ownship-vptrack-los-deg", "90"],
+    "env_r6000_l120":         ["--ownship-backend", "vptrack", "--ownship-vptrack-throttle", "1",
+                               "--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120"],
+    "env_r8000_l120":         ["--ownship-backend", "vptrack", "--ownship-vptrack-throttle", "1",
+                               "--ownship-vptrack-range-m", "8000", "--ownship-vptrack-los-deg", "120"],
+
+    # PARKED KNOBS, RE-TESTED AT THE ADOPTED ENVELOPE (2026-09-03, F56). defensive_break and
+    # corner_hold were both measured as nulls -- but at 2500/45, an envelope that deals 0.000
+    # damage, so those verdicts measured nothing and are void. F26-DEFENSIVE parked the break
+    # with the words "worth re-testing against an opponent that out-shoots us"; the corrected
+    # cutoff now deals 0.278/ep against 6000/90, and F58 found we LOSE round 4 on accumulated
+    # damage despite out-killing it. This is that re-test.
+    "env6000_90_def":         ["--ownship-backend", "vptrack", "--ownship-vptrack-throttle", "1",
+                               "--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "90",
+                               "--ownship-vptrack-defensive", "1"],
+    "env6000_90_corner":      ["--ownship-backend", "vptrack", "--ownship-vptrack-throttle", "1",
+                               "--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "90",
+                               "--ownship-vptrack-corner", "1"],
+    "env6000_90_def_corner":  ["--ownship-backend", "vptrack", "--ownship-vptrack-throttle", "1",
+                               "--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "90",
+                               "--ownship-vptrack-defensive", "1", "--ownship-vptrack-corner", "1"],
+
+    # HARD-DECK GUARD (2026-09-03). The 120 deg arms produced the best damage differential this
+    # project has measured (+0.023 / +0.030) and threw it away flying into the ground 6-7 times
+    # in 50, because the controller owns the stick inside the envelope and has no altitude term,
+    # so Gate 0 never gets to climb. These re-run the same arms with the guard at 1000 m (just
+    # above Gate 0's own 914 m trigger). env_r6000_l90_deck is the CONTROL: the shipped config
+    # takes zero altitude-floor losses today, so the guard can only cost it -- measure that.
+    "env_r8000_l120_deck":    ["--ownship-backend", "vptrack", "--ownship-vptrack-throttle", "1",
+                               "--ownship-vptrack-range-m", "8000", "--ownship-vptrack-los-deg", "120",
+                               "--ownship-vptrack-hard-deck", "1000"],
+    "env_r6000_l120_deck":    ["--ownship-backend", "vptrack", "--ownship-vptrack-throttle", "1",
+                               "--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120",
+                               "--ownship-vptrack-hard-deck", "1000"],
+    "env_r8000_l90_deck":     ["--ownship-backend", "vptrack", "--ownship-vptrack-throttle", "1",
+                               "--ownship-vptrack-range-m", "8000", "--ownship-vptrack-los-deg", "90",
+                               "--ownship-vptrack-hard-deck", "1000"],
+    "env_r6000_l90_deck":     ["--ownship-backend", "vptrack", "--ownship-vptrack-throttle", "1",
+                               "--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "90",
+                               "--ownship-vptrack-hard-deck", "1000"],
+
     "rl_v10":                 ["--ownship-backend", "rl", "--ownship-bundle-dir", _BUNDLE] + _OBS,
     "hybrid_v10":             ["--ownship-backend", "hybrid", "--ownship-bundle-dir", _BUNDLE] + _OBS + _SCALE_V10,
     "hybridvp_v10":           ["--ownship-backend", "hybrid_vptrack", "--ownship-bundle-dir", _BUNDLE] + _OBS + _SCALE_V10,
@@ -108,6 +166,7 @@ def main() -> None:
     running: list[tuple[str, subprocess.Popen, object]] = []
     done: list[tuple[str, int, float]] = []
     started: dict[str, float] = {}
+    relaunched: set[str] = set()
 
     def launch(name: str) -> None:
         cmd = [
@@ -135,6 +194,15 @@ def main() -> None:
             running.remove(entry)
             log.close()
             elapsed = time.time() - started[name]
+            # Relaunch a failed arm ONCE. A crashed job used to vanish from the results table
+            # with only a non-zero rc in the tail of the log to show for it, which is how
+            # env_r8000_l90 came back as a 6-episode row in a N=50 sweep.
+            if proc.returncode != 0 and name not in relaunched:
+                relaunched.add(name)
+                print(f"[sweep] FAILED {name} rc={proc.returncode} after {elapsed/60:.1f} min "
+                      f"-- relaunching once", flush=True)
+                queue.append(name)
+                continue
             done.append((name, proc.returncode, elapsed))
             print(f"[sweep] done  {name} rc={proc.returncode} in {elapsed/60:.1f} min", flush=True)
 

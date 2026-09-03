@@ -124,7 +124,7 @@ def _verify_bundle_if_present(bundle_dir: str, observation_mode: str, observatio
 
 
 def _vptrack_kwargs(range_m, los_deg, throttle, defensive=None, corner=None,
-                    roll_taper_deg=None) -> dict:
+                    roll_taper_deg=None, hard_deck_m=None) -> dict:
     """Per-side overrides for VPTrackingProvider, omitting any left as None.
 
     Added 2026-08-06 to make ASYMMETRIC evaluation possible. Both aircraft read one global
@@ -147,6 +147,8 @@ def _vptrack_kwargs(range_m, los_deg, throttle, defensive=None, corner=None,
         kw["corner_hold"] = bool(corner)
     if roll_taper_deg is not None:
         kw["roll_taper_deg"] = float(roll_taper_deg)
+    if hard_deck_m is not None:
+        kw["hard_deck_m"] = float(hard_deck_m)
     return kw
 
 
@@ -199,6 +201,7 @@ def _build_provider_raw(
     vptrack_defensive: bool | None = None,
     vptrack_corner: bool | None = None,
     vptrack_roll_taper: float | None = None,
+    vptrack_hard_deck: float | None = None,
 ):
     if backend == "fixed":
         return None
@@ -216,7 +219,7 @@ def _build_provider_raw(
         # See student/controller_providers.py for the measured defect this bypasses.
         return VPTrackingProvider(dll_name=bt_dll, **_vptrack_kwargs(
             vptrack_range_m, vptrack_los_deg, vptrack_throttle, vptrack_defensive, vptrack_corner,
-            vptrack_roll_taper))
+            vptrack_roll_taper, vptrack_hard_deck))
     if backend in ("hybrid_vptrack", "hybrid_gated"):
         vptrack_range_m, vptrack_los_deg, vptrack_throttle = resolve_vptrack_floor(
             backend, vptrack_range_m, vptrack_los_deg, vptrack_throttle)
@@ -235,7 +238,7 @@ def _build_provider_raw(
             primary_provider=rl_provider,
             secondary_provider=VPTrackingProvider(dll_name=bt_dll, **_vptrack_kwargs(
                 vptrack_range_m, vptrack_los_deg, vptrack_throttle, vptrack_defensive, vptrack_corner,
-            vptrack_roll_taper)),
+            vptrack_roll_taper, vptrack_hard_deck)),
             mode=hybrid_mode,
             alpha=alpha,
             residual_scale=residual_scale,
@@ -314,6 +317,7 @@ def main():
         vptrack_corner=(None if args.ownship_vptrack_corner is None
                        else bool(args.ownship_vptrack_corner)),
         vptrack_roll_taper=args.ownship_vptrack_roll_taper,
+        vptrack_hard_deck=args.ownship_vptrack_hard_deck,
     )
     target_provider = build_provider(
         side="target",
@@ -335,6 +339,7 @@ def main():
         vptrack_corner=(None if args.target_vptrack_corner is None
                        else bool(args.target_vptrack_corner)),
         vptrack_roll_taper=args.target_vptrack_roll_taper,
+        vptrack_hard_deck=args.target_vptrack_hard_deck,
     )
 
     with activate_rule_xml(args.bt_rule_xml, ROOT):

@@ -115,7 +115,16 @@ ENGAGE_LOS_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_LOS_DEG", "45.0"))
 #
 # Both live entry points now take these, so the two cannot drift apart:
 #   throttle  -- F29, adopted on 3 seeds; losses fell in every one (8->5,5,4)
-#   6000/90   -- F56 (2026-09-03). SUPERSEDES 4000/60. See below.
+#   6000/120  -- F59 (2026-09-03) + hard deck 1000 m. SUPERSEDES 6000/90, which superseded
+#                4000/60. Measured on BOTH opponents and BOTH geometries:
+#                  vs cutoff  match_base : rule 28.0%, damage 0.394/0.374 (diff +0.020),
+#                                          0 self-crashes -- vs 6000/90's +0.004
+#                  peer H2H   match_base : 21W/18D/11L, damage 0.523/0.365 (diff +0.159)
+#                  peer H2H   tiebreak   : 16W/16D/18L -- a dead heat, 2-episode margin
+#                Clearly better on the geometry played EVERY match three times a BO3; a wash on
+#                the one played only when three rounds are level. corner_hold was tested on top
+#                and is HARMFUL here (rule 24.0%, diff -0.042) even though it HELPED at 6000/90
+#                -- forcing corner speed widens the turn radius a wide envelope cannot afford.
 #
 # WHY 6000/90, AND WHY THE OLD JUSTIFICATION FOR 4000/60 IS VOID.
 #
@@ -151,8 +160,14 @@ ENGAGE_LOS_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_LOS_DEG", "45.0"))
 # TO REVERT: set these two back to 4000.0 / 60.0. Nothing else changes -- both live entry points
 # read these constants, which is the F44 single-source-of-truth guarantee.
 SHIP_ENGAGE_RANGE_M = 6000.0
-SHIP_ENGAGE_LOS_DEG = 90.0
+SHIP_ENGAGE_LOS_DEG = 120.0
 SHIP_THROTTLE_CONTROL = True
+# Hard-deck guard, ON in the shipped config (F59, 2026-09-03). At 120 deg the controller owns
+# the stick even with the bandit behind us, so Gate 0 never climbs: 6/50 self-crashes. With the
+# guard at 1000 m (just above Gate 0's own 914 m trigger) those go to ZERO and damage dealt
+# RISES 0.341 -> 0.394. NOT a global default -- applied to 6000/90 (which never crashed) it
+# measured slightly WORSE, so it is a fix for wide envelopes specifically.
+SHIP_HARD_DECK_M = 1000.0
 
 # ---- Gains ----------------------------------------------------------------------------
 K_ROLL = 1.0
@@ -311,6 +326,32 @@ THROTTLE_AUTHORITY = float(os.environ.get("DOGFIGHT_VPTRACK_THR_AUTH", "0.7"))
 # WORTH RE-TESTING against an opponent that out-shoots us, where trading 1:1 is a gain rather
 # than a wash -- e.g. the organizers' cutoff model. Enable with DOGFIGHT_VPTRACK_DEFENSIVE=1
 # or --{side}-vptrack-defensive 1.
+# ---- Hard-deck guard (2026-09-03) ------------------------------------------------------
+# THE DEFECT IT ADDRESSES. This controller overrides roll/pitch/rudder for every step inside the
+# engagement envelope, and it has no altitude term at all. Widen the envelope far enough and it
+# therefore keeps flying the aircraft even when the bandit is behind us and the BT wants to climb
+# -- Gate 0 (Task_ClimbToSafeAltitude, trigger 914 m) never gets the stick. Measured cost at
+# N=50 vs the corrected cutoff on match_base:
+#
+#     envelope    own altitude-floor losses    kills    damage dealt/taken
+#     6000/90               0                    11        0.282 / 0.278
+#     6000/120              6                     5        0.341 / 0.318
+#     8000/120              7                     5        0.348 / 0.318
+#
+# The 120 deg arms have the best damage differential this project has ever measured (+0.030) and
+# throw it away by flying into the ground 6-7 times in 50.
+#
+# Deliberately altitude-only, NO sink-rate term: state[VZ] is NED-down locally but the wire sends
+# velocity.z UP-POSITIVE, and LiveVerticalFrameProvider only corrects state[2] unless
+# DOGFIGHT_LIVE_STATE_COMPLETE=1 (Sec 4.1 F46). A guard keyed on VZ would invert on the live path
+# -- exactly the train/deploy divergence this file exists to avoid. state[D] IS corrected live
+# (F53), so altitude alone is the safe signal.
+#
+# Set ABOVE Gate 0's own 914 m trigger so the BT is already climbing when we hand back.
+# DEFAULT OFF: the shipped 6000/90 takes ZERO altitude-floor losses, so this can only cost it.
+# Enable with DOGFIGHT_VPTRACK_HARD_DECK_M or --{side}-vptrack-hard-deck.
+HARD_DECK_M = float(os.environ.get("DOGFIGHT_VPTRACK_HARD_DECK_M", "0.0"))
+
 DEFENSIVE_BREAK = os.environ.get("DOGFIGHT_VPTRACK_DEFENSIVE", "0") not in ("0", "false", "False")
 THREAT_ATA_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_THREAT_ATA", "8.0"))
 WEZ_MIN_M, WEZ_MAX_M = 152.4, 914.4
@@ -374,6 +415,7 @@ class VPTrackingProvider(BTActionProvider):
         self.pitch_floor = float(kwargs.pop("pitch_floor", PITCH_FLOOR))
         self.roll_taper_deg = float(kwargs.pop("roll_taper_deg", ROLL_TAPER_DEG))
         self.threat_ata_deg = float(kwargs.pop("threat_ata_deg", THREAT_ATA_DEG))
+        self.hard_deck_m = float(kwargs.pop("hard_deck_m", HARD_DECK_M))
         super().__init__(*args, **kwargs)
         self._los_error_sum = 0.0
         self._prev_range_m: float | None = None
@@ -449,6 +491,14 @@ class VPTrackingProvider(BTActionProvider):
         A None throttle means "keep the BT's" -- the behaviour before throttle control existed.
         """
         fwd, up, right = body_axes(own)
+
+        # HARD DECK. Below this, hand the aircraft back to the BT: Gate 0 self-triggers at 914 m
+        # and is the only thing in the stack that climbs. Returning None (rather than biasing
+        # pitch here) keeps survival in ONE place instead of two that can fight each other.
+        if self.hard_deck_m > 0.0:
+            own_alt_m = -float(own[StateIndex.D])
+            if np.isfinite(own_alt_m) and own_alt_m < self.hard_deck_m:
+                return None
 
         # N-E-Up: D is negated, matching the eval replica and GetStick's own frame.
         rel = np.array([

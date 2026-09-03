@@ -93,6 +93,7 @@ from student.inference_providers import (
 from student.controller_providers import (
     SHIP_ENGAGE_LOS_DEG,
     SHIP_ENGAGE_RANGE_M,
+    SHIP_HARD_DECK_M,
     SHIP_THROTTLE_CONTROL,
     EnvelopeGatedHybridProvider,
     GLimitedProvider,
@@ -348,10 +349,12 @@ def _build_action_provider_raw():
         # 진입점이 같은 상수를 읽으므로 서로 어긋날 수 없다.
         print(f"[{TEAM_NAME}] VP 트래킹 백엔드 사용 (RL 없음): {BT_DLL} "
               f"(throttle_control={SHIP_THROTTLE_CONTROL}, "
-              f"engage={SHIP_ENGAGE_RANGE_M:.0f}m/{SHIP_ENGAGE_LOS_DEG:.0f}deg)")
+              f"engage={SHIP_ENGAGE_RANGE_M:.0f}m/{SHIP_ENGAGE_LOS_DEG:.0f}deg, "
+              f"hard_deck={SHIP_HARD_DECK_M:.0f}m)")
         return VPTrackingProvider(
             dll_name=BT_DLL, throttle_control=SHIP_THROTTLE_CONTROL,
             engage_range_m=SHIP_ENGAGE_RANGE_M, engage_los_deg=SHIP_ENGAGE_LOS_DEG,
+            hard_deck_m=SHIP_HARD_DECK_M,
         )
 
     # BUNDLE_DIR 가드 (2026-08-11): 여기 도달했다는 것은 MODE가 rl/hybrid* 계열이라는

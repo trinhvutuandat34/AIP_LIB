@@ -723,6 +723,9 @@ def parse_args():
                        help=f"{_side} defensive break when losing the gun duel (default off).")
         p.add_argument(f"--{_side}-vptrack-corner", type=int, choices=[0, 1], default=None,
                        help=f"{_side} hold corner speed (~440 KTAS) for peak turn rate (default off).")
+        p.add_argument(f"--{_side}-vptrack-hard-deck", type=float, default=None,
+                       help=f"{_side} altitude (m) below which the controller hands back to "
+                            f"the BT so Gate 0 can climb (default 0 = off).")
         p.add_argument(f"--{_side}-vptrack-roll-taper", type=float, default=None,
                        help=f"{_side}: taper the ROLL command by pointing-error magnitude "
                             f"below this many degrees (0 = off, the shipped default). See "
@@ -810,6 +813,7 @@ def main():
         vptrack_corner=(None if args.ownship_vptrack_corner is None
                         else bool(args.ownship_vptrack_corner)),
         vptrack_roll_taper=args.ownship_vptrack_roll_taper,
+        vptrack_hard_deck=args.ownship_vptrack_hard_deck,
     )
     # Capture vp_valid so a SAFE_VP zero substitution is distinguishable from a genuine zero
     # aimpoint. Wrapping is transparent; see VPProbe.
@@ -830,6 +834,7 @@ def main():
         vptrack_corner=(None if args.target_vptrack_corner is None
                         else bool(args.target_vptrack_corner)),
         vptrack_roll_taper=args.target_vptrack_roll_taper,
+        vptrack_hard_deck=args.target_vptrack_hard_deck,
     )
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)
