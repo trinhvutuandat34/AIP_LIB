@@ -11,19 +11,54 @@
 
 ---
 
-## 0. 한 줄 요약
+## 0. 한 줄 요약 — 본선용으로 전면 교체 (2026-09-08)
+
+> ### ⚠️ 이 절은 2026-09-08 이전까지 **예선 절차**를 담고 있었다.
+> `python student\my_submission.py` + conda 환경 + 공지된 IP/포트를 환경변수로 넣는 방식이었는데,
+> **본선 제출물에는 `student\` 폴더도 파이썬 소스도 들어 있지 않다.** 규정상 ZIP 안에는
+> `JinjjaBoramae.exe` 와 `config.json` **딱 두 파일**만 있다(F75). 당일에 그 절차를 따르면
+> 존재하지 않는 파일을 찾게 된다.
 
 ```powershell
 cd <압축 푼 폴더>
-$env:DOGFIGHT_SERVER_IP  = "<공지된 IP>"
-$env:DOGFIGHT_SERVER_PORT = "<공지된 포트>"
-python student\my_submission.py
+.\JinjjaBoramae.exe
 ```
 
-`python`은 **`aip` conda 환경**이어야 한다. 기본 `python`은 anaconda3 base라 `pymap3d`가 없어
-즉시 죽는다.
+끝이다. 더블클릭해도 된다. **환경변수도, conda 도, 파이썬도 필요 없다** — 실행파일 안에 파이썬
+런타임과 DLL 3개, Rule XML, `aircraft/`, `engine/` 이 전부 들어 있다.
 
-**경로는 장비마다 다르다 — 당일에 찾지 말고 미리 확정할 것** (2026-09-02 실측):
+**접속 정보는 손대지 않는다.** 규정상 고정값이고(F75) `config.json` 에 이미 들어 있다:
+
+```json
+{ "ip": "127.0.0.1", "port": 9999 }
+```
+
+`student/runtime_paths.py` 의 해석 순서는 **환경변수 → 실행파일 옆 config.json → 127.0.0.1:9999**
+이다. `config.json` 이 깨져 있어도 예외를 던지지 않고 기본값으로 내려간다. 즉 **당일 조작할 것이
+없다.** 만에 하나 운영측이 다른 주소를 공지하면 그때만 `config.json` 을 고치거나
+`DOGFIGHT_SERVER_IP` / `DOGFIGHT_SERVER_PORT` 를 넣는다.
+
+**정상 기동 확인 — 시작 배너 한 줄로 전부 확인된다:**
+
+```
+[진짜보라매] VP 트래킹 백엔드 사용 (RL 없음): ...\AIP_BASE.dll (model=1, throttle_control=True,
+engage=6000m/120deg, hard_deck=1000m, server=127.0.0.1:9999 [...\config.json])
+```
+
+여기서 확인할 것은 세 가지다: **표시 팀명이 `진짜보라매`**(헤드온이면 `진짜보라매_HeadOn`),
+**model=1**(헤드온이면 2), **server 가 127.0.0.1:9999**. 그리고 그 아래
+`Behavior Tree Initialized` 가 떠야 한다 — **`Behavior Tree Initialization Failed` 가 뜨면
+스틱이 전부 0으로 나가면서도 60Hz 로 정상 응답한다(F70). 겉으로는 멀쩡해 보인다.**
+
+**헤드온 모델로 바꿀 때**는 다른 실행파일을 띄운다: `.\JinjjaBoramae_headon.exe`.
+**단, 기본값은 "바꾸지 않는다"** — 전환 판단은 §7.3 을 그대로 따를 것.
+
+---
+
+### conda 환경은 이제 로컬 도구 전용이다
+
+제출물 실행에는 필요 없다. `league.py` / `smoke_exe.py` / `package_release.py` 같은 **로컬 도구**를
+돌릴 때만 쓴다. 경로는 장비마다 다르다(2026-09-02 실측):
 
 | 출처 | 경로 | 이 장비에 존재? |
 |---|---|---|
@@ -31,11 +66,7 @@ python student\my_submission.py
 | 이 문서에 적혀 있던 값 | `C:\Users\Administrator\anaconda3\envs\aip\python.exe` | X |
 | `CLAUDE.md` 의 값 | `C:\Users\USER\anaconda3\envs\aip\python.exe` | X |
 
-`anaconda3` 가 아니라 `.conda` 이고 사용자명도 다르다. 실행 전에 한 번 확인한다:
-
-```powershell
-& "C:\Users\user\.conda\envs\aip\python.exe" -c "import pymap3d, torch; print('ok')"
-```
+`anaconda3` 가 아니라 `.conda` 이고 사용자명도 다르다.
 
 ---
 
@@ -43,30 +74,50 @@ python student\my_submission.py
 
 | 확인 | 방법 | 기대값 |
 |---|---|---|
-| 압축 해제 완료 | `dir` | 최상위에 `AIP_BASE.dll`, `student\`, `src\` |
-| 파이썬 환경 | `python -c "import pymap3d, torch; print('ok')"` | `ok` |
-| IP/포트 확정 | 운영 공지 | **추측 금지** — §2 참고 |
+| 압축 해제 완료 | `dir` | **정확히 두 파일**: `JinjjaBoramae.exe`, `config.json` |
+| 접속 정보 | `type config.json` | `{"ip": "127.0.0.1", "port": 9999}` |
+| 기동 확인 | `.\JinjjaBoramae.exe` | 배너에 `진짜보라매` / `model=1` / `127.0.0.1:9999`, 그리고 `Behavior Tree Initialized` |
 
-**작업 디렉터리는 신경 쓰지 않아도 된다.** 진입점은 자기 위치 기준으로 경로를 푼다
-(`C:\`에서 절대경로로 띄워도 정상 동작함을 실측). 다만 위 명령은 압축 푼 폴더에서 실행하는
-것을 기본으로 한다.
+> **위 표는 2026-09-08 에 교체됐다.** 이전 판은 `AIP_BASE.dll`, `student\`, `src\` 가 최상위에
+> 있는지, 그리고 `import pymap3d, torch` 가 되는지 확인하라고 했다 — 전부 **예선 제출물**의
+> 이야기다. 본선 ZIP 에는 그 중 어느 것도 없다(규정상 두 파일뿐, F75). DLL 과 Rule XML 은
+> 실행파일 **안에** 들어 있고, 파이썬 런타임도 마찬가지다.
+
+**작업 디렉터리는 신경 쓰지 않아도 된다.** 실행파일은 자기 위치를 기준으로 번들을 푼다
+(`sys._MEIPASS`), 그리고 `config.json` 은 **실행파일 옆**에서 읽는다. 압축 푼 폴더에서 그대로
+실행하는 것이 기본이다.
 
 ---
 
-## 2. IP와 포트 — 절대 추측하지 말 것
+## 2. IP와 포트 — 이제 확정값이다, 당일에 할 일이 없다
 
-코드 기본값은 `221.151.77.208:9999`이지만 **이 값은 공식이 아니다.** 기록에 남은 주소는 전부
-팀원 개인 장비이고, 포트도 `COMPETITION_RULES.md`에 명시가 없다 — 실제로 기록된 연결 테스트
-2건은 모두 **6666**을 썼다(§4.1 F27).
+> **이 절도 2026-09-08 에 교체됐다.** 이전 판은 "코드 기본값 `221.151.77.208:9999` 는 공식이
+> 아니므로 공지된 값을 환경변수로 넣어라"고 했다. **F75 로 확정됐다: 접속 정보는 `config.json`
+> 에서 오고 고정이다 — IP `127.0.0.1`, 포트 `9999`.** 교전 서버는 **로컬 루프백**에 있다.
+> 그리고 `student/my_submission.py` 의 기본값도 `221.151.77.208` 이 아니라 `127.0.0.1` 로 이미
+> 고쳐져 있다.
 
-**따라서 공지된 값을 환경변수로 넣는다.** 파일을 수정할 필요 없다(제출본은 잠겨 있다):
+해석 순서(`student/runtime_paths.py`):
+
+1. 환경변수 `DOGFIGHT_SERVER_IP` / `DOGFIGHT_SERVER_PORT` (둘 다 있을 때만)
+2. **실행파일 옆의 `config.json`** ← 정상 경로
+3. `127.0.0.1:9999` (최종 기본값)
+
+`config.json` 이 없거나 깨져 있어도 **예외를 던지지 않는다.** 경고 한 줄 찍고 3번으로 내려간다.
+값이 고정된 이상 파싱 오류로 경기를 잃을 이유가 없기 때문이다.
+
+**따라서 당일 조작할 것이 없다.** 시작 배너의 `server=127.0.0.1:9999 [...\config.json]` 만
+확인하면 된다. 대괄호 안이 어느 단계가 답했는지 알려준다 — `[...\config.json]` 이면 파일을 읽은
+것이고, `[default]` 면 파일을 못 읽고 기본값으로 내려간 것이다(값은 같으니 문제는 아니다).
+
+운영측이 예상과 다른 주소를 공지하는 경우에만:
 
 ```powershell
 $env:DOGFIGHT_SERVER_IP  = "<공지 IP>"
 $env:DOGFIGHT_SERVER_PORT = "<공지 포트>"
 ```
 
-이 환경변수 경로는 패키징된 사본에서 동작을 실측 확인했다.
+(제출본은 잠겨 있으므로 파일을 고치지 않고 환경변수로 덮어쓴다. 이 경로는 실측 확인됨.)
 
 ---
 
