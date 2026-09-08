@@ -156,6 +156,13 @@ Named BFM maneuvers (Part 6) form a natural difficulty ladder: each one isolates
 | **5 — Defensive survival** | Defensive Spiral | Self-play, asymmetric start (agent placed defensive, opponent has initial rear-hemisphere advantage) | **#5 Terminal/survival (raised)**; energy term sign/target flipped for the defender role (see note below) | Survives from disadvantaged starts above a target rate, or forces attacker overshoot |
 | **6 — Free-play league** | All of the above, unlabeled | Self-play league (pool of past checkpoints) | Anneal shaping terms (#1–#4) down, **#5 Terminal win/loss/timeout dominant** | Win-rate vs. a fixed baseline/heuristic bot at or above your target threshold |
 
+**Implemented 2026-09-06 on the BT side:** `Task_DefensiveSpiral` now exists as a native
+`AIP_DCS` node (`Gate1_DefensiveSpiral` in `Rule_forTraining.xml`/`Rule_real_eagle.xml`) —
+see `BFM_MANEUVER_GAP_REFERENCE.md` §5 for the implementation/verification detail. This stage's
+opponent-side behavior (if the opponent is the native BT rather than a scripted/self-play target)
+can now actually exhibit this maneuver; it doesn't change anything about how the RL agent's own
+Stage 5 reward should be shaped, which is still the open item this Part 8 describes.
+
 **Note on Stage 5's asymmetric energy term:** everywhere else in this curriculum, positive Ps (gaining energy) is treated as good. In the Defensive Spiral regime specifically, the historically correct defensive tactic is to *minimize acceleration* (i.e., deliberately stay energy-negative) to force a faster attacker to overshoot. If you keep a single fixed-sign energy reward across all stages, Stage 5 will fight your reward function. Handle this either by (a) making the energy-term sign role-conditional (attacker wants Ps↑, defender wants controlled Ps↓ while behind the attacker's nose), or (b) simply not including the energy term at full weight during Stage 5 and leaning on the terminal/survival term instead — the second option is simpler and often sufficient.
 
 **General curriculum practice worth keeping:** advance a stage only after a rolling win-rate/success-rate threshold is met over N evaluation episodes (not just N training episodes) against that stage's opponent, and keep a small replay fraction of earlier-stage scenarios mixed in during later stages to avoid catastrophic forgetting of basic pursuit/energy skills once the agent is deep into scissors/free-play stages.
@@ -171,3 +178,40 @@ For your JSBSim reward functions, the actual aircraft-specific performance data 
 - Publicly available unclassified performance data (e.g., NASA technical reports, USAF unclassified flight manuals where available) if you want independent validation numbers.
 
 The formulas above are the reusable part; the numbers should come from your simulation, not from this book.
+
+---
+
+## Part 10 — F-16-Specific Candidate Numbers (addendum 2026-09-06, answers Part 9's own ask)
+
+A second reference (F-16-specific tactical/EM parameter synthesis, provided in chat alongside
+AETCTTP11-1, the official T-38 IFF manual cross-checked in `BFM_MANEUVER_GAP_REFERENCE.md`'s own
+2026-09-06 addendum) gives per-maneuver numeric envelopes for the Part 6 maneuver list. **Confidence
+level, stated plainly**: this source self-describes its combat-BFM numbers as derived from AFMAN
+11-246V1 (a real but *airshow-demo*, not combat-BFM, F-16 manual) plus general doctrine synthesis —
+so treat everything below the way Part 9 already told you to treat any outside number: a sanity
+check / starting point for JSBSim-measured values, not a substitute for them. Its EM-diagram corner
+velocity (~420 KCAS, 9.0G) and 9.0G sustained-with-full-fuel limit are internally consistent with
+this project's other F-16 source (`BFM_REFERENCE.md`'s RoKAF BEM, 330-440 KCAS corner plateau) —
+no contradiction found, which is some evidence the synthesis isn't wildly off, but isn't the same
+as a verified citation.
+
+Condensed to just the Part 6/Part 8 maneuvers this project already curriculum-plans for:
+
+| Maneuver (Part 6/8) | Entry speed | G-load | Duration | Ps | Candidate use |
+|---|---|---|---|---|---|
+| High Yo-Yo | 300-400 KCAS | 6.5-7.5G | 5-10s | Negative during pull, positive on unload | Stage 2 promotion window / episode-length budget for the maneuver |
+| Low Yo-Yo | 300-400 KCAS | 2-4G | 5-8s | Positive (gravity-assisted) | Sanity bound: Low Yo-Yo should show Ps ≥ 0 in telemetry; if not, the agent isn't executing the doctrine version |
+| Flat Scissors | 200-300 KCAS | 5-7G | 10-30s | Strongly negative (both aircraft) | Stage 4 energy-term weight — confirms "highest weight" choice in Part 8 is directionally right, both parties should be losing Es |
+| Rolling Scissors | 300-450 KCAS | 6-9G | 15-45s | Oscillating | — |
+| Defensive Spiral | 250-350 KCAS entry, 150-250 KCAS exit | 6-9G | 10-20s | Negative (intentional) | Stage 5's "minimize acceleration" note (line 159 above) — this table's own numbers show Defensive Spiral is *not* a low-G maneuver, it's a high-G, deliberately negative-Ps one; don't confuse "minimize acceleration" with "minimize G" when tuning the Stage 5 reward |
+
+Also included, useful as a generic *margin-to-limiter* shaping idea rather than literal numbers
+(FLCS-specific, won't transfer to JSBSim's control laws as-is): a 4-zone G/AoA-limiter fade table
+(full G below ~15° AoA, fading 15-25°, hard AoA cap above 25°). The general pattern — reward
+shaping that's aware of *how close to the aircraft's own limiter* a maneuver is being flown, not
+just raw G or AoA in isolation — is a candidate Part 7 addition (a "limiter margin" term) if JSBSim's
+simulated F-16 exposes an equivalent envelope boundary to check against.
+
+**Not incorporated as hard numbers into any reward config by this addendum** — flagged here as
+candidates per Part 9's own instruction to validate against simulation before use, consistent with
+`BFM_MANEUVER_GAP_REFERENCE.md`'s parallel caution about the same source.

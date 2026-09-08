@@ -1,11 +1,22 @@
 // Standalone regression check for BTFunc::ShorterTurnDirection (BehaviorTree/BT_Content/Functions.cpp).
 //
-// Build (from AIP_DCS/):
-//   g++ -std=c++17 -IGeometry Geometry/tests/verify_shorter_turn_direction.cpp \
-//     Geometry/Vector3.cpp Geometry/Vector4.cpp Geometry/Quaternion.cpp Geometry/Matrix4.cpp \
-//     Geometry/Matrix3.cpp Geometry/Math.cpp Geometry/EulerAngle.cpp Geometry/CoordinateConverter.cpp \
-//     Geometry/AxisAngle.cpp Geometry/Angle.cpp -o /tmp/verify_shorter_turn_direction
-//   /tmp/verify_shorter_turn_direction   # exits 0 and prints ALL CHECKS PASSED
+// Build (from AIP_DCS/). NOTE: no -I/Geometry -- see the include block below for why that
+// breaks on Windows.
+//
+//   MSVC (what this box has; run inside a vcvars64 shell):
+//     cl /nologo /EHsc /std:c++17 Geometry\tests\verify_shorter_turn_direction.cpp ^
+//       Geometry\Vector3.cpp Geometry\Vector4.cpp Geometry\Quaternion.cpp Geometry\Matrix4.cpp ^
+//       Geometry\Matrix3.cpp Geometry\Math.cpp Geometry\EulerAngle.cpp ^
+//       Geometry\CoordinateConverter.cpp Geometry\AxisAngle.cpp Geometry\Angle.cpp ^
+//       /Fe:verify_shorter_turn_direction.exe
+//
+//   g++:
+//     g++ -std=c++17 Geometry/tests/verify_shorter_turn_direction.cpp \
+//       Geometry/Vector3.cpp Geometry/Vector4.cpp Geometry/Quaternion.cpp Geometry/Matrix4.cpp \
+//       Geometry/Matrix3.cpp Geometry/Math.cpp Geometry/EulerAngle.cpp Geometry/CoordinateConverter.cpp \
+//       Geometry/AxisAngle.cpp Geometry/Angle.cpp -o /tmp/verify_shorter_turn_direction
+//
+//   Either way it exits 0 and prints ALL CHECKS PASSED.
 //
 // This links against the project's real Geometry/Vector3.{h,cpp} (and EulerAngle/Quaternion for
 // the rotated-aircraft case) so the math is exactly what AIP_DCS.dll uses -- not a
@@ -14,9 +25,14 @@
 // measurement -- run the peer-rig eval (see DogFightEnv HANDOFF.md) for that.
 #include <cstdio>
 #include <cmath>
-#include "Vector3.h"
-#include "EulerAngle.h"
-#include "Quaternion.h"
+// Relative, and deliberately NOT via -I/Geometry. On a case-insensitive filesystem (i.e. every
+// Windows box this project is built on) putting Geometry/ on the include path makes <cmath>'s
+// own `#include <math.h>` resolve to Geometry/Math.h, and the CRT math declarations then never
+// appear -- MSVC fails with a wall of "'remquof': identifier not found" inside <cmath>. The
+// documented g++ line works only because it was run somewhere case-sensitive.
+#include "../Vector3.h"
+#include "../EulerAngle.h"
+#include "../Quaternion.h"
 
 using namespace BT_Geometry;
 
@@ -39,6 +55,14 @@ static Vector3 NewShorterTurnDirection(const Vector3& F, const Vector3& R, const
     if (dir.dot(F) < 0.0)
     {
         dir = -dir;
+    }
+    // Mirrors the 2026-09-08 degenerate guard in Functions.cpp: |U x toTarget| -> 0 when the
+    // bandit is directly above or below, and Vector3::normalize() is a silent no-op on a
+    // near-zero vector, so without this the function returns ~(0,0,0) and every caller adds
+    // nothing to its aim point. Keep this copy in step with the real one.
+    if (dir.length() < 1e-6)
+    {
+        dir = R;
     }
     dir.normalize();
     return dir;
@@ -169,6 +193,62 @@ int main()
         Vector3 rightNew = NewShorterTurnDirection(Fb, Rb, Ub, targetRightB);
         check((leftNew.dot(Rb) > 0) != (rightNew.dot(Rb) > 0),
               "B: fix differentiates left/right under a non-trivial (rotated) attitude too");
+    }
+
+    // --- Case set C: THE REAR HEMISPHERE (added 2026-09-08).
+    //
+    // Every case above places the target in the FORWARD hemisphere. That is why nothing here
+    // caught the defect that motivated the ManeuverTurnDir latch: Task_DefensiveSpiral is only
+    // reachable with the bandit AFT of the 3-9 line (Gate1_JinkingTurn sits above it in the
+    // Fallback and succeeds on a strict superset of its trigger), and Task_Evade's break turn is
+    // flown in the same regime. The function is CORRECT there -- it agrees with brute force --
+    // but it is not STABLE, and a sustained turn needs stability, not just correctness.
+    printf("\n-- Case set C: rear hemisphere (what the spiral and the break actually fly) --\n");
+    runCase("C1: bandit at 5 o'clock (aft, RIGHT)", F, R, U, Vector3(-100, 10, 0));
+    runCase("C2: bandit at 7 o'clock (aft, LEFT)", F, R, U, Vector3(-100, -10, 0));
+    {
+        Vector3 aftRight = NewShorterTurnDirection(F, R, U, Vector3(-100, 10, 0));
+        Vector3 aftLeft  = NewShorterTurnDirection(F, R, U, Vector3(-100, -10, 0));
+        check((aftRight.dot(R) > 0) != (aftLeft.dot(R) > 0),
+              "C: left/right are still differentiated with the bandit behind us");
+    }
+
+    printf("\n-- C3: the dead-six discontinuity, which is why a SUSTAINED turn must latch --\n");
+    {
+        // Walk the bandit across dead six one metre at a time. The commanded side is the sign of
+        // (toTarget . R), so it inverts at exactly y = 0 -- no deadband, no memory of last tick.
+        // In flight that is a full roll reversal driven by metre-scale jitter, which for
+        // Task_DefensiveSpiral (1200 m lateral aim offset, 900 m dive, 10% throttle) turns a
+        // spiral into a wings-level dive.
+        bool flipped = false;
+        double prev = 0.0;
+        for (int i = -3; i <= 3; ++i)
+        {
+            Vector3 d = NewShorterTurnDirection(F, R, U, Vector3(-1000, (double)i, 0));
+            double comp = d.dot(R);
+            printf("  lateral offset %+d m -> R-comp %+.3f (%s)\n", i, comp, sideLabel(comp));
+            if (i > -3 && (comp > 0) != (prev > 0))
+            {
+                flipped = true;
+            }
+            prev = comp;
+        }
+        check(flipped,
+              "C3: confirms the dead-six sign flip is real -- BTFunc::LatchedTurnDirection() and "
+              "CPPBlackBoard::ManeuverTurnDir exist to hold one direction across it. If this ever "
+              "stops flipping, ShorterTurnDirection() itself gained hysteresis and the latch "
+              "should be re-examined rather than silently kept.");
+    }
+
+    printf("\n-- C4: bandit directly below -- the degenerate cross product --\n");
+    {
+        // LOS parallel to U, so |U x toTarget| = 0. Before the 2026-09-08 guard this returned a
+        // near-zero vector that normalize() left alone (it skips the divide), collapsing the
+        // caller's aim point onto its own position plus the dive bias: a commanded vertical dive
+        // at 10% throttle.
+        Vector3 d = NewShorterTurnDirection(F, R, U, Vector3(0, 0, -1000));
+        printf("  dir=(%.3f,%.3f,%.3f) length=%.3f\n", d.X, d.Y, d.Z, d.length());
+        check(d.length() > 0.99, "C4: a degenerate LOS still yields a unit turn direction");
     }
 
     printf("\n%s (%d check%s failed)\n", g_fail == 0 ? "ALL CHECKS PASSED" : "SOME CHECKS FAILED",

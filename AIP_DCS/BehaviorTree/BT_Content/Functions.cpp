@@ -41,6 +41,9 @@ namespace BTFunc
 		{
 			BB->ActiveManeuverID = id;
 			BB->ActiveManeuverStartTime = BB->RunningTime;
+			// Latch the turn direction for the life of this claim -- see ManeuverTurnDir's
+			// comment in CPPBlackBoard.h for why a sustained turn cannot re-derive it per tick.
+			BB->ManeuverTurnDir = ShorterTurnDirection(BB);
 			return 0.0;
 		}
 
@@ -48,6 +51,10 @@ namespace BTFunc
 		if (elapsed > staleAfterSeconds)
 		{
 			BB->ActiveManeuverStartTime = BB->RunningTime;
+			// A stale reset restarts the maneuver's phase clock, so it restarts the latch too:
+			// the node is about to re-run its phase 0, and holding a direction chosen from
+			// geometry 20 s stale would be worse than re-deriving it from the current picture.
+			BB->ManeuverTurnDir = ShorterTurnDirection(BB);
 			return 0.0;
 		}
 
@@ -108,8 +115,34 @@ namespace BTFunc
 		{
 			dir = -dir;
 		}
+
+		// DEGENERATE CASE (2026-09-08). |MyUpVector x toTarget| -> 0 when the LOS is parallel to
+		// MyUpVector, i.e. the bandit is directly above or below -- entirely plausible in a steep
+		// descending spiral with an attacker in the vertical. Vector3::normalize() is a silent
+		// NO-OP on a near-zero vector (Vector3.h: it skips the divide when Equals(0.0, length())),
+		// so it would return the near-zero vector unchanged and every caller would then add
+		// ~nothing to its aim point. For Task_DefensiveSpiral that yields an aim point ~900 m
+		// straight down at 10% throttle. Fall back to the wing line, which is a real turn
+		// direction and is what "turn hardest away from a threat directly above/below" means.
+		if (dir.length() < 1e-6)
+		{
+			dir = BB->MyRightVector;
+		}
+
 		dir.normalize();
 		return dir;
+	}
+
+	Vector3 LatchedTurnDirection(CPPBlackBoard* BB, ManeuverID id)
+	{
+		// The latch is written by ClaimManeuverPhase, which every phased node calls before it
+		// aims. If some other maneuver owns the slot the latch is not ours, so fall back to the
+		// live value rather than steering on a direction picked for a different maneuver.
+		if (BB->ActiveManeuverID != id)
+		{
+			return ShorterTurnDirection(BB);
+		}
+		return BB->ManeuverTurnDir;
 	}
 
 }

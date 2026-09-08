@@ -46,8 +46,15 @@ namespace BTFunc
 	Vector3 PredictedTargetTravel(CPPBlackBoard* BB);
 
 	// Unit vector perpendicular to the line-of-sight to the target, on whichever side is the
-	// shorter turn from current heading (MyUpVector x toTarget, flipped to agree with
-	// MyRightVector) -- not an arbitrary fixed handedness that might demand a near-180 reversal.
+	// shorter turn from current heading (MyUpVector x toTarget, canonicalized against
+	// MyForwardVector -- see the c0f3eaf fix note in the .cpp for why MyRightVector is the wrong
+	// axis here) -- not an arbitrary fixed handedness that might demand a near-180 reversal.
 	Vector3 ShorterTurnDirection(CPPBlackBoard* BB);
+
+	// ShorterTurnDirection(), but held constant for the life of a maneuver's phase claim. Use
+	// this in any node that commands a SUSTAINED turn -- the bare function flips sign whenever
+	// the bandit crosses the ownship's vertical longitudinal plane, which is exactly the dead-six
+	// geometry a defensive spiral lives in. See ManeuverTurnDir in CPPBlackBoard.h.
+	Vector3 LatchedTurnDirection(CPPBlackBoard* BB, ManeuverID id);
 
 }

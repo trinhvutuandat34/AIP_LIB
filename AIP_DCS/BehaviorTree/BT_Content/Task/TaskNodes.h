@@ -22,3 +22,4 @@
 #include "Task_BarrelRollAttack.h"
 #include "Task_LagDisplacementRoll.h"
 #include "Task_SingleSideOffset.h"
+#include "Task_DefensiveSpiral.h"

@@ -178,7 +178,11 @@ build artifact drop.
 ## DogFightEnv/Release (Python RL training env)
 
 Run everything from `DogFightEnv/Release/` (the primary working directory) using the `aip` conda env
-(`C:\Users\USER\anaconda3\envs\aip\python.exe`). Install deps with
+(**`C:\Users\user\.conda\envs\aip\python.exe`** — verified 2026-09-05, Python 3.11.16. Note it is
+`.conda`, NOT `anaconda3`: this file said `anaconda3` until 2026-09-05 and that path does not exist
+on this host. The bare `python` on PATH is a dependency-free Python 3.12 — using it is the
+"numpy is missing" red herring that cost real time in F65. `MATCH_DAY_RUNBOOK.md` §2 has the
+same correction). Install deps with
 `pip install -r requirements.txt` (`ray[rllib]==2.54.0`, `torch>=2.3,<3.0`, `gymnasium>=1.0,<2.0`,
 `numpy==2.2.6`, `pymap3d`, `PyYAML`).
 

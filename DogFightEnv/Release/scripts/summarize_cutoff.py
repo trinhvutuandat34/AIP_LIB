@@ -37,6 +37,10 @@ from pathlib import Path
 _TARGET_LOST = {"target altitude below min", "Target FDM output Fall"}
 _OWNSHIP_LOST = {"ownship altitude below min", "Ownship FDM output Fall", "FDM Update Fail"}
 
+# Below this many episodes a file is a smoke run, not a measurement: it is still printed, but it
+# cannot take the top slot or answer the organizers' bar. See the comment in main().
+MIN_VERDICT_EPISODES = 10
+
 
 def load(path: Path) -> dict | None:
     rows = list(csv.DictReader(path.open(encoding="utf-8-sig")))
@@ -101,7 +105,18 @@ def main() -> None:
     if not results:
         print("no eval CSVs found")
         return
-    results.sort(key=lambda r: (-r["rule_rate"], -r["earned_rate"]))
+
+    # MINIMUM N FOR THE VERDICT (2026-09-08). This ranked on rule_rate alone, with no regard for
+    # how many episodes produced it -- and `artifacts/eval/` holds six 2-EPISODE smoke files
+    # sitting under the same `cutoff_*` glob as the N=50 campaigns. The consequence was not a
+    # cosmetic one: `cutoff_env_r8000_l120.csv` (N=2, 2 wins) sorted FIRST, and this script then
+    # printed "BEST: env_r8000_l120  rule 100.0%" and "Organizers' bar (>50% win): PASS".
+    # A two-episode file was declaring the project's single hardest gate cleared. The real best
+    # at N>=50 is 28%. Under-powered files are still printed -- they are legitimate smoke runs --
+    # but flagged, and excluded from the ranking's top slot and from the bar verdict.
+    for r in results:
+        r["underpowered"] = r["n"] < MIN_VERDICT_EPISODES
+    results.sort(key=lambda r: (r["underpowered"], -r["rule_rate"], -r["earned_rate"]))
 
     print(f"{'config':<22} {'N':>3} | {'W':>2} {'D':>2} {'L':>2} {'rule%':>7} {'earned%':>8} "
           f"{'free':>5} {'ours':>5} | {'env%':>6} | {'dealt':>6} {'taken':>6}")
@@ -109,13 +124,24 @@ def main() -> None:
     for r in results:
         print(f"{r['name']:<22} {r['n']:>3} | {r['rule_w']:>2} {r['rule_d']:>2} {r['rule_l']:>2} "
               f"{r['rule_rate']:>6.1%} {r['earned_rate']:>8.1%} {r['free']:>5} {r['our_crash']:>5} "
-              f"| {r['env_rate']:>5.1%} | {r['dealt']:>6.3f} {r['taken']:>6.3f}")
+              f"| {r['env_rate']:>5.1%} | {r['dealt']:>6.3f} {r['taken']:>6.3f}"
+              + ("   <- SMOKE RUN, not a measurement" if r["underpowered"] else ""))
     print("-" * 100)
     print("rule%  = competition adjudication (altitude floor = loss for whoever descends)")
     print("earned%= wins where we put target health to zero; free = cutoff self-crashes")
     print("env%   = what eval_v5_vs_bt reports today (target floor booked as a draw)")
 
-    best = results[0]
+    ranked = [r for r in results if not r["underpowered"]]
+    skipped = len(results) - len(ranked)
+    if skipped:
+        print(f"({skipped} file(s) under N={MIN_VERDICT_EPISODES} excluded from the verdict.)")
+    if not ranked:
+        # Refusing to answer is the correct behaviour here. Reporting the best of six 2-episode
+        # files as if it settled the organizers' bar is what this guard exists to stop.
+        print(f"\nNO VERDICT: every file is under N={MIN_VERDICT_EPISODES}. Run a real campaign.")
+        return
+
+    best = ranked[0]
     print(f"\nBEST: {best['name']}   rule {best['rule_rate']:.1%}  "
           f"earned {best['earned_rate']:.1%}  (N={best['n']})")
     print(f"Organizers' bar (>50% win): {'PASS' if best['rule_rate'] > 0.50 else 'FAIL'}")

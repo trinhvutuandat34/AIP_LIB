@@ -45,7 +45,12 @@ def load(path):
     series = defaultdict(lambda: defaultdict(list))  # id -> field -> [(t,val)]
     events = []
     t = 0.0
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
+    # utf-8-sig, not utf-8: this engine's ACMI export writes a UTF-8 BOM on some
+    # runs. Plain utf-8 leaves the BOM glued to "FileType", so the startswith()
+    # check below misses it, the line falls through to parse_object_line(), and
+    # that crashes on a line with no comma. utf-8-sig strips a leading BOM if
+    # present and is a no-op otherwise, so it's safe for files without one too.
+    with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
         for line in f:
             line = line.rstrip("\n")
             if not line:

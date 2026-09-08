@@ -336,6 +336,9 @@
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_EnergyTactics.h">
       <Filter>BehaviorTree\Task</Filter>
     </ClInclude>
+    <ClInclude Include="BehaviorTree\BT_Content\Task\Task_DefensiveSpiral.h">
+      <Filter>BehaviorTree\Task</Filter>
+    </ClInclude>
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_Evade.h">
       <Filter>BehaviorTree\Task</Filter>
     </ClInclude>
@@ -579,6 +582,9 @@
       <Filter>BehaviorTree\Task</Filter>
     </ClCompile>
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_EnergyTactics.cpp">
+      <Filter>BehaviorTree\Task</Filter>
+    </ClCompile>
+    <ClCompile Include="BehaviorTree\BT_Content\Task\Task_DefensiveSpiral.cpp">
       <Filter>BehaviorTree\Task</Filter>
     </ClCompile>
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_Evade.cpp">

@@ -165,19 +165,28 @@ live file and silently restores symmetry.
 --------------------------------------------------------------------------------
 ## Regression guards -- run these before committing compute or submitting
 
-There is no CI and no test suite for the core package, so these are the tripwires. All three exit
+There is no CI and no test suite for the core package, so these are the tripwires. All four exit
 0 on success and name the register row each check protects.
 
 ```powershell
 python scripts\verify_report_fixes.py    # ~seconds, no sim: gate/telemetry/curriculum/v8 config
 python scripts\verify_match_spawn.py     # ~1 min, real envs: match_base stages spawn correctly
 python scripts\verify_resilience.py      # ~seconds: DQ guards under injected faults
+python scripts\spawn_preset_guard.py     # instant: aircraft/f16/f16_init.xml not drifted (F57)
 ```
 
 Run the first two after touching `train_curriculum.py`, `student/my_curriculum.py` or an
 `experiments/*.yaml`; the third before any submission. They exist because every defect they cover
 **failed silently** -- a stage advancing on stale metrics, a metric reading `nan`, a record that
 never saved, a wrapper that was never wired in. None of those show up in a training log.
+
+**The fourth one is different: it is expected to FAIL after any eval, and that is not a bug.**
+`JSBSimWrapper.Fighter` hands initial conditions to the native DLL *by rewriting*
+`aircraft/f16/f16_init.xml`, so every episode leaves its own spawn there (F57). Run
+`python scripts\spawn_preset_guard.py --restore` before you commit or package -- it rewrites the
+file to the confirmed competition preset. `scripts\package_release.py` now runs the same check
+and refuses to build a package on a drifted preset, so the worst case is a refused package rather
+than a shipped wrong spawn.
 
 ## Local verification
 
