@@ -47,6 +47,10 @@ CPPBlackBoard::CPPBlackBoard()
 
 	ActiveManeuverID = Maneuver_None;
 	ActiveManeuverStartTime = 0.0;
+	// Written by BTFunc::ClaimManeuverPhase on every fresh claim, so no node can read this before
+	// it is set -- but initialize it anyway, because this constructor initializing every member
+	// is the invariant that makes that reasoning checkable rather than a claim.
+	ManeuverTurnDir = Vector3(0.0, 0.0, 0.0);
 	NeutralEngagementStartTime = -1.0;
 
 	OwnSpecificEnergy = 0;

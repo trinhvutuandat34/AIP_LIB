@@ -69,10 +69,19 @@ _MT_CMD = 6
 _MT_SET_PLANE_ID = 9
 
 _CUTOFF_PLANE_ID = 0
+
+# F54 vertical-axis fix (folded into the provider 2026-09-02, once the corrected column was
+# complete). Opt back out only to reproduce the void historical baselines.
+_LEGACY_Z = os.environ.get("DOGFIGHT_CUTOFF_LEGACY_Z", "0") not in ("0", "false", "False")
 _ENEMY_PLANE_ID = 1
 
 _DEFAULT_EXE_CANDIDATES = (
     _ROOT / "unreal_bt_client.exe",
+    # Actual location on the team machine (verified 2026-09-02). The D:\AIP1\... entries
+    # below were the original guesses and do not exist on disk; without this entry every
+    # cutoff eval raised FileNotFoundError unless --cutoff-exe was passed by hand, which
+    # silently broke sweep_vs_cutoff.py for anyone running it unattended.
+    Path(r"D:\AIP\AIP1\AIP\unreal_bt_client.exe"),
     Path(r"D:\AIP1\AIP\unreal_bt_client.exe"),
     Path(r"D:\AIP1\AIP\컷오프모델-20260819T132623Z-1-001\컷오프모델\unreal_bt_client.exe"),
 )
@@ -222,10 +231,24 @@ class CutoffProvider(ActionProvider):
 
     @staticmethod
     def _plane_fields(state) -> tuple[list[float], list[float], list[float]]:
+        """Pack our sim state into the PlaneInfo fields the cutoff binary expects.
+
+        THE VERTICAL AXIS IS FLIPPED HERE ON PURPOSE (folded in 2026-09-02, was
+        scripts/eval_vs_cutoff_zfix.py). The local sim carries state[2] as NED Down --
+        NEGATIVE above ground -- while the real Unreal server sends PlaneInfo.position.z as
+        altitude, POSITIVE up (verified over 2,984 captured frames). Forwarding state[2]
+        unchanged handed the cutoff an inverted vertical axis and an inverted vertical
+        separation, i.e. it fought us blind in the vertical: F54. Every number measured before
+        this fix is against a crippled opponent and is void.
+
+        Set DOGFIGHT_CUTOFF_LEGACY_Z=1 to restore the pre-fix (inverted) behaviour, which is
+        the only way to reproduce the historical F39/F45 baselines.
+        """
         s = np.asarray(state, dtype=np.float64)
         s = np.nan_to_num(s, nan=0.0, posinf=0.0, neginf=0.0)
+        z = float(s[2]) if _LEGACY_Z else -float(s[2])
         return (
-            [float(s[0]), float(s[1]), float(s[2])],   # NED position, metres
+            [float(s[0]), float(s[1]), z],             # position, metres (z up-positive)
             [float(s[3]), float(s[4]), float(s[5])],   # roll/pitch/yaw, degrees
             [float(s[6]), float(s[7]), float(s[8])],   # body u/v/w, m/s
         )

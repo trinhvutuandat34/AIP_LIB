@@ -113,6 +113,22 @@ def parse_args():
         parser.add_argument(f"--{_side}-vptrack-roll-taper", type=float, default=None,
                            help=f"{_side} taper ROLL by pointing-error magnitude (0 = off, "
                                 f"the shipped default -- F47 measured non-zero values harmful).")
+        # ADDED 2026-09-04 -- these two were MISSING. main() has passed
+        # args.{side}_vptrack_hard_deck to build_provider() since F59, but the flag was never
+        # defined on this parser, so EVERY invocation of this script raised
+        # AttributeError: 'Namespace' object has no attribute 'ownship_vptrack_hard_deck'
+        # before it reached the sim. F59's WIRING row claims the flag was added here; it was
+        # added to scripts/eval_v5_vs_bt.py only. eval imports build_provider() directly and
+        # never touches this parser, which is why the whole eval campaign kept working while
+        # the documented local sanity-check command (CLAUDE.md, HANDOFF "Local verification")
+        # could not start at all.
+        parser.add_argument(f"--{_side}-vptrack-hard-deck", type=float, default=None,
+                           help=f"{_side} altitude (m) below which the controller hands back "
+                                f"to the BT so Gate 0 can climb (default 0 = off).")
+        parser.add_argument(f"--{_side}-vptrack-deck-ttc", type=float, default=None,
+                           help=f"{_side} seconds-to-impact at the current sink rate below "
+                                f"which the controller hands back to the BT (default 0 = off). "
+                                f"F62: altitude alone cannot express how long you have.")
     return parser.parse_args()
 
 
@@ -124,7 +140,7 @@ def _verify_bundle_if_present(bundle_dir: str, observation_mode: str, observatio
 
 
 def _vptrack_kwargs(range_m, los_deg, throttle, defensive=None, corner=None,
-                    roll_taper_deg=None) -> dict:
+                    roll_taper_deg=None, hard_deck_m=None, deck_ttc_s=None) -> dict:
     """Per-side overrides for VPTrackingProvider, omitting any left as None.
 
     Added 2026-08-06 to make ASYMMETRIC evaluation possible. Both aircraft read one global
@@ -147,6 +163,10 @@ def _vptrack_kwargs(range_m, los_deg, throttle, defensive=None, corner=None,
         kw["corner_hold"] = bool(corner)
     if roll_taper_deg is not None:
         kw["roll_taper_deg"] = float(roll_taper_deg)
+    if hard_deck_m is not None:
+        kw["hard_deck_m"] = float(hard_deck_m)
+    if deck_ttc_s is not None:
+        kw["deck_ttc_s"] = float(deck_ttc_s)
     return kw
 
 
@@ -199,6 +219,8 @@ def _build_provider_raw(
     vptrack_defensive: bool | None = None,
     vptrack_corner: bool | None = None,
     vptrack_roll_taper: float | None = None,
+    vptrack_hard_deck: float | None = None,
+    vptrack_deck_ttc: float | None = None,
 ):
     if backend == "fixed":
         return None
@@ -216,7 +238,7 @@ def _build_provider_raw(
         # See student/controller_providers.py for the measured defect this bypasses.
         return VPTrackingProvider(dll_name=bt_dll, **_vptrack_kwargs(
             vptrack_range_m, vptrack_los_deg, vptrack_throttle, vptrack_defensive, vptrack_corner,
-            vptrack_roll_taper))
+            vptrack_roll_taper, vptrack_hard_deck, vptrack_deck_ttc))
     if backend in ("hybrid_vptrack", "hybrid_gated"):
         vptrack_range_m, vptrack_los_deg, vptrack_throttle = resolve_vptrack_floor(
             backend, vptrack_range_m, vptrack_los_deg, vptrack_throttle)
@@ -235,7 +257,7 @@ def _build_provider_raw(
             primary_provider=rl_provider,
             secondary_provider=VPTrackingProvider(dll_name=bt_dll, **_vptrack_kwargs(
                 vptrack_range_m, vptrack_los_deg, vptrack_throttle, vptrack_defensive, vptrack_corner,
-            vptrack_roll_taper)),
+            vptrack_roll_taper, vptrack_hard_deck, vptrack_deck_ttc)),
             mode=hybrid_mode,
             alpha=alpha,
             residual_scale=residual_scale,
@@ -314,6 +336,8 @@ def main():
         vptrack_corner=(None if args.ownship_vptrack_corner is None
                        else bool(args.ownship_vptrack_corner)),
         vptrack_roll_taper=args.ownship_vptrack_roll_taper,
+        vptrack_hard_deck=args.ownship_vptrack_hard_deck,
+        vptrack_deck_ttc=args.ownship_vptrack_deck_ttc,
     )
     target_provider = build_provider(
         side="target",
@@ -335,6 +359,8 @@ def main():
         vptrack_corner=(None if args.target_vptrack_corner is None
                        else bool(args.target_vptrack_corner)),
         vptrack_roll_taper=args.target_vptrack_roll_taper,
+        vptrack_hard_deck=args.target_vptrack_hard_deck,
+        vptrack_deck_ttc=args.target_vptrack_deck_ttc,
     )
 
     with activate_rule_xml(args.bt_rule_xml, ROOT):

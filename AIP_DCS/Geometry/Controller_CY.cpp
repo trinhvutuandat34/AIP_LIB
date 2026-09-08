@@ -205,6 +205,37 @@ StickValue StickController::GetStick(Vector3 MyLocation_FNED, Vector3 MyRotation
 	// which independently supports the roll-taper hypothesis (see ROLL_TAPER_CEIL below). Prefer
 	// adding authority deliberately there over "correcting" this line.
 	//
+	// REVISITED 2026-09-05 (F67) with a mirror-pair harness that did not exist in August --
+	// `scripts/verify_side_symmetry.py`, exact mirror pairs, same seeds, vs the organizers'
+	// cutoff binary. Confirmed this asymmetry is REAL and LARGE at match scale: baseline win
+	// rate 48.0% on the side whose decisive correction falls on the boosted (negative/left)
+	// direction vs 22.0% on the other, 2.9 sigma, corroborated independently by a 3.6-sigma
+	// post-hoc split across the full N=150 randomised-condition matrix (COMPETITION_PLAN F66).
+	// TWO FIXES WERE TRIED AND BOTH MEASURED WORSE THAN THIS BASELINE, not just ineffective:
+	//   (a) `std::abs(RollCMD) < ROLL_BOOST_THRESHOLD` (the literal correct reading of this
+	//       comment's own stated intent) -- gap WIDENED to 34.0% (4.1 sigma), both sides' damage
+	//       differential went negative, losses on the losing side jumped 2/50 -> 36/50.
+	//   (b) unconditional `RollCMD = clamp(RollCMD * ROLL_BOOST_GAIN, -1, 1)` (extend the same
+	//       authority to both signs instead of removing it from one) -- gap still 30.0% (N=20),
+	//       losing side's differential went MORE negative again (-0.591 -> -0.754).
+	// Both results corroborate the 2026-08-06 finding above, not just once but twice: whatever
+	// this boost is compensating for, editing it in EITHER direction (shrink or extend) makes
+	// things worse, which means it is patching something upstream rather than being the defect
+	// itself. Separately instrumented WHERE control actually sits during these episodes
+	// (`ep_bt_frac` in eval_v5_vs_bt.py, via VPProbe -- src/dogfight/** could not be touched to
+	// read `ctrl_source` directly, see that file's comment): on the LOSING mirror side this
+	// controller holds the stick for a median 98.8% of the 200s episode, vs 36.3% on the winning
+	// side -- the Python VPTrackingProvider law (confirmed symmetric by inspection) essentially
+	// never gets a turn on the losing side because LOS never drops under its 120 deg envelope.
+	// Widening that envelope to 180 deg (always-engage) cut the gap to 10% (0.9 sigma) but
+	// collapsed absolute win rate on BOTH sides (40%->15%, 20%->5%) -- confirms the mechanism,
+	// is not a fix. TEAM DECISION 2026-09-05: ship with this KNOWN asymmetry rather than keep
+	// iterating on it (COMPETITION_PLAN F67) -- the F66 matrix's numbers already have this effect
+	// baked in, so it is a known, measured quantity, not a hidden one. DO NOT attempt a third
+	// direct edit to this function without new evidence narrowing which of the ~20 native
+	// `Task_*` nodes handles the losing side's long-range approach differently -- the defect is
+	// most likely there, not here.
+	//
 	// Constants named 2026-08-06: this file has produced three bugs from untied inline literals
 	// (ERROR_SUM_WINDOW's bare 60s, MFsum's bare 20s, and the roll magic numbers here).
 	static const float ROLL_BOOST_THRESHOLD = 0.1f;
@@ -239,7 +270,7 @@ StickValue StickController::GetStick(Vector3 MyLocation_FNED, Vector3 MyRotation
 	static const float ROLL_TAPER_CEIL = 1.0f;
 	static const float ROLL_TAPER_FLOOR = 0.0f;
 
-	if (RollCMD < ROLL_BOOST_THRESHOLD)   // deliberately NOT abs() -- see the note above
+	if (RollCMD < ROLL_BOOST_THRESHOLD)   // deliberately NOT abs() -- see the note above (F67: two attempted fixes both measured worse)
 		RollCMD = RollCMD * ROLL_BOOST_GAIN;
 
 	RollCMD = RollCMD * clamp(LOS, ROLL_TAPER_FLOOR, ROLL_TAPER_CEIL);

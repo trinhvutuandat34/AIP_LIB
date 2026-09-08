@@ -48,8 +48,10 @@ from student.inference_providers import (
 # DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. See the
 # module docstring for the two client fragilities this guards against (COMPETITION_RULES Sec8).
 from student.controller_providers import (
+    SHIP_DECK_TTC_S,
     SHIP_ENGAGE_LOS_DEG,
     SHIP_ENGAGE_RANGE_M,
+    SHIP_HARD_DECK_M,
     SHIP_THROTTLE_CONTROL,
     EnvelopeGatedHybridProvider,
     GLimitedProvider,
@@ -83,6 +85,17 @@ def parse_args():
     parser.add_argument(
         "--vptrack-los-deg", type=float, default=SHIP_ENGAGE_LOS_DEG,
         help=f"vptrack engagement LOS half-angle (default {SHIP_ENGAGE_LOS_DEG:.0f} deg -- SHIPPED).",
+    )
+    parser.add_argument(
+        "--vptrack-hard-deck", type=float, default=SHIP_HARD_DECK_M,
+        help=f"altitude (m) below which the controller hands back to the BT so Gate 0 can climb "
+             f"(default {SHIP_HARD_DECK_M:.0f} m -- the SHIPPED value; 0 disables).",
+    )
+    parser.add_argument(
+        "--vptrack-deck-ttc", type=float, default=SHIP_DECK_TTC_S,
+        help=f"seconds-to-impact at the current sink rate below which the controller hands back "
+             f"to the BT (default {SHIP_DECK_TTC_S:.0f} = OFF, the shipped value). Wired now so "
+             f"adopting it later is a one-line change to SHIP_DECK_TTC_S (F44/F62).",
     )
     parser.add_argument(
         "--vptrack-throttle", type=int, choices=[0, 1], default=int(SHIP_THROTTLE_CONTROL),
@@ -241,6 +254,8 @@ def _build_action_provider_raw(args, effective_observation_mode: str):
             dll_name=args.bt_dll,
             throttle_control=args.vptrack_throttle,
             engage_range_m=args.vptrack_range_m,
+            hard_deck_m=args.vptrack_hard_deck,
+            deck_ttc_s=args.vptrack_deck_ttc,
             engage_los_deg=args.vptrack_los_deg,
         )
 
@@ -274,6 +289,8 @@ def _build_action_provider_raw(args, effective_observation_mode: str):
             dll_name=args.bt_dll,
             throttle_control=args.vptrack_throttle,
             engage_range_m=args.vptrack_range_m,
+            hard_deck_m=args.vptrack_hard_deck,
+            deck_ttc_s=args.vptrack_deck_ttc,
             engage_los_deg=args.vptrack_los_deg,
         )
         if args.mode == "hybrid_gated":

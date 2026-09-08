@@ -218,6 +218,20 @@
                 <Task_JinkingTurn name="Gate1_JinkingTurn" BB="{BB}"/>
               </Sequence>
               <Sequence>
+                <!-- Gate1_DefensiveSpiral (2026-09-06): the low-speed sibling of Gate1_TheBreak
+                     below -- BFM_MANEUVER_GAP_REFERENCE.md's addendum (SS5/SS6, F-16 tactical
+                     maneuver reference + this project's own BFM_ACM_Reward_Engineering_
+                     Reference.md Part 6/8) names "Defensive Spiral" as the doctrine response when
+                     a defender is too slow to extend the way The Break assumes. Tried first in
+                     this Fallback; the node's own internal speed gate (<154 m/s) means it simply
+                     fails through to Gate1_TheBreak whenever the defender is fast enough to
+                     extend, so this cannot shadow it. Same gun-solution carve-out as
+                     Gate1_JinkingTurn/Gate1_TheBreak (own ATA >= 8). -->
+                <DECO_AngleOffCheck name="Gate1_Spiral_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
+                <DECO_LOSCheck name="Gate1_Spiral_NotGunSolution_OwnATA_Ge8" UpDown="Greater" InputLOS="8" Which="Own" BB="{BB}"/>
+                <Task_DefensiveSpiral name="Gate1_DefensiveSpiral" BB="{BB}"/>
+              </Sequence>
+              <Sequence>
                 <DECO_AngleOffCheck name="Gate1_Break_HCA_Lt150" UpDown="Less" InputAO="150" BB="{BB}"/>
                 <!-- Same gun-solution carve-out as Gate1_JinkingTurn above (own ATA >= 8). -->
                 <DECO_LOSCheck name="Gate1_Break_NotGunSolution_OwnATA_Ge8" UpDown="Greater" InputLOS="8" Which="Own" BB="{BB}"/>

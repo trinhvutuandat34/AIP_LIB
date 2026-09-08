@@ -1,206 +1,210 @@
-"""Build the submission package: compliant, complete, and under the 1 GB limit.
+"""Build the two finals submission ZIPs, and refuse to build one that would be rejected.
 
-WHY THIS EXISTS. Two independent ways to fail on submission day, both silent:
+    python scripts/package_release.py              # verify + build both ZIPs
+    python scripts/package_release.py --no-smoke   # skip the flight check (iterating only)
 
-  1. SIZE. `Release/artifacts/` is ~11.7 GB on this box (curriculum 10.3 GB + ray_results
-     1.25 GB) -- 12x the organizers' 1 GB limit on its own. Everything the submission actually
-     NEEDS totals ~40 MB. None of `artifacts/` is required: `student/my_submission.py` ships
-     `MODE = "vptrack"` with `BUNDLE_DIR = None`, so no RL bundle is loaded at all.
+REWRITTEN 2026-09-08. This script used to stage a MIRROR of `Release/` and zip it flat -- the
+prelim's deliverable, where the submission was Python sources launched with
+`python student\\my_submission.py`. The finals spec (COMPETITION_RULES.md Sec 7.1 / F75) makes
+that non-compliant in two independent ways: the artifact must be a single `.exe`, and each ZIP
+must contain **exactly two files at its root, no subfolders**, with README, source code and
+라이브러리 폴더 explicitly banned. The old script emitted hundreds of files and a dozen folders.
+The onedir/mirror logic is not patched here, it is gone; `git log` has it if it is ever wanted.
 
-  2. COMPLIANCE. COMPETITION_RULES.md Sec8 forbids RENAMING, MOVING or DELETING the runtime
-     assets. A hand-pruned zip that drops `Rule.xml` or `engine/` because "we don't seem to use
-     it" is a rules violation that no local test would catch. So this script does not just
-     exclude -- it ASSERTS every protected asset is present at its exact path afterwards, and
-     refuses to produce a package if one is missing.
+WHAT IT VERIFIES, AND WHY EACH GATE EXISTS
 
-It also guards the failure this project has already had once, in a different form: shipping code
-whose fix is absent. It verifies `student/live_frame_fix.py` is present and imported by both
-entry points, because without it the native BT sees a ~110,700x wrong range on the live path
-(see LIVE_INFERENCE_FRAME_BUGS.md and scripts/verify_live_frame_fix.py).
-
-USAGE
-    python scripts/package_release.py                    # stage + verify, report size
-    python scripts/package_release.py --zip              # also write submission_<team>.zip
-    python scripts/package_release.py --out D:\pkg       # choose the staging directory
-
-Exit 0 = staged, complete, compliant and under the limit.
+  1. The exe FLIES (`smoke_exe.py`). This is the only gate that separates a working submission
+     from one flying a centred stick: per F70 a failed Rule-XML load inside the DLL is caught in
+     C++, printed to `std::cout`, and turned into an all-zero `ControlValue` that the client
+     forwards at 60 Hz forever. The previous version of this script "verified" the entry point by
+     GREPPING ITS SOURCE TEXT for a substring -- which is exactly how a fatal `NameError` shipped
+     in HEAD and went unnoticed (F69/F70). A gate that reads a file proves nothing; this one runs
+     the artifact.
+  2. The spawn preset is canonical (`spawn_preset_guard.py`). Any eval run rewrites
+     `aircraft/f16/f16_init.xml` as a side effect (F57), and a drifted preset bakes the wrong
+     initial conditions into the bundle.
+  3. The exe was built from the CURRENT runtime assets. A stale exe next to a rebuilt DLL is the
+     F8/F57/F59 shape of silent staleness, and nothing else in the pipeline would catch it.
+  4. Filenames are pure ASCII and the displayed team name round-trips the wire packer. Two
+     DISTINCT fields (F76): `SUBMISSION_NAME` = filenames, English; `TEAM_NAME` = the name shown
+     on the engagement server, Korean, `_HeadOn` appended as a SUFFIX for the head-on model
+     (`HeadOn_X` is explicitly rejected by the spec).
 """
-
 from __future__ import annotations
 
 import argparse
-import os
-import shutil
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-LIMIT_BYTES = 1024 ** 3  # 1 GB
+_HERE = Path(__file__).resolve().parent
+ROOT = _HERE.parent                        # DogFightEnv/Release
+_EXE_DIR = ROOT.parent / "submission_exe"  # scripts/build_exe.py's --distpath
 
-# Protected runtime assets: must exist, at exactly these names/locations, in the package.
-# Source: COMPETITION_RULES.md Sec8 (and the editing-boundaries table in CLAUDE.md).
-PROTECTED = [
-    "AIP_BASE.dll",
-    "AIP_BASE_target.dll",
-    "JSBSimAIPLib.dll",
-    "Rule_forTraining.xml",
-    "Rule.xml",
-    "aircraft",
-    "engine",
-    "scripts/f15_cruise.xml",
-    "scripts/f16_cruise.xml",
-    "scripts/fa50_cruise.xml",
-]
+sys.path.insert(0, str(ROOT))
+from scripts.spawn_preset_guard import check as check_spawn_presets  # noqa: E402
+from student.my_submission import SUBMISSION_NAME, TEAM_NAME  # noqa: E402
 
-# Needed to actually run the submission.
-REQUIRED = [
-    "student/my_submission.py",
-    "student/live_frame_fix.py",
-    "student/controller_providers.py",
-    "run_unreal_inference.py",
-    "src/dogfight",
-]
+LIMIT_BYTES = 1024 ** 3
 
-# Directory names excluded wholesale, at any depth.
-EXCLUDE_DIRS = {
-    "artifacts",        # 11.7 GB of training/eval output; none of it is needed to run
-    "logs",             # captured packet dumps + run logs
-    "ray_results",
-    "__pycache__",
-    ".git",
-    ".vs",
-    ".vscode",
-    ".ipynb_checkpoints",
-    "bt_peer",          # local measurement rig (its own docstring: not part of a submission)
-}
+# Files whose mtime the exe must not be older than: if any of these changed after the build, the
+# bundled copy is stale. `engine/` is walked rather than listed.
+#
+# `aircraft/` is DELIBERATELY ABSENT despite being bundled. Every eval run rewrites
+# `aircraft/f16/f16_init.xml` as a side effect (F57 -- the FDM writes initial conditions back
+# through it on reset), and `--restore` then bumps its mtime again. Including it here would make
+# this gate fire after literally every eval, including when the file's CONTENT is canonical --
+# and a gate that cries wolf is a gate people learn to ignore, which is how F69 shipped. The
+# spawn preset is already checked byte-for-byte by `check_spawn_presets` above, which is the
+# stronger check anyway: it compares content, not timestamps.
+_ASSET_ROOTS = ("AIP_BASE.dll", "AIP_BASE_target.dll", "JSBSimAIPLib.dll",
+                "Rule_forTraining.xml", "Rule.xml", "Rule_real_eagle.xml",
+                "engine", "student", "src")
+
+VARIANTS = (
+    {"model": 1, "exe": f"{SUBMISSION_NAME}.exe",
+     "zip": f"{SUBMISSION_NAME}_APTGC2026_main.zip", "team": TEAM_NAME},
+    {"model": 2, "exe": f"{SUBMISSION_NAME}_headon.exe",
+     "zip": f"{SUBMISSION_NAME}_APTGC2026_headon.zip", "team": f"{TEAM_NAME}_HeadOn"},
+)
 
 
-def _is_disposable_dll(name: str) -> bool:
-    """Experiment/backup DLL variants we added -- NOT protected assets, and ~38 MB of noise.
+def _newest_asset_mtime() -> tuple[float, Path]:
+    newest, where = 0.0, ROOT
+    for name in _ASSET_ROOTS:
+        p = ROOT / name
+        if p.is_file():
+            candidates = [p]
+        elif p.is_dir():
+            candidates = [f for f in p.rglob("*")
+                          if f.is_file() and f.suffix not in (".pyc", ".pyo")]
+        else:
+            continue
+        for f in candidates:
+            m = f.stat().st_mtime
+            if m > newest:
+                newest, where = m, f
+    return newest, where
 
-    Protected names are matched exactly in PROTECTED; anything like AIP_BASE_gatetrace.dll or
-    AIP_BASE.dll.bak_aug03build is ours, is not referenced by the submission, and is excluded.
-    """
-    low = name.lower()
-    if low in {"aip_base.dll", "aip_base_target.dll", "jsbsimaiplib.dll"}:
-        return False
-    if ".bak" in low:
-        return True
-    return low.startswith("aip_base") and low.endswith(".dll")
 
-
-def should_skip(rel: Path) -> bool:
-    if any(part in EXCLUDE_DIRS for part in rel.parts):
-        return True
-    name = rel.name
-    if name.endswith((".pyc", ".pyo")):
-        return True
-    if name.endswith(".dll") and _is_disposable_dll(name):
-        return True
-    if ".bak" in name.lower():
-        return True
-    return False
+def _check_names(problems: list[str]) -> None:
+    for v in VARIANTS:
+        for field in ("exe", "zip"):
+            if not v[field].isascii():
+                problems.append(f"{field} filename is not ASCII: {v[field]!r} "
+                                "(the finals spec requires an English FILENAME)")
+    # The displayed name is the other field entirely, and it must survive the wire packer.
+    try:
+        from dogfight.unreal.protocol import AIType, ClientJoinInfo, pack_client_join_info
+        for v in VARIANTS:
+            raw = v["team"].encode("utf-8")
+            if len(raw) > 29:
+                problems.append(f"displayed team name {v['team']!r} is {len(raw)} bytes; "
+                                "protocol.py:109 truncates on a BYTE boundary at 29 and would "
+                                "sever a Hangul character, emitting invalid UTF-8")
+            # Round-trip through the REAL packer, not a re-implementation of it: pack, then
+            # decode the 30-byte field back and require the exact string. That is what proves
+            # the Korean name survives the wire, which is the whole point of the check.
+            blob = pack_client_join_info(ClientJoinInfo(v["team"], AIType.RuleBased, 0))
+            back = blob[4:34].rstrip(b"\x00").decode("utf-8", errors="replace")
+            if back != v["team"]:
+                problems.append(f"displayed team name does not round-trip the wire packer: "
+                                f"sent {v['team']!r}, got back {back!r}")
+    except (ImportError, AttributeError, TypeError) as exc:
+        problems.append(f"could not exercise the wire packer to check the team name: {exc!r}")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default=str(ROOT.parent / "submission_package"))
-    ap.add_argument("--zip", action="store_true")
-    ap.add_argument("--force", action="store_true", help="overwrite an existing staging dir")
+    ap.add_argument("--no-smoke", action="store_true",
+                    help="skip the flight check. NEVER pass this for a real submission -- it is "
+                         "the only gate that can tell a working exe from a zeroed one (F70).")
+    ap.add_argument("--out", default=str(_EXE_DIR))
     args = ap.parse_args()
 
     out = Path(args.out)
-    if out.exists():
-        if not args.force:
-            print(f"FAIL: {out} already exists. Pass --force to overwrite.")
-            return 1
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
+    problems: list[str] = []
 
-    copied = skipped_bytes = total = 0
-    for src in ROOT.rglob("*"):
-        if not src.is_file():
+    print(f"exe dir  : {out}")
+    print(f"displayed: {TEAM_NAME!r} / {TEAM_NAME + '_HeadOn'!r}")
+    print(f"filenames: {SUBMISSION_NAME}*\n")
+
+    # --- gate 2: spawn preset ------------------------------------------------------------
+    drift = check_spawn_presets(ROOT)
+    if drift:
+        problems.append(f"spawn preset drifted from canonical: {drift}. "
+                        "Run `python scripts/spawn_preset_guard.py --restore` (F57).")
+    else:
+        print("[ok] spawn preset canonical")
+
+    # --- gate 4: names -------------------------------------------------------------------
+    _check_names(problems)
+    if not problems:
+        print("[ok] filenames ASCII, displayed names round-trip the wire packer")
+
+    newest_asset, asset_path = _newest_asset_mtime()
+
+    for v in VARIANTS:
+        exe = out / v["exe"]
+        if not exe.is_file():
+            problems.append(f"{v['exe']} not built -- run `python scripts/build_exe.py` first")
             continue
-        rel = src.relative_to(ROOT)
-        try:
-            size = src.stat().st_size
-        except OSError:
+
+        # --- gate 3: staleness -----------------------------------------------------------
+        if exe.stat().st_mtime < newest_asset:
+            problems.append(
+                f"{v['exe']} is OLDER than {asset_path.relative_to(ROOT)} -- it was built from "
+                "assets that have since changed. Rebuild before packaging.")
             continue
-        if should_skip(rel):
-            skipped_bytes += size
-            continue
-        dst = out / rel
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
-        copied += 1
-        total += size
+        print(f"[ok] {v['exe']:<32} {exe.stat().st_size/1e6:>6.1f} MB, newer than every asset")
 
-    print(f"staged   : {out}")
-    print(f"files    : {copied:,}")
-    print(f"size     : {total/1024/1024:.1f} MB   (limit {LIMIT_BYTES/1024/1024:.0f} MB)")
-    print(f"excluded : {skipped_bytes/1024/1024/1024:.2f} GB")
-    print()
-
-    problems = []
-
-    print("protected runtime assets (COMPETITION_RULES.md Sec8 -- must not be renamed/moved/deleted)")
-    for rel in PROTECTED:
-        ok = (out / rel).exists()
-        print(f"  [{'OK' if ok else 'MISSING'}] {rel}")
-        if not ok:
-            problems.append(f"protected asset missing: {rel}")
-
-    print()
-    print("required to run")
-    for rel in REQUIRED:
-        ok = (out / rel).exists()
-        print(f"  [{'OK' if ok else 'MISSING'}] {rel}")
-        if not ok:
-            problems.append(f"required file missing: {rel}")
-
-    # The live frame fix must not merely exist -- both entry points must import it, or the
-    # live path silently reverts to the broken geometry.
-    print()
-    print("live-path frame fix wired in")
-    for rel in ("student/my_submission.py", "run_unreal_inference.py"):
-        p = out / rel
-        ok = p.exists() and "live_frame_fix" in p.read_text(encoding="utf-8", errors="replace")
-        print(f"  [{'OK' if ok else 'FAIL'}] {rel} imports live_frame_fix")
-        if not ok:
-            problems.append(f"{rel} does not reference live_frame_fix")
-
-    print()
-    if total > LIMIT_BYTES:
-        problems.append(f"package is {total/1024/1024:.1f} MB, over the 1 GB limit")
+        # --- gate 1: it flies ------------------------------------------------------------
+        if args.no_smoke:
+            print(f"     !! smoke SKIPPED for {v['exe']}")
+        else:
+            rc = subprocess.run([sys.executable, str(_HERE / "smoke_exe.py"), str(exe)]).returncode
+            if rc != 0:
+                problems.append(f"{v['exe']} FAILED the flight check -- see the output above")
+                continue
+            print(f"[ok] {v['exe']} passed the flight check")
 
     if problems:
-        print("FAIL:")
+        print("\nFAIL:")
         for p in problems:
             print(f"  - {p}")
         return 1
 
-    if args.zip:
-        try:
-            from student.my_submission import TEAM_NAME
-        except Exception:
-            TEAM_NAME = "submission"
-        zpath = out.parent / f"submission_{TEAM_NAME}.zip"
-        with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as zf:
-            for f in out.rglob("*"):
-                if f.is_file():
-                    zf.write(f, f.relative_to(out))
-        zmb = zpath.stat().st_size / 1024 / 1024
-        print(f"zip      : {zpath}  ({zmb:.1f} MB)")
-        if zpath.stat().st_size > LIMIT_BYTES:
-            print("FAIL: zip exceeds 1 GB")
-            return 1
+    cfg = out / "config.json"
+    if not cfg.is_file():
+        print(f"\nFAIL: {cfg} missing -- scripts/build_exe.py writes it")
+        return 1
 
-    print(f"PASS -- {total/1024/1024:.1f} MB, all protected assets present, frame fix wired in.")
+    print()
+    for v in VARIANTS:
+        zpath = out / v["zip"]
+        with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as zf:
+            # EXACTLY two entries, both at the archive root, arcname'd explicitly so no
+            # directory component can leak in from the source path.
+            zf.write(out / v["exe"], v["exe"])
+            zf.write(cfg, "config.json")
+        with zipfile.ZipFile(zpath) as zf:
+            names = zf.namelist()
+        if names != [v["exe"], "config.json"]:
+            print(f"FAIL: {zpath.name} contains {names}, expected exactly "
+                  f"[{v['exe']!r}, 'config.json']")
+            return 1
+        size = zpath.stat().st_size
+        if size > LIMIT_BYTES:
+            print(f"FAIL: {zpath.name} exceeds 1 GB")
+            return 1
+        print(f"zip      : {zpath.name}  ({size/1e6:.1f} MB)  {names}")
+
+    print("\nPASS -- both ZIPs hold exactly two root files, both exes fly, preset canonical.")
+    print("Still needed by hand: 팀명_개인정보수집및활용동의서.zip (one signed PDF/HWP per member).")
     return 0
 
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(ROOT))
     raise SystemExit(main())

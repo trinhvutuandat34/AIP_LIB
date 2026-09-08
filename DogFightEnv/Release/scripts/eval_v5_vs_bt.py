@@ -105,7 +105,7 @@ from student.inference_providers import require_healthy_bundle
 from student.obfm_scenario_wrapper import ObfmScenarioWrapper, OBFM_ALTITUDE_M, OBFM_SPEED_MPS
 from student.match_scenario_wrapper import (
     MatchScenarioWrapper, MATCH_ALTITUDE_M, MATCH_SPEED_MPS,
-    MATCH_SEPARATION_MIN_M, MATCH_SEPARATION_MAX_M, MATCH_LOS_DEG,
+    MATCH_SEPARATION_SET_M, MATCH_LOS_DEG,
 )
 from student.reward_lib import WEZ_PHASES, match_wez_phase, wez_damage_estimate
 from dogfight.sim.state_schema import StateIndex
@@ -122,7 +122,25 @@ MATCH_STEP_LIMIT = 12000
 CSV_FIELDS = [
     "episode", "alpha_deg", "outcome", "end_condition",
     "ownship_health", "target_health", "total_reward", "steps",
+    # 2026-09-05 (F67 diagnosis): which controller actually held the stick, and for how long.
+    # VPTrackingProvider.compute_action() already tags every step's info dict with
+    # ctrl_source ("vptrack" or "bt") -- this was computed and thrown away every run until now.
+    # Needed to test whether the mirror-side asymmetry traces to the HAND-OFF boundary (the
+    # student-space law's engage_los_deg envelope) rather than to Controller_CY's internals
+    # specifically, after two direct edits to the native roll boost both measured WORSE.
+    "ep_bt_frac", "ep_bt_steps",
     "ep_wez_steps", "ep_min_distance", "initial_distance_m",
+    # 2026-09-04: the rest of the START CONDITION, not just the separation. The 본선 randomises
+    # initial altitude and speed every game and alternates Blue/Red (COMPETITION_RULES.md 5.1),
+    # so a result is only interpretable next to the conditions it was measured at -- and F61
+    # requires the shipped config to be picked ACROSS those conditions rather than at one point.
+    # All three are MEASURED from the post-reset state rather than copied from the scenario dict,
+    # for the same reason initial_distance_m is: the student-space wrappers stage the spawn via
+    # change_init_position(), so the scenario dict is what we asked for and the state is what we
+    # got. initial_side is the observable consequence of apply_match_scenario()'s random mirror
+    # (+1 = target starts to our RIGHT), derived here instead of plumbed out of the wrapper so it
+    # is defined for every scenario mode, not just match_*.
+    "initial_altitude_m", "initial_speed_mps", "initial_side",
     # _2d / _3d suffixes are mandatory here -- see the ANGLE CONVENTIONS note in the module
     # docstring. These two come straight from the platform's info dict, which computes them
     # with proj=True (2D azimuth). They are NOT comparable to the gate.
@@ -183,6 +201,15 @@ class VPProbe:
         self.last_vp_valid = None
         self.invalid_steps = 0
         self.total_steps = 0
+        # ctrl_source tracking (F67 diagnosis, 2026-09-05). VPTrackingProvider.compute_action()
+        # tags every ActionResult.info with "vptrack" or "bt", but _step_controlled_aircraft()
+        # in src/dogfight/envs/single_agent_env.py only reads result.action and discards
+        # result.info entirely -- so nothing about ctrl_source ever reaches env.step()'s
+        # returned info dict, no matter what the CSV writer asks for. src/dogfight/** is a hard
+        # no-edit boundary (team policy, CLAUDE.md), so this is captured HERE instead, at the
+        # one point outside that boundary that already sees every compute_action() call.
+        self.ctrl_bt_steps = 0
+        self.ctrl_total_steps = 0
 
     def compute_action(self, context):
         result = self._inner.compute_action(context)
@@ -194,6 +221,11 @@ class VPProbe:
                 self.invalid_steps += 1
         else:
             self.last_vp_valid = None
+        src = info.get("ctrl_source")
+        if src is not None:
+            self.ctrl_total_steps += 1
+            if src == "bt":
+                self.ctrl_bt_steps += 1
         return result
 
     def reset(self, context=None):
@@ -695,6 +727,17 @@ def parse_args():
     p.add_argument("--episode-step-limit", type=int, default=MATCH_STEP_LIMIT)
     p.add_argument("--min-altitude", type=float, default=300.0)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--episode-offset", type=int, default=0,
+                   help="Shift the whole deterministic episode sequence (seed AND alpha_plan "
+                        "index) by this many episodes, and label rows starting from this number "
+                        "instead of 0. Lets a short chunk continue exactly where a prior chunk "
+                        "of the same seed left off, rather than re-running episodes 0..N-1 every "
+                        "time. Added 2026-09-04 after the N=150 matrix could not survive as one "
+                        "long background run; see --append.")
+    p.add_argument("--append", action="store_true",
+                   help="Append to --out-csv instead of overwriting it (header written only if "
+                        "the file is new/empty). Pairs with --episode-offset to build one CSV "
+                        "out of several short chunked invocations.")
     p.add_argument("--scenario-mode",
                    choices=["two_circle_headon", "obfm_offensive", "obfm_defensive",
                             "match_base", "match_tiebreak"],
@@ -723,6 +766,14 @@ def parse_args():
                        help=f"{_side} defensive break when losing the gun duel (default off).")
         p.add_argument(f"--{_side}-vptrack-corner", type=int, choices=[0, 1], default=None,
                        help=f"{_side} hold corner speed (~440 KTAS) for peak turn rate (default off).")
+        p.add_argument(f"--{_side}-vptrack-hard-deck", type=float, default=None,
+                       help=f"{_side} altitude (m) below which the controller hands back to "
+                            f"the BT so Gate 0 can climb (default 0 = off).")
+        p.add_argument(f"--{_side}-vptrack-deck-ttc", type=float, default=None,
+                       help=f"{_side} seconds-to-impact at the current sink rate below which "
+                            f"the controller hands back to the BT (default 0 = off). F62: an "
+                            f"altitude threshold cannot express how long you have -- 914 m at "
+                            f"236 m/s of sink is 3.9 s, and an inverted recovery needs more.")
         p.add_argument(f"--{_side}-vptrack-roll-taper", type=float, default=None,
                        help=f"{_side}: taper the ROLL command by pointing-error magnitude "
                             f"below this many degrees (0 = off, the shipped default). See "
@@ -733,6 +784,13 @@ def parse_args():
                         "rounds-1-3 slide art supports two readings: 90 (antiparallel and "
                         "abeam -- a beam merge, the default) or 180 (antiparallel and "
                         "nose-away, tail-to-tail). Measure both rather than assuming.")
+    p.add_argument("--match-side", type=float, default=None, choices=[-1.0, 1.0],
+                   help="Force the spawn mirror for match_* modes instead of drawing it "
+                        "randomly (+1 / -1). The same --seed run once with each value gives an "
+                        "exact mirror-image pair of engagements, because only the two headings "
+                        "depend on the side -- positions do not. That is the side-symmetry "
+                        "test: Blue/Red alternates every game in the finals, and this project "
+                        "has already shipped one left/right bug (c0f3eaf).")
     p.add_argument("--out-csv", default="artifacts/eval/matchup.csv")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--trace-geometry", action="store_true",
@@ -748,7 +806,12 @@ def main():
     args = parse_args()
 
     out_csv = Path(args.out_csv)
-    alpha_plan = [ALPHA_SCHEDULE_DEG[i % len(ALPHA_SCHEDULE_DEG)] for i in range(args.episodes)]
+    # episode_offset shifts the whole deterministic sequence, not just the seed: alpha_plan is
+    # indexed by absolute episode number too, so a chunk starting at offset K reproduces exactly
+    # what a single unbroken run would have done at episodes [K, K+args.episodes), rather than
+    # restarting the alpha schedule from 0 each chunk.
+    alpha_plan = [ALPHA_SCHEDULE_DEG[(args.episode_offset + i) % len(ALPHA_SCHEDULE_DEG)]
+                 for i in range(args.episodes)]
 
     observation_hook = load_observation_hook(args.observation_module) if args.observation_module else None
     effective_observation_mode = observation_hook["mode"] if observation_hook else args.observation_mode
@@ -810,6 +873,8 @@ def main():
         vptrack_corner=(None if args.ownship_vptrack_corner is None
                         else bool(args.ownship_vptrack_corner)),
         vptrack_roll_taper=args.ownship_vptrack_roll_taper,
+        vptrack_hard_deck=args.ownship_vptrack_hard_deck,
+        vptrack_deck_ttc=args.ownship_vptrack_deck_ttc,
     )
     # Capture vp_valid so a SAFE_VP zero substitution is distinguishable from a genuine zero
     # aimpoint. Wrapping is transparent; see VPProbe.
@@ -830,6 +895,8 @@ def main():
         vptrack_corner=(None if args.target_vptrack_corner is None
                         else bool(args.target_vptrack_corner)),
         vptrack_roll_taper=args.target_vptrack_roll_taper,
+        vptrack_hard_deck=args.target_vptrack_hard_deck,
+        vptrack_deck_ttc=args.target_vptrack_deck_ttc,
     )
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -845,9 +912,16 @@ def main():
     geometry_errors = 0
     zero_action = np.zeros(4, dtype=np.float32)
 
-    with activate_rule_xml(args.bt_rule_xml, ROOT), open(out_csv, "w", newline="") as fh:
+    # APPEND (2026-09-04): --append lets successive short-chunk invocations accumulate into
+    # ONE csv instead of each overwriting the last -- see the module-level note above main() for
+    # why this exists. Header is written only when the file does not already have one, so a
+    # fresh --append run on a nonexistent path behaves exactly like a normal run.
+    _write_header = not (args.append and out_csv.exists() and out_csv.stat().st_size > 0)
+    with activate_rule_xml(args.bt_rule_xml, ROOT), \
+         open(out_csv, "a" if args.append else "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=CSV_FIELDS)
-        writer.writeheader()
+        if _write_header:
+            writer.writeheader()
 
         env = DogFightWrapper(
             env_config={
@@ -978,21 +1052,41 @@ def main():
                 if args.scenario_mode == "two_circle_headon":
                     scen = {"mode": "two_circle_headon", "alpha_deg": float(alpha_deg)}
                 elif args.scenario_mode.startswith("match_"):
-                    # alpha_deg from the schedule is NOT a geometry knob here (LOS is fixed
-                    # by the mode); it is reused as a deterministic sweep across the
-                    # 2000-3000 ft band so the N episodes cover the published range evenly
-                    # instead of clustering wherever the RNG happens to land.
-                    _frac = (float(alpha_deg) % 180.0) / 180.0
+                    # SEPARATION IS DISCRETE, NOT A SWEEP -- FIXED 2026-09-08.
+                    #
+                    # COMPETITION_RULES.md Sec 5.1: start separation cycles with the GAME INDEX,
+                    # 1경기 2,000 ft -> 2경기 2,500 ft -> 3경기 3,000 ft -> 4경기 2,000 ft ...
+                    # Only three values ever occur, and every BO3 uses all three.
+                    #
+                    # This previously reused alpha_deg as a smooth sweep across the band:
+                    #   _frac = (alpha_deg % 180) / 180
+                    # Because ALPHA_SCHEDULE_DEG contains BOTH 0 and 180, which both map to
+                    # frac 0, that produced nine separations of which exactly one (609.6 m =
+                    # 2,000 ft) is a real game distance -- and DOUBLE-WEIGHTED it. Measured over
+                    # 500 episodes: 609.6 m x100, then 643.5/677.3/711.2/745.1/778.9/812.8/846.7/
+                    # 880.5 m x50 each. **2,500 ft and 3,000 ft never occurred at all**, so games
+                    # 2 and 3 of every BO3 were flown at distances we had never evaluated. Its
+                    # maximum, 880.5 m, does not even reach 3,000 ft.
+                    #
+                    # That matters beyond coverage: 세트득실차 (the third standings key) is
+                    # decided per GAME, so a config strong at 2,000 ft and weak at 3,000 ft
+                    # loses set differential exactly where group order is settled.
+                    #
+                    # Cycling the schedule index over the three real values reproduces the
+                    # competition's own rotation and keeps the assignment deterministic per
+                    # episode, which the chunked resume needs.
                     scen = {"mode": args.scenario_mode,
                             "altitude_m": MATCH_ALTITUDE_M,
                             "speed_mps": MATCH_SPEED_MPS}
                     if args.scenario_mode == "match_base":
-                        scen["separation_m"] = (
-                            MATCH_SEPARATION_MIN_M
-                            + _frac * (MATCH_SEPARATION_MAX_M - MATCH_SEPARATION_MIN_M)
-                        )
+                        scen["separation_m"] = MATCH_SEPARATION_SET_M[
+                            episode % len(MATCH_SEPARATION_SET_M)]
                     if args.match_los_deg is not None:
                         scen["los_deg"] = float(args.match_los_deg)
+                    # Force the spawn mirror for the side-symmetry test. Same seed with +1 and
+                    # -1 gives an exact mirror-image pair; see apply_match_scenario's docstring.
+                    if args.match_side is not None:
+                        scen["side"] = float(args.match_side)
                 else:
                     role = "offensive" if args.scenario_mode == "obfm_offensive" else "defensive"
                     scen = {"mode": "obfm", "role": role,
@@ -1007,7 +1101,8 @@ def main():
                 # values). Spawn geometry is load-bearing here -- E1 traced the bimodality to a
                 # 0.017 deg spawn perturbation, which is unreadable without it.
                 _, reset_info = env.reset(
-                    seed=args.seed + episode, options={"initial_scenario": scen}
+                    seed=args.seed + args.episode_offset + episode,
+                    options={"initial_scenario": scen}
                 )
                 reset_info = reset_info or {}
                 # Fallback for scenario modes single_agent_env.py does not know about
@@ -1025,6 +1120,12 @@ def main():
                         )
                     except Exception:
                         pass
+                # NOTE: altitude / speed / heading are NOT captured here. Measured 2026-09-04:
+                # at reset the state array still reads ALT = 0.0 and VX/VY/VZ = 0.0 -- the FDM
+                # has not filled it yet, and only the position triple that
+                # _get_distance() uses is meaningful. Reading the start condition here silently
+                # logged zeros. It is captured on the FIRST STEP instead (see the episode loop),
+                # 1/60 s in, where the array is real and the geometry has barely moved.
                 terminated = truncated = False
                 total_reward = 0.0
                 info: dict = {}
@@ -1042,6 +1143,12 @@ def main():
                 ep_steps_le2 = 0
                 ep_steps_le1 = 0
                 last_ata_3d = float("nan")   # cone-convention counterpart of info's 2D final_ata
+                # ctrl_source snapshot (F67 diagnosis): vp_probe's counters are cumulative across
+                # the WHOLE run (created once, outside this loop), not per-episode -- snapshot
+                # here and diff at episode end. See VPProbe's own comment for why this lives here
+                # rather than reading it off env.step()'s info dict (it never arrives there).
+                _bt0 = vp_probe.ctrl_bt_steps if vp_probe is not None else 0
+                _tot0 = vp_probe.ctrl_total_steps if vp_probe is not None else 0
                 phased = PhasedScore(substep_s)
                 while not (terminated or truncated):
                     _obs, reward, terminated, truncated, info = env.step(zero_action)
@@ -1049,6 +1156,23 @@ def main():
                     try:
                         _b = env.unwrapped
                         _own, _tgt, _geo = _b._ownship_state, _b._target_state, _b._geo_info
+                        if "initial_altitude_m" not in reset_info:
+                            # First step of the episode: the start condition, measured. One step
+                            # is 1/60 s, so this is the spawn for every practical purpose.
+                            reset_info["initial_altitude_m"] = float(_own[StateIndex.ALT])
+                            reset_info["initial_speed_mps"] = float(np.sqrt(
+                                float(_own[StateIndex.VX]) ** 2
+                                + float(_own[StateIndex.VY]) ** 2
+                                + float(_own[StateIndex.VZ]) ** 2))
+                            # Which side the bandit is on, in our own body frame: rotate the NE
+                            # displacement by ownship heading and read the cross-track term.
+                            # YAW is DEGREES in this schema (controller_providers.py:375 divides
+                            # by RADTODEG) -- the easy thing to get wrong here.
+                            _dn = float(_tgt[StateIndex.N]) - float(_own[StateIndex.N])
+                            _de = float(_tgt[StateIndex.E]) - float(_own[StateIndex.E])
+                            _psi = float(_own[StateIndex.YAW]) / RADTODEG
+                            _right = -_dn * np.sin(_psi) + _de * np.cos(_psi)
+                            reset_info["initial_side"] = 1 if _right >= 0.0 else -1
                         # proj=False throughout: the WEZ convention update_damage() uses.
                         _ata = abs(float(_geo._get_antenna_train_angle(_own, _tgt, False)))
                         _tgt_ata = abs(float(_geo._get_antenna_train_angle(_tgt, _own, False)))
@@ -1098,7 +1222,7 @@ def main():
                 geometry_errors += phased.errors
 
                 writer.writerow({
-                    "episode": episode,
+                    "episode": args.episode_offset + episode,
                     "alpha_deg": alpha_deg,
                     "outcome": outcome,
                     "end_condition": info.get("end_condition", ""),
@@ -1106,12 +1230,24 @@ def main():
                     "target_health": info.get("target_health", ""),
                     "total_reward": round(total_reward, 4),
                     "steps": info.get("ep_step_count", ""),
+                    "ep_bt_frac": (
+                        round((vp_probe.ctrl_bt_steps - _bt0)
+                             / (vp_probe.ctrl_total_steps - _tot0), 4)
+                        if vp_probe is not None and (vp_probe.ctrl_total_steps - _tot0) else ""),
+                    "ep_bt_steps": (vp_probe.ctrl_bt_steps - _bt0) if vp_probe is not None else "",
                     "ep_wez_steps": info.get("ep_wez_steps", ""),
                     "ep_min_distance": round(float(info.get("ep_min_distance", 0.0)), 1),
                     # From reset_info, not info: step() never re-emits the initial geometry.
                     "initial_distance_m": round(
                         float(reset_info.get("initial_distance_m",
                                              info.get("initial_distance_m", 0.0))), 1),
+                    "initial_altitude_m": (
+                        round(float(reset_info["initial_altitude_m"]), 1)
+                        if "initial_altitude_m" in reset_info else ""),
+                    "initial_speed_mps": (
+                        round(float(reset_info["initial_speed_mps"]), 2)
+                        if "initial_speed_mps" in reset_info else ""),
+                    "initial_side": reset_info.get("initial_side", ""),
                     # proj=True (2D azimuth) -- straight from the platform info dict.
                     "final_ata_deg_2d": round(float(info.get("final_ata_deg", 0.0)), 1),
                     "final_aa_deg_2d": round(float(info.get("final_aa_deg", 0.0)), 1),

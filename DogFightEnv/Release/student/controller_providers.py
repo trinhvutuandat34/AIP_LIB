@@ -115,11 +115,140 @@ ENGAGE_LOS_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_LOS_DEG", "45.0"))
 #
 # Both live entry points now take these, so the two cannot drift apart:
 #   throttle  -- F29, adopted on 3 seeds; losses fell in every one (8->5,5,4)
-#   4000/60   -- F39-ENVELOPE-MARGIN; 100% win / 95% earned vs cutoff at N=100, and unlike
-#                4000/45 it costs nothing on the peer rig (match_base 46.7% vs 43.3%)
-SHIP_ENGAGE_RANGE_M = 4000.0
-SHIP_ENGAGE_LOS_DEG = 60.0
+#   6000/120  -- F59 (2026-09-03) + hard deck 1000 m. SUPERSEDES 6000/90, which superseded
+#                4000/60. Measured on BOTH opponents and BOTH geometries:
+#                  vs cutoff  match_base : rule 28.0%, damage 0.394/0.374 (diff +0.020),
+#                                          0 self-crashes -- vs 6000/90's +0.004
+#                  peer H2H   match_base : 21W/18D/11L, damage 0.523/0.365 (diff +0.159)
+#                  peer H2H   tiebreak   : 16W/16D/18L -- a dead heat, 2-episode margin
+#                Clearly better on the geometry played EVERY match three times a BO3; a wash on
+#                the one played only when three rounds are level. corner_hold was tested on top
+#                and is HARMFUL here (rule 24.0%, diff -0.042) even though it HELPED at 6000/90
+#                -- forcing corner speed widens the turn radius a wide envelope cannot afford.
+#
+# WHY 6000/90, AND WHY THE OLD JUSTIFICATION FOR 4000/60 IS VOID.
+#
+# 4000/60 was adopted on F39-ENVELOPE-MARGIN: "100% win / 95% earned vs cutoff at N=100, and
+# unlike 4000/45 it costs nothing on the peer rig (match_base 46.7% vs 43.3%)". **The first half
+# of that is void** -- F54 found the cutoff had been fed an INVERTED VERTICAL AXIS, so every
+# pre-fix cutoff number was scored against an opponent that was blind in the vertical. With the
+# feed corrected (folded into scripts/cutoff_provider.py 2026-09-02), all 15 runnable modes were
+# re-scored at N=50:
+#
+#     envelope     damage dealt   rule%     differential
+#     2500/45          0.000       0.0%       negative
+#     4000/45          0.000       0.0%       negative
+#     2500/90          0.014       0.0%       negative
+#     4000/60          0.122      12.0%        -0.046
+#     6000/90          0.282      28.0%        +0.004   <- only non-negative one in the sweep
+#
+# Every other config -- including every throttle/corner/defensive/2200-35/2000-45 variant --
+# dealt LITERALLY ZERO damage. The gradient is entirely envelope width, both axes must widen
+# together, and it has not turned over: 6000/90 is the widest ever tested and the best.
+#
+# **The second half of F39's justification was re-tested rather than assumed**, because the peer
+# rig -- not the cutoff -- is what originally picked 4000/60. Head to head on match_base, N=50,
+# seed 0, ownship 6000/90 vs target 4000/60, both with throttle: **17W/13D/18L, 11 kills vs 12
+# deaths**. A 1-episode margin where 1 sigma is ~3.4 episodes -- a dead heat. F37's "costs real
+# match_base performance" DOES NOT REPRODUCE.
+#
+# Net: strictly better against one opponent, statistically indistinguishable against the other.
+# The real trade is VARIANCE -- 6000/90 converts draws into decisive results in both directions
+# (against the cutoff 4000/60 times out 43 of 50). For a BO3 where a draw advances nobody,
+# against a field we are the underdog in, that is the correct direction.
+#
+# TO REVERT: set these two back to 4000.0 / 60.0. Nothing else changes -- both live entry points
+# read these constants, which is the F44 single-source-of-truth guarantee.
+SHIP_ENGAGE_RANGE_M = 6000.0
+SHIP_ENGAGE_LOS_DEG = 120.0
 SHIP_THROTTLE_CONTROL = True
+# Hard-deck guard, ON in the shipped config (F59, 2026-09-03). At 120 deg the controller owns
+# the stick even with the bandit behind us, so Gate 0 never climbs: 6/50 self-crashes. With the
+# guard at 1000 m (just above Gate 0's own 914 m trigger) those go to ZERO and damage dealt
+# RISES 0.341 -> 0.394. NOT a global default -- applied to 6000/90 (which never crashed) it
+# measured slightly WORSE, so it is a fix for wide envelopes specifically.
+SHIP_HARD_DECK_M = 1000.0
+# Time-to-impact deck guard (F62). 0.0 = OFF, which is what ships today -- the knob exists so
+# the matrix can measure it. Adopting it is a one-line change here, and both entry points read
+# this constant (the F44 single-source guarantee), so there is nowhere else to remember.
+SHIP_DECK_TTC_S = 0.0
+
+# ---- Model 1 / Model 2 profiles (2026-09-05, F61) ---------------------------------------
+# The finals accept TWO artifacts: Model 1 (main, plays every standard game) and Model 2 (used
+# only after Head-On mode triggers -- both games 1 AND 2 drawn in a knockout BO5). Per
+# COMPETITION_RULES.md 7.1 Model 2 is OPTIONAL; Model 1 is required.
+#
+# A "model" here is nothing but a set of controller constants over the SAME code and the SAME
+# DLLs -- exactly what league.py's CANDIDATES already demonstrates, where each candidate is
+# just a list of CLI flags. There is no second build and no second bundle.
+#
+# WHY A DICT INSTEAD OF EDITING THE SHIP_* CONSTANTS. Those constants are the F44
+# single-source-of-truth that BOTH live entry points read, and every number in the F66 N=150
+# matrix was measured at exactly those values. So profile 1 is BUILT FROM them rather than
+# copying them: there is still exactly one place to change the shipped config, and the two
+# cannot silently drift apart.
+#
+# PROFILE 2 IS DELIBERATELY IDENTICAL TO PROFILE 1 until the head-on separation sweep lands.
+# Shipping an unmeasured Model 2 is strictly worse than shipping Model 1 in both slots, so the
+# safe default is "Model 2 == Model 1, never switch"; adopting a real Model 2 is a one-dict
+# change here and nowhere else.
+MODEL_PROFILES: dict[int, dict[str, object]] = {
+    1: {
+        "engage_range_m": SHIP_ENGAGE_RANGE_M,
+        "engage_los_deg": SHIP_ENGAGE_LOS_DEG,
+        "throttle_control": SHIP_THROTTLE_CONTROL,
+        "hard_deck_m": SHIP_HARD_DECK_M,
+        "deck_ttc_s": SHIP_DECK_TTC_S,
+    },
+}
+# MODEL 2 ADOPTED 2026-09-05 (F74): `prev_6000_90` -- 6000 m, LOS 90 deg, throttle ON, NO hard
+# deck. Measured head-on at the organizer-confirmed 3,048 m (F72), N=60 x 5 archetypes x 4
+# candidates = 1,200 episodes.
+#
+# WHY IT DIFFERS FROM MODEL 1, AND WHY THAT IS NOT A CONTRADICTION. Model 1's 120 deg LOS hands
+# the controller the stick early, which pays in the offset beam merge every standard game starts
+# from -- and is exactly wrong nose-to-nose at 3 km. Head-on, Model 1's config scores 0.44
+# expected BO3 points against the cutoff (11W/10D/39L, 7% BO5) versus 1.18 for this one
+# (19W/17D/24L, 32%). Both configs are correct; they are correct for different geometries, which
+# is the entire reason the rules allow two artifacts.
+#
+# THE HARD DECK WAS TESTED HERE AND REJECTED ON EVIDENCE, not inherited from F59. `6000/90 +
+# deck 1000` (candidate `m2_6000_90_deck`, N=300) cut self-crashes from 11/300 to 3/300 -- the
+# guard demonstrably works -- and STILL scored slightly worse (floor 1.02 vs 1.18, mean 1.62 vs
+# 1.64). So those crashes were not free losses: the aircraft reaching the deck were already
+# losing, and the guard also fires where the controller would have recovered. F59 reached the
+# same verdict in match_base on a premise ("6000/90 never crashed") that is FALSE here -- right
+# answer, wrong reason. Do not re-open this without new evidence.
+#
+# Side symmetry verified on this exact profile: paired forced-mirror run vs cutoff at head-on,
+# 0.3 sigma (8/6/11 vs 9/6/10). F67's 26-point asymmetry is geometry-specific -- it lives in the
+# offset merge, not the symmetric nose-to-nose start.
+MODEL_PROFILES[2] = {
+    "engage_range_m": 6000.0,
+    "engage_los_deg": 90.0,
+    "throttle_control": True,
+    "hard_deck_m": 0.0,     # OFF -- measured better than 1000.0 here; see above
+    "deck_ttc_s": 0.0,
+}
+
+
+def get_model_profile(model=None) -> dict:
+    """Return the controller constants for Model 1 or Model 2, as a fresh dict.
+
+    Resolution order: explicit argument -> DOGFIGHT_MODEL_PROFILE env var -> 1.
+
+    An unrecognised value falls back to Model 1 rather than raising. On match day a typo in an
+    operator's environment must not take the process down, and Model 1 is always a valid thing
+    to fly; a Model 2 that silently becomes Model 1 loses at most the head-on edge, whereas an
+    exception at startup loses the game.
+    """
+    if model is None:
+        model = os.environ.get("DOGFIGHT_MODEL_PROFILE", "1")
+    try:
+        key = int(model)
+    except (TypeError, ValueError):
+        key = 1
+    return dict(MODEL_PROFILES.get(key, MODEL_PROFILES[1]))
 
 # ---- Gains ----------------------------------------------------------------------------
 K_ROLL = 1.0
@@ -278,6 +407,64 @@ THROTTLE_AUTHORITY = float(os.environ.get("DOGFIGHT_VPTRACK_THR_AUTH", "0.7"))
 # WORTH RE-TESTING against an opponent that out-shoots us, where trading 1:1 is a gain rather
 # than a wash -- e.g. the organizers' cutoff model. Enable with DOGFIGHT_VPTRACK_DEFENSIVE=1
 # or --{side}-vptrack-defensive 1.
+# ---- Hard-deck guard (2026-09-03) ------------------------------------------------------
+# THE DEFECT IT ADDRESSES. This controller overrides roll/pitch/rudder for every step inside the
+# engagement envelope, and it has no altitude term at all. Widen the envelope far enough and it
+# therefore keeps flying the aircraft even when the bandit is behind us and the BT wants to climb
+# -- Gate 0 (Task_ClimbToSafeAltitude, trigger 914 m) never gets the stick. Measured cost at
+# N=50 vs the corrected cutoff on match_base:
+#
+#     envelope    own altitude-floor losses    kills    damage dealt/taken
+#     6000/90               0                    11        0.282 / 0.278
+#     6000/120              6                     5        0.341 / 0.318
+#     8000/120              7                     5        0.348 / 0.318
+#
+# The 120 deg arms have the best damage differential this project has ever measured (+0.030) and
+# throw it away by flying into the ground 6-7 times in 50.
+#
+# Deliberately altitude-only, NO sink-rate term: state[VZ] is NED-down locally but the wire sends
+# velocity.z UP-POSITIVE, and LiveVerticalFrameProvider only corrects state[2] unless
+# DOGFIGHT_LIVE_STATE_COMPLETE=1 (Sec 4.1 F46). A guard keyed on VZ would invert on the live path
+# -- exactly the train/deploy divergence this file exists to avoid. state[D] IS corrected live
+# (F53), so altitude alone is the safe signal.
+#
+# Set ABOVE Gate 0's own 914 m trigger so the BT is already climbing when we hand back.
+# DEFAULT OFF: the shipped 6000/90 takes ZERO altitude-floor losses, so this can only cost it.
+# Enable with DOGFIGHT_VPTRACK_HARD_DECK_M or --{side}-vptrack-hard-deck.
+HARD_DECK_M = float(os.environ.get("DOGFIGHT_VPTRACK_HARD_DECK_M", "0.0"))
+
+# TIME-TO-IMPACT DECK GUARD (F62, added 2026-09-04). Hands back when the aircraft is this many
+# seconds from the ground AT ITS CURRENT SINK RATE, regardless of how high it currently is.
+#
+# WHY ALTITUDE ALONE IS THE WRONG QUANTITY. The 8-27 trajectory (F62) crosses this file's 1000 m
+# floor at 236 m/s of sink, inverted at -95 deg bank and -43 deg pitch. That is 3.9 s of life.
+# A wings-level 9 g pull at 331 m/s has a 1,249 m radius and loses ~375 m recovering from -45
+# deg -- survivable -- but from -95 deg of bank the aircraft must ROLL FIRST, and one second of
+# roll costs another 236 m. The margin is gone before the pull starts. An altitude threshold
+# cannot express "how long do I have"; alt / sink_rate can.
+#
+# HOW IT AVOIDS F46's SIGN INVERSION. It does NOT read state[VZ]. state[VZ] is NED-down locally
+# but the wire sends velocity.z UP-POSITIVE, and LiveVerticalFrameProvider only corrects
+# state[2] unless DOGFIGHT_LIVE_STATE_COMPLETE=1 -- a VZ-keyed guard would dive when it should
+# climb on the live path. Sink rate here is FINITE-DIFFERENCED from state[D], the one vertical
+# channel confirmed corrected live (F53). A stale or noisy altitude gives a noisy rate, not an
+# inverted one, which is the failure mode we can afford.
+#
+# WHAT THIS DOES NOT FIX. Handing back earlier gives Gate 0 more room; it does not teach Gate 0
+# to roll wings-level before pulling. The 8-27 trace shows a pull-while-inverted geometry that
+# lives in the BT (Task_ClimbToSafeAltitude aims +5000 m straight up), not in this file, and
+# fixing it needs a DLL/XML change. This buys that recovery TIME, not competence.
+#
+# DEFAULT OFF, like HARD_DECK_M: unmeasured knobs do not ship (F59, F60-corner_hold).
+DECK_TTC_S = float(os.environ.get("DOGFIGHT_VPTRACK_DECK_TTC_S", "0.0"))
+# Sink rates below this are treated as level flight -- differencing altitude across one tick is
+# noisy, and a guard that trips on numerical jitter at 8,000 m would hand back permanently.
+_DECK_MIN_SINK_MPS = 5.0
+# Sanity band for the differenced timestep. Outside it the sample is discarded rather than
+# turned into a wild rate: SIM_TIME is not on the list of channels F53 confirmed corrected on
+# the live path, so it is used defensively here and never trusted blindly.
+_DECK_DT_MIN_S, _DECK_DT_MAX_S = 1e-4, 1.0
+
 DEFENSIVE_BREAK = os.environ.get("DOGFIGHT_VPTRACK_DEFENSIVE", "0") not in ("0", "false", "False")
 THREAT_ATA_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_THREAT_ATA", "8.0"))
 WEZ_MIN_M, WEZ_MAX_M = 152.4, 914.4
@@ -341,6 +528,11 @@ class VPTrackingProvider(BTActionProvider):
         self.pitch_floor = float(kwargs.pop("pitch_floor", PITCH_FLOOR))
         self.roll_taper_deg = float(kwargs.pop("roll_taper_deg", ROLL_TAPER_DEG))
         self.threat_ata_deg = float(kwargs.pop("threat_ata_deg", THREAT_ATA_DEG))
+        self.hard_deck_m = float(kwargs.pop("hard_deck_m", HARD_DECK_M))
+        self.deck_ttc_s = float(kwargs.pop("deck_ttc_s", DECK_TTC_S))
+        # Previous sample for the finite difference. None until the second call.
+        self._deck_prev_alt_m: float | None = None
+        self._deck_prev_t_s: float | None = None
         super().__init__(*args, **kwargs)
         self._los_error_sum = 0.0
         self._prev_range_m: float | None = None
@@ -416,6 +608,31 @@ class VPTrackingProvider(BTActionProvider):
         A None throttle means "keep the BT's" -- the behaviour before throttle control existed.
         """
         fwd, up, right = body_axes(own)
+
+        # HARD DECK. Below this, hand the aircraft back to the BT: Gate 0 self-triggers at 914 m
+        # and is the only thing in the stack that climbs. Returning None (rather than biasing
+        # pitch here) keeps survival in ONE place instead of two that can fight each other.
+        if self.hard_deck_m > 0.0 or self.deck_ttc_s > 0.0:
+            own_alt_m = -float(own[StateIndex.D])
+            if np.isfinite(own_alt_m):
+                if self.hard_deck_m > 0.0 and own_alt_m < self.hard_deck_m:
+                    self._deck_prev_alt_m = own_alt_m
+                    self._deck_prev_t_s = float(own[StateIndex.SIM_TIME])
+                    return None
+                if self.deck_ttc_s > 0.0:
+                    t_s = float(own[StateIndex.SIM_TIME])
+                    prev_alt, prev_t = self._deck_prev_alt_m, self._deck_prev_t_s
+                    self._deck_prev_alt_m, self._deck_prev_t_s = own_alt_m, t_s
+                    if prev_alt is not None and prev_t is not None:
+                        dt = t_s - prev_t
+                        if _DECK_DT_MIN_S <= dt <= _DECK_DT_MAX_S:
+                            sink_mps = (prev_alt - own_alt_m) / dt   # +ve = descending
+                            if sink_mps >= _DECK_MIN_SINK_MPS:
+                                if own_alt_m / sink_mps < self.deck_ttc_s:
+                                    return None
+                else:
+                    self._deck_prev_alt_m = own_alt_m
+                    self._deck_prev_t_s = float(own[StateIndex.SIM_TIME])
 
         # N-E-Up: D is negated, matching the eval replica and GetStick's own frame.
         rel = np.array([

@@ -1,0 +1,54 @@
+# RedBasic — 스파링용 기본 상대 트리 (SDK 제공 예제가 아니라 이 팀이 직접 만든
+# 학습용 test sample). starter.yaml보다는 한 단계 위(방어 분기 있음), 우리
+# 실전 제출 트리(agents/agent.yaml, 20분기)보다는 훨씬 단순한 5분기짜리다 —
+# "왜 이 5개만으로도 그럴듯한 상대가 되는가"를 보여주는 게 목적이다.
+#
+# 설계 원칙(starter_pack/06_lessons_from_the_trenches.md에서 배운 것 그대로):
+#   1) 안전(하드덱)이 최우선 — 죽으면 나머지는 의미 없다.
+#   2) 방어 분기에는 반드시 거리 게이트를 같이 건다(각도 조건만 쓰면 원거리
+#      위협에도 발동해 수세에 고착된다).
+#   3) 요요처럼 국면이 여러 개인 기동은 없다 — 그래서 commit이 필요 없다.
+#      "단순함"의 대가로 과접근 방어(overshoot 처리)가 없다는 뜻이기도 하다
+#      (아래 설명 문서의 "한계" 절 참고).
+#
+# 사용법:
+#   python scripts/run_match.py --scenario headon --seed 1 \
+#     --blue my_agents/my_agent.yaml --red reference/examples/red_basic.yaml --analyze
+#
+# 자세한 설명·BT 그림: starter_pack/09_sample_red_opponent.md
+
+agent_name: RedBasic
+selector:
+
+  # 1. 하드덱 회피 — 최우선. floor_ft를 넉넉히(4,500ft) 잡고, lookahead_s로
+  #    급강하 관성을 미리 반영한다(1,000ft 위반은 즉시 패이므로 늦으면 안 된다).
+  - sequence:
+      - condition: {name: low_altitude, floor_ft: 4500, lookahead_s: 3.0}
+      - action: {pursuit: pure, g_burst: 0.8, aim_above_ft: 4000, name: recover_altitude}
+
+  # 2. 방어 브레이크 — 적이 나를 조준 중(foe_threat) **+ 근접(merged 5,000ft
+  #    이내)**일 때만. 거리 게이트가 없으면 원거리에서도 발동해 늘 도망만 다니는
+  #    트리가 된다 — 이게 이 트리에서 가장 중요한 한 줄이다.
+  - sequence:
+      - condition: {name: foe_threat, aspect_deg: 120}
+      - condition: {name: merged, range_ft: 5000}
+      - action:
+          {pursuit: lag, lag_dist_ft: 3000, aim_above_ft: -1000, g_burst: 0.7,
+           name: break_defense}
+
+  # 3. 사격 — Gun WEZ 전 대역(룰북 §4: 500-3,000ft, ATA<30°)에 들면 조준
+  #    사격하고, track_*로 마지막 각을 추가 G로 조인다.
+  - sequence:
+      - condition: {name: in_gun_envelope, range_ft: 3000, ata_deg: 30}
+      - action:
+          {pursuit: pure, g_burst: 0.5, track_rng_ft: 2500, track_ata_deg: 25,
+           name: gun_track}
+
+  # 4. 기수 재정렬 — 각이 크게 벌어졌으면(50° 이상) lead로 미래점을 노려 빨리
+  #    당긴다.
+  - sequence:
+      - condition: {name: nose_far, ata_deg: 50}
+      - action: {pursuit: lead, lead_time_s: 1.3, name: lead_pull}
+
+  # 5. 기본 추격 — 위 어디에도 안 걸리면 pure로 추격.
+  - action: {pursuit: pure, name: default_chase}

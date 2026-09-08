@@ -44,3 +44,7 @@ DogFightEnv/Release/bt_probe/
 # scripts/setup_peer_bt.py; contains a 2.8 MB DLL copy, and is a measurement rig,
 # not part of any submission.
 DogFightEnv/Release/bt_peer*/
+
+# Packaged submission build output (158 MB, regenerable via scripts/build_exe.py) --
+# not project source.
+DogFightEnv/submission_exe/

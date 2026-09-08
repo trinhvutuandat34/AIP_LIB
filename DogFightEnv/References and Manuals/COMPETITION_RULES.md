@@ -65,17 +65,36 @@ independently confirms the `MyTrainEnv` vs `Release/` split already noted in
 - **Engagement duration: 200 seconds.** Whoever has dealt more damage / has more health when time runs out wins.
 - **Minimum altitude: 1000 ft (≈300 m).** Dropping below this is processed as a crash/loss.
 
-### 5.1 Starting geometry — CONFIRMED from the official scenario slides (2026-08-06)
+### 5.1 Starting geometry — REWRITTEN 2026-09-03 from the 본선 운영 안내
 
-Two slides, "개요: 교전 시나리오 룰(예선)" and "…(본선)", pin the starting setup:
+**Source of record: the organizing committee's 본선 운영 안내 (2026-09-03).** It supersedes the
+kickoff-deck scenario slides ("개요: 교전 시나리오 룰(예선)" / "…(본선)", transcribed 2026-08-06)
+wherever the two disagree. The slides said the exact 시작거리/고도/속력 were "차후 공개"; this is
+that release.
 
-| Stage | Setup |
+| Item | Official value |
 |---|---|
-| **Prelim (예선)** | **1 round (단판)**, aircraft at **2000ft ~ 3000ft** separation, "AlphaDogFight 의 교전 방식을 채용". Exact 시작거리/고도/속력 "차후 공개". |
-| **Finals rounds 1–3** | The **same** 2000–3000 ft setup. |
-| **Finals round 4+** | Tie-break, entered only if 3 rounds are level: **10000ft 이상**, and the only one described as head-on — "서로 마주본 상태에서 정면 교전 수행". |
+| **초기 고도 / 속도** | **RANDOM, every game.** The band is not published. |
+| **시작 상대거리** | Cycles with the **game index**: 1경기 **2,000 ft** → 2경기 **2,500 ft** → 3경기 **3,000 ft** → 4경기 **2,000 ft** → 5경기 **2,500 ft** … |
+| **Blue / Red** | Alternates every game. Game 1: the bracket's **left-hand team is Blue**. |
+| **Head-On 모드** | A **draw-triggered mode in the knockout rounds**, not a round number — see §5.2. |
+| Everything else | "그 외 기본 경기규정은 예선 규정을 동일하게 적용" — the prelim rules (200 s clock, 1000 ft floor, guns-only, the §6.2 phased WEZ) carry over unchanged. |
 
-**The rounds-1–3 setup is a BEAM merge, not a head-on.** Both diagrams draw the two
+**Two things this KILLS.** Both were load-bearing:
+
+1. **There is no "round 4 at 10,000 ft".** The slide-derived row — *"Finals round 4+: tie-break,
+   entered only if 3 rounds are level, 10000ft 이상, 서로 마주본 상태에서 정면 교전 수행"* — is
+   **superseded**. Game 4 starts at **2,000 ft** like game 1. The head-on GEOMETRY survives as
+   Head-On 모드; the 10,000 ft separation and the round number do not.
+2. **Fixed altitude/speed is no longer a defensible assumption.** Every local measurement to date
+   was taken at one spawn preset (4572 m / 200 m/s). With both randomized per game, a
+   single-preset number is a point sample. This compounds F38: real server packets showed
+   altitudes of 0–1067 m (median 604 m), and `Task_ClimbToSafeAltitude` (Gate 0) fires below
+   914 m and starves every tactical gate under it. Local eval has never spawned low enough to see
+   it. **Randomized altitude makes that a recurring match condition, not a one-capture anomaly.**
+
+**What SURVIVES the change:** the separation band is still 2,000–3,000 ft, and the merge geometry
+is still a **BEAM merge, not a head-on**. Both diagrams draw the two
 aircraft pointing in **opposite directions** with the separation arrow **between** them:
 headings antiparallel, LOS running across them, i.e. ~90° off each aircraft's own nose.
 Only the round-4 slide says "정면". This matters because it invalidates two of the three
@@ -87,6 +106,37 @@ scenarios this project had been evaluating against:
 Modelled in `student/match_scenario_wrapper.py` as `match_base` / `match_tiebreak`; prefer
 those for any result meant to predict match performance. `los_deg` is left a parameter because
 the slide art also admits a 180° (tail-to-tail) reading — measured, not assumed.
+
+> **Caveat added 2026-09-03.** `match_base` samples separation **uniformly** over 610–914 m,
+> whereas the real thing is the three-value cycle above; and `match_tiebreak` keeps its 3,048 m
+> separation, which is now an **assumption** (see §5.2), not a citation. `MATCH_SEPARATION_SET_M`
+> in that module holds the real set. The uniform sampling was left in place deliberately so the
+> existing F56/F58/F59 numbers stay comparable — re-measure against the discrete set as its own
+> pass rather than changing the distribution underneath them.
+
+### 5.2 Head-On 모드 — draw-triggered, geometry known, distance NOT known
+
+From the same announcement (§5, 무승부 및 Head-On 모드):
+
+- Applies in the **결선라운드** (knockout: 8강/4강/결승, all BO5). The group stage is BO3 with
+  draws scored at 1 point, and the announcement does not extend the mode to it — **asked, not
+  confirmed**.
+- Trigger: **if games 1 AND 2 are both draws**, every subsequent game of that match is played in
+  Head-On mode.
+- A team may **optionally switch to a separately submitted 헤드온 모델** at that point. The switch
+  is **one-way for the rest of that match**; the next match starts from the main model again.
+- If everything is still level at the end: **one 연장전 game**, then a **coin toss**.
+
+**What is not published: the separation and the exact geometry of Head-On mode.** "정면 교전"
+gives us LOS ≈ 0° and that is all. The project's `match_tiebreak` proxy uses 3,048 m purely
+because that was the old round-4 number — **if Head-On mode instead reuses the 2,000/2,500/3,000
+ft cycle, every F58/F59 head-on measurement was taken at 3.3–5× the real range and does not
+transfer.** Sweep it via `DOGFIGHT_HEADON_SEPARATION_M` until the organizers answer.
+
+**Strategic consequence.** A draw is no longer merely a lost point — in the knockout it is the
+event that *hands the opponent the option to change models mid-match*. Our own peer league runs
+draw-heavy (F59: 18 draws in 50). Reducing the draw rate is now worth points in the group stage
+**and** denies that option in the knockout.
 
 **Cutoff (§3) — updated from the same slide.** Too many teams applied (`예상보다 너무 많은
 참여팀이 지원`), and the mechanism is still under discussion between two proposals:
@@ -215,16 +265,70 @@ The formula *structure* matches exactly, but the exact health-depletion rate / k
 competition constants the deck says are "차후 공개 (released later)" — worth reconfirming when they
 publish them.
 
-## 7. Match scenario format
+## 7. Match scenario format — UPDATED 2026-09-03 (본선 운영 안내)
 
-| Stage | Starting distance | Rounds | Tie-break |
+Finals: **2026-09-17**, 16 teams (12 direct + 4 wildcard), 4 groups of 4.
+
+| Stage | Format | Starting distance | Advancement |
 |---|---|---|---|
-| Prelims | 2000–3000 ft | 1 round, single match | — (exact start params "to be released later" per the deck) |
-| Finals | 2000–3000 ft | Rounds 1–3, AlphaDogFight-style | If still tied/undecided after 3 rounds: a winner-take-all **head-on pass** starting at **10,000+ ft**, face to face |
+| Prelims | 1 round, single match | 2000–3000 ft | — |
+| **조별라운드** | 4 groups × 4 teams, **round robin, BO3** | per-game cycle 2,000 / 2,500 / 3,000 ft | **top 2 of each group** (8 teams) |
+| **결선라운드** | **8강 / 4강 / 결승, BO5, single elimination** | same cycle, extended: game 4 = 2,000 ft, game 5 = 2,500 ft | winner advances |
 
-This head-on tie-break is almost certainly why the training curriculum's α-sweep
-(`two_circle_headon_a000`…`a180`, see [PROJECT_ANALYSIS.md](PROJECT_ANALYSIS.md) §4) exists
-as a dedicated curriculum block — it's training specifically for this scenario.
+**Group scoring:** 승 3 / 무 1 / 패 0. Standings tiebreak order: **승점 → 세트승수 → 세트득실차
+→ 승자승 → 코인토스**. Note the second and third keys are *set*-level — a 2:0 sweep and a 2:1 grind
+are worth the same points but not the same set differential, and drawn sets bleed it.
+
+**8강 bracket:** M1 = A1–D2 · M2 = B1–C2 · M3 = C1–B2 · M4 = D1–A2. 4강 = M1/M2 winners and
+M3/M4 winners.
+
+**Our group (A조):** GoGoSSung (숭실대) · Fight's on! (연세대) · **진짜보라매 (공사, us)** ·
+HAnnamAir (한남대). GoGoSSung already has a dossier in
+[OPPONENTS_ANALYSIS.md](OPPONENTS_ANALYSIS.md) — it is a group opponent, not a hypothetical.
+
+**Tie-break:** there is no separate long-range tie-break round. Draws are resolved by Head-On 모드
+(§5.2), then 연장전 1경기, then a coin toss. The training curriculum's α-sweep
+(`two_circle_headon_a000`…`a180`, see [PROJECT_ANALYSIS.md](PROJECT_ANALYSIS.md) §4) was built for
+the old 10,000 ft head-on round; it is the right *family* for Head-On mode — **and, since the
+organizers confirmed Head-On separation as 3,048 m / 10,000 ft on 2026-09-05, the right
+*separation* too.** (This sentence previously ended "…but its separations were chosen for a
+scenario that no longer exists." That is now wrong: the scenario changed, the distance did not.
+See §4.1 F72 and `student/match_scenario_wrapper.py` for the provenance.)
+
+### 7.1 Submission — CHANGED 2026-09-03
+
+| | Prelim (what we did) | Finals (required) |
+|---|---|---|
+| Artifact | ZIP of Python sources + DLLs, launched as `python student\my_submission.py` (`scripts/package_release.py`) | **실행파일 (.exe)** |
+| Environment | `aip` conda env on the operations PC | must run **without installing any library**, immediately, on the same operations PC |
+| Count | one | **main model (required) + head-on model (optional)** |
+| Deadline | — | **2026-09-14 (Mon) 12:00 noon.** No modification, replacement, or resubmission afterwards. |
+
+**The full submission spec arrived 2026-09-05 (§4.1 F75). It answers both open packaging
+questions, and one answer reverses our plan — read this before building anything.**
+
+| Item | Requirement |
+|---|---|
+| Archives | **two**, one per model: `팀명_APTGC2026_main.zip`, `팀명_APTGC2026_headon.zip` |
+| ZIP contents | **exactly two files at the archive root, no subfolders**: `팀명.exe` (headon: `팀명_headon.exe`) + optional `config.json` |
+| Explicitly banned | README, guide docs, source code, **라이브러리 폴더** — i.e. anything else at all |
+| Exe filename | English if the team name is Korean — **this clause governs the FILENAME ONLY** |
+| Displayed team name | **exactly** the registered team name; 임의의 식별자 / 테스트용 이름 / 축약형 forbidden. Head-on appends **`_HeadOn`** (suffix — `HeadOn_X` is explicitly rejected) |
+| Network | from `config.json`, **fixed**: IP `127.0.0.1`, port `9999` — the server is on **loopback** |
+| Packaging | single `.exe`; no separate install, no extra dependency install |
+| Verification PC | **same spec as the prelim** (⇒ the debug CRTs are present — F73/F75) |
+| Deadline | **2026-09-14 (Mon) 12:00 noon**, no resubmission |
+| 개인정보동의서 | separate `팀명_개인정보수집및활용동의서.zip`, one signed PDF/HWP per member |
+
+**Consequence: a PyInstaller `onedir` bundle is NON-COMPLIANT.** The three protected DLLs,
+`aircraft/`, `engine/` and the Rule XMLs must all be embedded **inside** the executable —
+`onefile` is mandatory. Our earlier reasoning (that §8's no-rename/no-move rule is easier to
+audit when the assets sit visible beside the exe) is moot: the organizers have ruled.
+
+**Two live defects this exposes in our code**, both on the submission path:
+`student/my_submission.py:115` ships `TEAM_NAME = "real_eagle"` (our registered team is
+**진짜보라매** — see F75, this is a DQ risk), and `:131` defaults `SERVER_IP` to
+`221.151.77.208` rather than `127.0.0.1`. **No `config.json` reader exists anywhere.**
 
 ## 8. Hard constraints / disqualification risks
 

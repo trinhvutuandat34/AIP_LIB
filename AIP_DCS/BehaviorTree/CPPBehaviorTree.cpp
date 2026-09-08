@@ -124,6 +124,7 @@ void UCPPBehaviorTree::init()
 	Factory.registerNodeType<Action::Task_BarrelRollAttack>("Task_BarrelRollAttack");
 	Factory.registerNodeType<Action::Task_LagDisplacementRoll>("Task_LagDisplacementRoll");
 	Factory.registerNodeType<Action::Task_SingleSideOffset>("Task_SingleSideOffset");
+	Factory.registerNodeType<Action::Task_DefensiveSpiral>("Task_DefensiveSpiral");
 
 	//파일로 트리 구조 정의
 	//자신의 팀 이름으로	xml 파일 만들어서 입력해주세요!!!!!! (Rule_forTraining.xml은 예시입니다)

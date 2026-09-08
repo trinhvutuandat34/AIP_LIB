@@ -25,6 +25,7 @@
 
 import ctypes as ct
 import os
+import time
 import math
 import struct
 from xml.etree.ElementTree import parse
@@ -136,7 +137,27 @@ class Fighter(object):
             phi.text = str(Init_Roll)
             gamma.text = str(Init_Pitch)#2022.02.08
             vt.text = str(Init_Speed) #v.0.7
-            doc.write(self._initPath)
+            # RETRY THE WRITE (2026-09-03). The FileLock above serialises OUR writes across
+            # processes, but it does not cover the handle the native JSBSim DLL holds on this
+            # same file: Init() is called inside the lock, and if the DLL keeps the path open
+            # after it returns, the NEXT process to take the lock can collide with that handle.
+            # Observed once in ~27 concurrent job-runs -- `sweep_vs_cutoff.py --jobs 6` lost the
+            # env_r8000_l90 arm at episode 7/50 with
+            #     OSError: [Errno 22] Invalid argument: '.../aircraft/f16/f16_init.xml'
+            # which silently drops a whole arm from a sweep. Deliberately a bounded retry rather
+            # than an atomic temp+replace: replace swaps file identity, and the DLL resolves this
+            # path itself, so keeping the same inode is the conservative choice.
+            _last_err = None
+            for _attempt in range(5):
+                try:
+                    doc.write(self._initPath)
+                    _last_err = None
+                    break
+                except OSError as _e:
+                    _last_err = _e
+                    time.sleep(0.05 * (_attempt + 1))
+            if _last_err is not None:
+                raise _last_err
             self.fighterID = JSBSim.Init(self._spaceID, self._fighterType, self._forceSide, self._delta)
             # print("[JSBSimWrapper] figherID = ", self.fighterID)
 

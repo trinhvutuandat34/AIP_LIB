@@ -68,8 +68,14 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\PropertySheets\Essential_release.props" />
-    <Import Project="..\..\PropertySheets\LDFP_Model.props" />
+    <!-- FIXED 2026-09-05: was "..\..\PropertySheets\..." (two levels up, resolving outside this
+         checkout entirely; Debug|x64 below has always used the correct "..\PropertySheets\"),
+         plus an LDFP_Model.props import pulling in RTVBase.lib, RTVSimulationLibLDFP.lib and
+         ModelBaseLDFP.lib, none of which anything in this DLL's actual code (BehaviorTree,
+         Geometry, LibMain.cpp) references; linking failed with LNK1181 (RTVBase.lib not found)
+         the first time this project was built directly from this checkout. Matched to
+         Debug|x64's pattern, which built and linked cleanly. -->
+    <Import Project="..\PropertySheets\Essential_release.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -150,6 +156,18 @@
       <PreprocessorDefinitions>NDEBUG;AIPILOTV1_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <!-- OVERRIDE 2026-09-05: Essential_release.props sets MultiThreadedDLL (dynamic CRT), which
+           depends on VCRUNTIME140.dll/MSVCP140.dll/the api-ms-win-crt-*.dll forwarder set being
+           present on whatever machine loads this DLL. On THIS dev box those forwarder DLLs are
+           missing from System32 even though the CRT they forward to (ucrtbase.dll) is present,
+           and the resulting DLL failed ctypes.LoadLibrary with
+           "Could not find module 'AIP_BASE.dll' (or one of its dependencies)". Statically
+           linking the runtime removes every one of those external dependencies (confirmed via
+           dumpbin /DEPENDENTS afterward showing KERNEL32.dll only), which is also the correct
+           choice on principle for a binary that must run on an arbitrary competition PC with no
+           library installs (the same requirement COMPETITION_RULES.md states for the student
+           submission itself). -->
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -244,6 +262,7 @@
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_BarrelRollAttack.h" />
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_ClimbToSafeAltitude.h" />
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_EnergyTactics.h" />
+    <ClInclude Include="BehaviorTree\BT_Content\Task\Task_DefensiveSpiral.h" />
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_Evade.h" />
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_FlatScissors.h" />
     <ClInclude Include="BehaviorTree\BT_Content\Task\Task_HighYoYoUp.h" />
@@ -309,6 +328,7 @@
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_BarrelRollAttack.cpp" />
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_ClimbToSafeAltitude.cpp" />
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_EnergyTactics.cpp" />
+    <ClCompile Include="BehaviorTree\BT_Content\Task\Task_DefensiveSpiral.cpp" />
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_Evade.cpp" />
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_FlatScissors.cpp" />
     <ClCompile Include="BehaviorTree\BT_Content\Task\Task_HighYoYoUp.cpp" />

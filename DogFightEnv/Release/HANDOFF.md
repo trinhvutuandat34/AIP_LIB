@@ -1,6 +1,6 @@
 # HANDOFF -- real_eagle (AIP TGC 2026)
 
-Last updated: 2026-08-13. Working dir for every command below: `DogFightEnv/Release/`
+Last updated: 2026-09-02 (was 2026-08-13). Working dir for every command below: `DogFightEnv/Release/`
 (PowerShell, `aip` conda env). This file is the operational critical path; the "why"
 lives in `References and Manuals/` (COMPETITION_PLAN.md, PROJECT_ANALYSIS.md, etc.).
 
@@ -41,11 +41,11 @@ number in these docs is an upper bound -- our own BT never shoots.
 
 | Thing | State |
 |---|---|
-| `student/my_submission.py` | `MODE="vptrack"`, `TEAM_NAME="real_eagle"`. Loads **no RL bundle**. G-limited at 10 G. |
+| `student/my_submission.py` | `MODE="vptrack"`, `TEAM_NAME="real_eagle"`. Loads **no RL bundle**. G-limited at 10 G. **Envelope 6000 m / 90° + throttle** (F56, 2026-09-03; was 4000/60, whose justification F54 voided). Single source of truth: `SHIP_ENGAGE_*` in `student/controller_providers.py`. |
 | `BUNDLE_DIR` | **`None`** (set 2026-08-11). Was a placeholder path to `v4/stage_3`, a **100 %-crash** policy that the health gate passes because it is finite-but-degenerate. Selecting any `rl`/`hybrid*` mode now **raises** instead of silently arming it. Replace with a validated bundle path when one exists. |
 | `SERVER_IP` | `221.151.77.208` -- **not a real value to chase down.** Confirmed 2026-08-13: the organizers have not released a competition address yet. This, `startup_command.txt`'s `10.185.16.247`, and a third value found this session (`172.30.1.49`) are all team members' own personal machines used for ad-hoc practice, not candidates for "which is correct." Wait for the official announcement; do not guess. **Port is also unconfirmed** -- the only two real connectivity tests on record (`startup_command.txt` git history) both used `6666`, never the `9999` hardcoded here, and `COMPETITION_RULES.md` states no port at all. Confirm IP and port together when the real one lands. Two network incidents = DQ. |
-| `AIP_BASE.dll` / `AIP_BASE_target.dll` | Built 2026-08-06 15:08, newer than every `AIP_DCS` source (newest `Controller_CY.cpp`, 14:26). **No rebuild owed.** |
-| `Rule_forTraining.xml` / `Rule_real_eagle.xml` | **Byte-identical** (MD5 `5C5979DB...`). Both carry `Gate2_BeamMerge`. `my_submission.py` loads `Rule_forTraining.xml`. |
+| `AIP_BASE.dll` / `AIP_BASE_target.dll` | Built 2026-08-06 15:08. **STALE as of 2026-09-02 -- four `AIP_DCS` commits have landed since** (`fc120d9` GateTrace.h, `3764328` F25, `c0f3eaf` ShorterTurnDirection, `e8b86e4` SaveTextData/GetStick). Nothing is broken: the shipped binary simply does not contain them, and F25's actual fix was XML-only so the tree is correct regardless. **But do not rebuild casually** -- `ShorterTurnDirection` alone changes the aim point in `Task_Evade`/`Task_Notch`/`Task_NoseToNoseTurn`/`Task_SingleSideOffset`, and none of the four has been scored through the peer rig. A rebuild is its own task with its own N>=30 measurement. |
+| `Rule_forTraining.xml` / `Rule_real_eagle.xml` | **Byte-identical** (MD5 `F49BACF8C91DD06A6AE65143182EA1B2`, verified 2026-09-02 and matching `MATCH_DAY_RUNBOOK.md`; the previously listed `5C5979DB...` predates the F25 XML edit). Both carry `Gate2_BeamMerge`. `my_submission.py` loads `Rule_forTraining.xml`. |
 | G limiter | Active on **every** path -- eval, `run_local_dogfight`, live submission, and RL training (`GLimitWrapper`). |
 | `v7` | **STOPPED 2026-08-11 14:33** at stage 2 / 313 iterations. Its stage results are void (F6). Superseded by v8. |
 | `v8` | **RETIRED 2026-08-13, do not resume.** Killed by an unplanned machine reboot (08:24:38, five minutes after its last checkpoint write) at stage 15/16. All 14 completed stages advanced on `max_iterations_reached`, never on their own gate, and all 31 real episodes measured in stage 15 ended in a crash. Treat as pipeline validation, not a policy. **Eight campaigns, still no usable RL bundle.** |
@@ -165,19 +165,28 @@ live file and silently restores symmetry.
 --------------------------------------------------------------------------------
 ## Regression guards -- run these before committing compute or submitting
 
-There is no CI and no test suite for the core package, so these are the tripwires. All three exit
+There is no CI and no test suite for the core package, so these are the tripwires. All four exit
 0 on success and name the register row each check protects.
 
 ```powershell
 python scripts\verify_report_fixes.py    # ~seconds, no sim: gate/telemetry/curriculum/v8 config
 python scripts\verify_match_spawn.py     # ~1 min, real envs: match_base stages spawn correctly
 python scripts\verify_resilience.py      # ~seconds: DQ guards under injected faults
+python scripts\spawn_preset_guard.py     # instant: aircraft/f16/f16_init.xml not drifted (F57)
 ```
 
 Run the first two after touching `train_curriculum.py`, `student/my_curriculum.py` or an
 `experiments/*.yaml`; the third before any submission. They exist because every defect they cover
 **failed silently** -- a stage advancing on stale metrics, a metric reading `nan`, a record that
 never saved, a wrapper that was never wired in. None of those show up in a training log.
+
+**The fourth one is different: it is expected to FAIL after any eval, and that is not a bug.**
+`JSBSimWrapper.Fighter` hands initial conditions to the native DLL *by rewriting*
+`aircraft/f16/f16_init.xml`, so every episode leaves its own spawn there (F57). Run
+`python scripts\spawn_preset_guard.py --restore` before you commit or package -- it rewrites the
+file to the confirmed competition preset. `scripts\package_release.py` now runs the same check
+and refuses to build a package on a drifted preset, so the worst case is a refused package rather
+than a shipped wrong spawn.
 
 ## Local verification
 
@@ -260,8 +269,12 @@ control-law ceiling: it was an aircraft not manoeuvring. Post-fix, BT pitch satu
   `experiments/*.yaml`, or the entry scripts (`train_*.py` / `run_*.py`).
 - Never rename/move/delete runtime assets (`AIP_BASE*.dll`, `JSBSimAIPLib.dll`, Rule XMLs,
   `aircraft/`, `engine/`, `scripts/*_cruise.xml`) -- content edits only.
-- Preserve `src/dogfight/unreal/protocol.py`'s wire format. Keep `--action-repeat 6`
-  (the 1/6 s compute-budget rule) matched to training `step_ratio=6`.
+- Preserve `src/dogfight/unreal/protocol.py`'s wire format. **`ACTION_REPEAT = 1` is what
+  ships** (F49, after the 2026-08-20 rules re-read): the 60 Hz answer-rate and the 0.1667 s
+  compute-latency cap are two separate rules, and neither requires action-repeat 6.
+  `ProviderCommandPolicy.compute_command` already emits a CMD every tick. Keep
+  `--action-repeat 6` ONLY for a trained RL/hybrid mode, to match its own training
+  `step_ratio=6`; `vptrack` was never trained and ships at 1. Do not "restore" 6.
 - **"It is in the tree" is not "it is wired in."** Five things have shipped inert:
   `DECO_BFMCheck`, `_recycle_native_bts()` for hybrid, the G limiter, `MatchScenarioWrapper`
   (F8) -- and, for the entire project until 2026-08-13, **the whole behaviour tree below

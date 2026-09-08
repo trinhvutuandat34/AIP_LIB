@@ -82,6 +82,7 @@ from dogfight.ai.rllib_utils import build_algorithm_from_bundle
 from dogfight.ai.student_hooks import load_observation_hook
 from dogfight.unreal import AIType, ProviderCommandPolicy, UnrealAIPilotUDPClient
 
+from student import runtime_paths
 from student.inference_providers import (
     RemappedRLProvider,
     StudentHybridProvider,
@@ -93,10 +94,12 @@ from student.inference_providers import (
 from student.controller_providers import (
     SHIP_ENGAGE_LOS_DEG,
     SHIP_ENGAGE_RANGE_M,
+    SHIP_HARD_DECK_M,
     SHIP_THROTTLE_CONTROL,
     EnvelopeGatedHybridProvider,
     GLimitedProvider,
     VPTrackingProvider,
+    get_model_profile,
 )
 from student.g_limiter import G_LIMIT
 from student.live_frame_fix import COMPLETE_LIVE_STATE, LiveVerticalFrameProvider
@@ -111,7 +114,30 @@ from student.submission_resilience import (
 # TODO: 아래 설정을 팀에 맞게 수정하세요.
 # =============================================================================
 
-TEAM_NAME = os.environ.get("DOGFIGHT_TEAM_NAME", "real_eagle")
+# 본선 제출 규정 5항(2026-09-05, §4.1 F75): 교전 서버에 표시되는 팀명은 **실제 등록 팀명과
+# 반드시 동일**해야 한다. 임의의 식별자·테스트용 이름·축약형은 금지이며, 위반 시 참가 제한
+# 사유가 될 수 있다. 2026-09-05까지 이 값은 `real_eagle` 이었는데, 그것은 규정이 금지하는
+# "임의의 영문 식별자"에 정확히 해당한다. 등록 팀명은 **진짜보라매**다.
+#
+# 와이어 안전성 확인함(2026-09-05): `unreal/protocol.py:109` 는 UTF-8 인코딩 후 **29바이트로
+# 자르고** 30바이트로 널 패딩한다. 진짜보라매 = 15바이트, 진짜보라매_HeadOn = 22바이트 -- 둘 다
+# 여유 있게 들어가고 왕복 디코딩도 정상. (주의: 자르기가 문자 단위가 아니라 **바이트 단위**라,
+# 29바이트를 넘는 이름은 한글 한 글자를 중간에서 쪼개 깨진 UTF-8을 만든다. 지금은 해당 없음.)
+#
+# 헤드온 모델은 뒤에 `_HeadOn` 을 **접미사로** 붙인다 -- 규정이 `HeadOn_팀명` 형태를 명시적으로
+# 거부한다. 실행파일 '파일명'만 영문이어야 하고, '표시 팀명'은 한글 그대로다(별개 항목).
+TEAM_NAME = os.environ.get("DOGFIGHT_TEAM_NAME", "진짜보라매")
+
+# 파일명 전용 영문 표기. **TEAM_NAME 과 절대 같은 값이 아니며, 서로 바꿔 쓰면 안 된다.**
+# 본선 규정은 두 개의 서로 다른 항목을 정의한다:
+#   - 교전 서버 '표시' 팀명  -> TEAM_NAME, 등록 팀명 그대로 (한글 유지) = 진짜보라매
+#   - 실행파일 '파일명'      -> SUBMISSION_NAME, 팀명이 한글이면 영문으로 = JinjjaBoramae
+# 팀 확정(2026-09-05): 음역 `JinjjaBoramae`. 번역어(RealEagle)나 기존 `real_eagle` 대신
+# 음역을 고른 이유는, 운영측이 등록 팀명 목록과 대조할 때 진짜보라매로 역추적되는 표기여야
+# 하기 때문이다. 아래 4개 파일명이 전부 이 값에서 나온다:
+#   JinjjaBoramae.exe                      / JinjjaBoramae_headon.exe
+#   JinjjaBoramae_APTGC2026_main.zip       / JinjjaBoramae_APTGC2026_headon.zip
+SUBMISSION_NAME = os.environ.get("DOGFIGHT_SUBMISSION_NAME", "JinjjaBoramae")
 
 # ⚑ 제출본은 월요일에 잠기고 재제출이 없다(4.1 F39-ONE-SHOT-SUBMISSION). 그런데 공식 서버
 # 주소는 아직 공개되지 않았고(4.1 F27), 기록에 남은 후보 IP는 전부 팀원 개인 장비다. 즉
@@ -127,8 +153,17 @@ TEAM_NAME = os.environ.get("DOGFIGHT_TEAM_NAME", "real_eagle")
 # 테스트 2건은 모두 6666을 썼다(4.1 F27).
 # 주소가 틀리면 조용히 실패한다 -- 소켓은 열리고 하트비트도 나가지만 프레임이 0장이다.
 # 2026-08-21 실측(4.1 F40-SILENCE-BLIND). 이제 최소한 경고는 뜬다.
-SERVER_IP = os.environ.get("DOGFIGHT_SERVER_IP", "221.151.77.208")
-SERVER_PORT = int(os.environ.get("DOGFIGHT_SERVER_PORT", "9999"))
+# 본선 확정값(2026-09-05, §4.1 F75): 접속 정보는 `config.json` 에서 오고 **고정**이다 --
+# IP `127.0.0.1`, 포트 `9999`. 즉 교전 서버는 **로컬 루프백**에 있다. 이는
+# `scripts/loopback_live_dryrun.py` 독스트링이 이미 추론해 둔 내용과 일치한다(컷오프 바이너리
+# 안의 유일한 IPv4 문자열이 127.0.0.1 이라는 근거). 2026-09-05까지 기본값은 팀원 개인 장비
+# 주소인 `221.151.77.208` 이었다.
+# 2026-09-08: 이제 `student/runtime_paths.py` 가 실제로 `config.json` 을 읽는다. 규정이 요구하는
+# 파일인데 이 저장소 어디에도 읽는 코드가 없었다(COMPETITION_RULES.md:331 이 그 사실을 명시).
+# 해석 순서는 환경변수 -> 실행파일 옆 config.json -> 127.0.0.1:9999 이며, config.json 이 깨져
+# 있어도 예외를 던지지 않고 기본값으로 내려간다. 값은 고정이므로 파싱 오류로 경기를 잃을 이유가
+# 없다. `SERVER_CONFIG_SOURCE` 는 어느 단계가 답했는지 시작 배너에 찍기 위한 것이다.
+SERVER_IP, SERVER_PORT, SERVER_CONFIG_SOURCE = runtime_paths.load_network_config()
 
 # 사용할 백엔드 모드 선택: "rl" | "bt" | "vptrack" | "hybrid" | "hybrid_vptrack" | "hybrid_gated"
 #
@@ -196,7 +231,16 @@ OBSERVATION_MODULE = "student.my_observation_v2"   # 학습 시 사용한 custom
 # BT 모드 설정
 # - 기본 배포 Rule은 Rule_forTraining.xml입니다 (2026-07-15 20종 기동 전부 재구성+재배포됨).
 # - 팀별 BT DLL/XML을 제출하는 경우 파일을 Release 루트에 두고 아래 이름을 바꾸세요.
-BT_DLL = "AIP_BASE.dll"
+# 2026-09-08: 이름이 아니라 **절대경로**로 넘긴다. `native_bt.py:99` 는 `__file__` 에서 네 단계
+# 위로 올라가 DLL 디렉터리를 잡는데, onefile 로 얼렸을 때 그 경로는 번들 밖(Temp)으로 나가
+# `FileNotFoundError` 로 죽는다. `src/dogfight/**` 는 수정 금지 경계라 그쪽을 고칠 수 없지만,
+# `AIPilot.__init__` 이 쓰는 `os.path.join(lib_path, filename)` 은 filename 이 절대경로면
+# lib_path 를 **버린다**. 그래서 진입점에서 절대경로를 주는 것만으로 고쳐진다.
+# 소스 실행 시 값은 종전과 동일한 파일을 가리키므로 동작 변화 없음.
+BT_DLL = runtime_paths.asset("AIP_BASE.dll")
+# Rule XML 은 DLL 이 **자기 자신이 있는 디렉터리**에서 직접 읽는다(CPPBehaviorTree.cpp:142,
+# GetThisModuleDirectory). 그래서 파이썬이 경로를 넘기는 게 아니라, 번들 레이아웃이
+# DLL 과 같은 디렉터리에 이 파일을 놓아야 한다 -- scripts/build_exe.py 가 그렇게 배치한다.
 BT_RULE_XML = "Rule_forTraining.xml"  # BT 튜닝은 이 파일에서 직접 진행
 
 # Hybrid 모드 설정 (MODE="hybrid" 일 때만 사용)
@@ -346,12 +390,25 @@ def _build_action_provider_raw():
         # 있었기 때문에 run_unreal_inference.py --mode vptrack은 클래스 기본값
         # (2500m/45deg/throttle off = 컷오프 13.3%)으로 조용히 날고 있었다. 이제 두
         # 진입점이 같은 상수를 읽으므로 서로 어긋날 수 없다.
+        # 2026-09-08: SHIP_* 를 직접 읽던 것을 get_model_profile() 경유로 바꿨다. 값은 동일하다
+        # -- MODEL_PROFILES[1] 자체가 SHIP_* 로 만들어지므로 F44 의 단일 소스 보장은 그대로다.
+        # 바뀐 것은 헤드온 실행파일이 프로필 2 를 고를 수 있게 됐다는 점뿐이다. 그전에는 이
+        # 진입점에 Model 1/2 스위치가 아예 없어서, 헤드온 모델을 제출해도 Model 1 을 두 번
+        # 내는 것과 같았다. 알 수 없는 값은 예외 대신 프로필 1 로 떨어진다(get_model_profile
+        # 독스트링): 경기 당일 오타가 프로세스를 죽이면 안 된다.
+        profile = get_model_profile()
         print(f"[{TEAM_NAME}] VP 트래킹 백엔드 사용 (RL 없음): {BT_DLL} "
-              f"(throttle_control={SHIP_THROTTLE_CONTROL}, "
-              f"engage={SHIP_ENGAGE_RANGE_M:.0f}m/{SHIP_ENGAGE_LOS_DEG:.0f}deg)")
+              f"(model={os.environ.get('DOGFIGHT_MODEL_PROFILE', '1')}, "
+              f"throttle_control={profile['throttle_control']}, "
+              f"engage={profile['engage_range_m']:.0f}m/{profile['engage_los_deg']:.0f}deg, "
+              f"hard_deck={profile['hard_deck_m']:.0f}m, "
+              f"server={SERVER_IP}:{SERVER_PORT} [{SERVER_CONFIG_SOURCE}])")
         return VPTrackingProvider(
-            dll_name=BT_DLL, throttle_control=SHIP_THROTTLE_CONTROL,
-            engage_range_m=SHIP_ENGAGE_RANGE_M, engage_los_deg=SHIP_ENGAGE_LOS_DEG,
+            dll_name=BT_DLL, throttle_control=profile["throttle_control"],
+            engage_range_m=profile["engage_range_m"],
+            engage_los_deg=profile["engage_los_deg"],
+            hard_deck_m=profile["hard_deck_m"],
+            deck_ttc_s=profile["deck_ttc_s"],
         )
 
     # BUNDLE_DIR 가드 (2026-08-11): 여기 도달했다는 것은 MODE가 rl/hybrid* 계열이라는

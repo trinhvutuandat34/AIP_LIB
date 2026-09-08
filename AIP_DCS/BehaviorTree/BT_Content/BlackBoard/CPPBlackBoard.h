@@ -64,6 +64,7 @@ enum ManeuverID
 	Maneuver_SingleSideOffset,
 	Maneuver_AnglesTactics,
 	Maneuver_EnergyTactics,
+	Maneuver_DefensiveSpiral,
 	// Sentinel -- sizes ManeuverCooldownUntil[] below. Keep LAST; any new maneuver goes
 	// immediately above this line, never after it.
 	Maneuver_Count
@@ -173,6 +174,30 @@ public:
 	// BT tactics expansion (additive) -- see the ManeuverID comment above.
 	ManeuverID ActiveManeuverID;							//현재 진행 중인 다단계 기동 (BB-timestamp 패턴, RUNNING 미사용)
 	double ActiveManeuverStartTime;						//ActiveManeuverID가 (재)설정된 시점의 RunningTime
+
+	// LATCHED TURN DIRECTION (2026-09-08). Captured by BTFunc::ClaimManeuverPhase on every tick
+	// where it returns 0.0 -- i.e. on a fresh claim and on a stale reset -- and held constant for
+	// the life of that claim. Read it with BTFunc::LatchedTurnDirection().
+	//
+	// WHY IT HAD TO EXIST. BTFunc::ShorterTurnDirection() is a pure function of the current
+	// geometry: dir = MyUpVector x toTarget, sign-canonicalised by dir.dot(MyForwardVector) < 0.
+	// By the scalar triple product that reduces to the sign of (toTarget . MyRightVector), so the
+	// returned direction FLIPS the instant the bandit crosses the ownship's own vertical
+	// longitudinal plane. There is no deadband, no hysteresis and no memory of what was commanded
+	// last tick.
+	//
+	// For a node that re-aims every tick (Task_Notch, 1.5 s) that is fine. For a SUSTAINED turn it
+	// is fatal, and Task_DefensiveSpiral is the worst case in the tree: it can only be reached at
+	// own ATA > 90 (Gate1_JinkingTurn above it succeeds on a strict superset of its trigger), and
+	// its doctrinal case is a bandit at dead six, where (toTarget . MyRightVector) is EXACTLY
+	// zero. Its aim point would swing 2,400 m across the nose on metre-scale jitter, so with
+	// Throttle = 0.1 and a 900 m dive bias the "spiral" degenerates into a straight idle-power
+	// dive -- the opposite of the maneuver, and the worst available action for a slow defender.
+	//
+	// The latch does NOT make the initial choice better; at dead six the shorter turn is genuinely
+	// ambiguous. It makes the choice STABLE, which is the property the maneuver actually needs
+	// ("a spiral is one sustained turn direction, not an alternating reversal").
+	Vector3 ManeuverTurnDir;								//기동 시작 시점에 고정한 선회 방향 (BTFunc::LatchedTurnDirection)
 	double NeutralEngagementStartTime;						//근접 중립 교전(스치어스 트리거) 지속 시작 시점, -1이면 미진행
 
 	float OwnSpecificEnergy;								//내 비행기 비에너지: E_s = V^2/2g + h
