@@ -36,6 +36,7 @@ import argparse
 import subprocess
 import sys
 import zipfile
+import zlib
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
@@ -47,6 +48,9 @@ from scripts.spawn_preset_guard import check as check_spawn_presets  # noqa: E40
 from student.my_submission import SUBMISSION_NAME, TEAM_NAME  # noqa: E402
 
 LIMIT_BYTES = 1024 ** 3
+# The filename CPPBehaviorTree.cpp:142 hardcodes and loads from the DLL's own directory.
+# Spelled out here the same way scripts/build_exe.py's _DATA_FILES spells it.
+RULE_XML_NAME = "Rule_forTraining.xml"
 
 # Files whose mtime the exe must not be older than: if any of these changed after the build, the
 # bundled copy is stale. `engine/` is walked rather than listed.
@@ -159,6 +163,30 @@ def main() -> int:
                 "assets that have since changed. Rebuild before packaging.")
             continue
         print(f"[ok] {v['exe']:<32} {exe.stat().st_size/1e6:>6.1f} MB, newer than every asset")
+
+        # --- gate 3b: the bundled tree IS the workspace tree ------------------------------
+        # Staleness above is an mtime argument, and smoke_exe's "native BT loaded its Rule XML"
+        # is `_BT_FAIL not in out` -- the ABSENCE of a failure line, on a path the smoke never
+        # exercises (with AIP_BT_GATE_TRACE set, a full 600-frame smoke writes no trace at all:
+        # the vptrack controller answers every frame and the tree is never ticked). Neither can
+        # tell you WHICH tree is inside. Read it out of the archive and compare bytes.
+        try:
+            from PyInstaller.archive.readers import CArchiveReader
+            bundled = CArchiveReader(str(exe)).extract(RULE_XML_NAME)
+            if isinstance(bundled, tuple):      # older PyInstaller returns (index, bytes)
+                bundled = bundled[1]
+            want = (ROOT / RULE_XML_NAME).read_bytes()
+            if zlib.crc32(bundled) != zlib.crc32(want):
+                problems.append(
+                    f"{v['exe']} bundles a DIFFERENT {RULE_XML_NAME} than the workspace "
+                    f"(crc32 {zlib.crc32(bundled)} vs {zlib.crc32(want)}). Rebuild before "
+                    "packaging -- the exe would fly a tree nobody measured.")
+                continue
+            print(f"[ok] {v['exe']} bundles the workspace {RULE_XML_NAME} "
+                  f"(crc32 {zlib.crc32(want)})")
+        except Exception as exc:               # noqa: BLE001 -- never let the check itself pass silently
+            problems.append(f"{v['exe']} bundled-XML check could not run: {exc!r}")
+            continue
 
         # --- gate 1: it flies ------------------------------------------------------------
         if args.no_smoke:

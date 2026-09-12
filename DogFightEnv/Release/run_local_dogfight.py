@@ -140,7 +140,8 @@ def _verify_bundle_if_present(bundle_dir: str, observation_mode: str, observatio
 
 
 def _vptrack_kwargs(range_m, los_deg, throttle, defensive=None, corner=None,
-                    roll_taper_deg=None, hard_deck_m=None, deck_ttc_s=None) -> dict:
+                    roll_taper_deg=None, hard_deck_m=None, deck_ttc_s=None,
+                    standoff_m=None, phased_window=None, adaptive_range=None) -> dict:
     """Per-side overrides for VPTrackingProvider, omitting any left as None.
 
     Added 2026-08-06 to make ASYMMETRIC evaluation possible. Both aircraft read one global
@@ -167,6 +168,12 @@ def _vptrack_kwargs(range_m, los_deg, throttle, defensive=None, corner=None,
         kw["hard_deck_m"] = float(hard_deck_m)
     if deck_ttc_s is not None:
         kw["deck_ttc_s"] = float(deck_ttc_s)
+    if standoff_m is not None:
+        kw["standoff_m"] = float(standoff_m)
+    if phased_window is not None:
+        kw["phased_window"] = bool(phased_window)
+    if adaptive_range is not None:
+        kw["adaptive_range"] = bool(adaptive_range)
     return kw
 
 
@@ -221,6 +228,9 @@ def _build_provider_raw(
     vptrack_roll_taper: float | None = None,
     vptrack_hard_deck: float | None = None,
     vptrack_deck_ttc: float | None = None,
+    vptrack_standoff_m: float | None = None,
+    vptrack_phased_window: bool | None = None,
+    vptrack_adaptive_range: bool | None = None,
 ):
     if backend == "fixed":
         return None
@@ -238,7 +248,8 @@ def _build_provider_raw(
         # See student/controller_providers.py for the measured defect this bypasses.
         return VPTrackingProvider(dll_name=bt_dll, **_vptrack_kwargs(
             vptrack_range_m, vptrack_los_deg, vptrack_throttle, vptrack_defensive, vptrack_corner,
-            vptrack_roll_taper, vptrack_hard_deck, vptrack_deck_ttc))
+            vptrack_roll_taper, vptrack_hard_deck, vptrack_deck_ttc,
+            standoff_m=vptrack_standoff_m, phased_window=vptrack_phased_window, adaptive_range=vptrack_adaptive_range))
     if backend in ("hybrid_vptrack", "hybrid_gated"):
         vptrack_range_m, vptrack_los_deg, vptrack_throttle = resolve_vptrack_floor(
             backend, vptrack_range_m, vptrack_los_deg, vptrack_throttle)
@@ -257,7 +268,8 @@ def _build_provider_raw(
             primary_provider=rl_provider,
             secondary_provider=VPTrackingProvider(dll_name=bt_dll, **_vptrack_kwargs(
                 vptrack_range_m, vptrack_los_deg, vptrack_throttle, vptrack_defensive, vptrack_corner,
-            vptrack_roll_taper, vptrack_hard_deck, vptrack_deck_ttc)),
+            vptrack_roll_taper, vptrack_hard_deck, vptrack_deck_ttc,
+            standoff_m=vptrack_standoff_m, phased_window=vptrack_phased_window, adaptive_range=vptrack_adaptive_range)),
             mode=hybrid_mode,
             alpha=alpha,
             residual_scale=residual_scale,
