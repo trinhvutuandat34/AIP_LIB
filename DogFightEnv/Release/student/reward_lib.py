@@ -84,7 +84,14 @@ def match_wez_phase(
             continue
         if not (phase["min_range_m"] <= dis_m <= phase["max_range_m"]):
             continue
-        if abs(ata_deg) > phase["angle_deg"] / 2.0:
+        # STRICT, not >=. COMPETITION_RULES Sec 6.2 and the 통합 픽셀 데미지 맵 slide both write
+        # the angle test as |theta| < 1 / < 2 / < 3, and the fall-through as |theta| >= 3 -> 0.
+        # Using >= here credited Phase 1 at exactly 1.000 deg (0.80) where the rule pays Phase 2
+        # (0.25), and Phase 3 at exactly 3.000 deg where the rule pays nothing. Exact float
+        # equality makes this measure-zero in practice, so no existing measurement moves --
+        # it is corrected because a scorer that disagrees with the rulebook anywhere is a
+        # scorer nobody can cite. Verified by scripts/test_phase_boundaries.py.
+        if abs(ata_deg) >= phase["angle_deg"] / 2.0:
             continue
         if best is None or phase["damage_coefficient"] > best["damage_coefficient"]:
             best = phase

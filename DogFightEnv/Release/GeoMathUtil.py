@@ -1,9 +1,31 @@
 # AIACE GeoMathUtil.py V.0.71a
+from functools import lru_cache
+
 import numpy as np
 import numpy.linalg as la
 
 D2R = np.pi/180.0
 R2D = 180.0/np.pi
+
+
+# ponytail: retain only recent geometry; byte keys capture mutable arrays and their precision.
+@lru_cache(maxsize=128)
+def _body_los(pose_dtype, pose_bytes, target_dtype, target_bytes, proj):
+    pose = np.frombuffer(pose_bytes, dtype=pose_dtype)
+    target_position = np.frombuffer(target_bytes, dtype=target_dtype)
+    roll, pitch, heading = np.asarray(pose[3:6])*D2R
+    Tz = np.array([[np.cos(heading), np.sin(heading), 0],
+                   [-np.sin(heading), np.cos(heading), 0], [0, 0, 1]])
+    p_ned = np.asarray(target_position) - np.asarray(pose[:3])
+    distance = la.norm(p_ned)
+    p_unit = p_ned / distance if distance != 0 else p_ned
+    if proj:
+        return tuple(np.matmul(Tz, p_unit))
+    Tx = np.array([[1, 0, 0], [0, np.cos(roll), np.sin(roll)],
+                   [0, -np.sin(roll), np.cos(roll)]])
+    Ty = np.array([[np.cos(pitch), 0, -np.sin(pitch)], [0, 1, 0],
+                   [np.sin(pitch), 0, np.cos(pitch)]])
+    return tuple(np.matmul(np.matmul(Tx, np.matmul(Ty, Tz)), p_unit))
 
 
 class GeometryInfo():
@@ -38,31 +60,17 @@ class GeometryInfo():
 
 
     def _get_aspect_angle(self, ownship_ned, target_ned, proj=False):
-        _angle = 0
-        roll, pitch, heading = target_ned[3]*D2R, target_ned[4]*D2R, target_ned[5]*D2R
-        Tx = np.array([[1, 0, 0], [0, np.cos(roll), np.sin(roll)], [0, -np.sin(roll), np.cos(roll)]])
-        Ty = np.array([[np.cos(pitch), 0, -np.sin(pitch)], [0, 1, 0], [np.sin(pitch), 0, np.cos(pitch)]])
-        Tz = np.array([[np.cos(heading), np.sin(heading), 0], [-np.sin(heading), np.cos(heading), 0], [0, 0, 1]])
-        Tz_pi = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
-        
-        p_ned = ownship_ned[0:3] - target_ned[0:3]
-        p_norm_ned = la.norm(p_ned)
-        if p_norm_ned != 0:
-            p_unit_ned = p_ned/p_norm_ned
-        
-        else:
-            p_unit_ned = p_ned
+        x, y, z = _body_los(target_ned.dtype.str, target_ned[:6].tobytes(),
+                            ownship_ned.dtype.str, ownship_ned[:3].tobytes(), proj)
+        # Tz_pi reverses the forward/right axes, preserving the historical AA convention.
+        # Matrix multiplication sums zero components to +0 (atan2 distinguishes -0).
+        p_unit_t = (0.0 if x == 0 else -x, 0.0 if y == 0 else -y, z)
         
         # 2D ATA
         if (proj == True):
-            T = np.matmul(Tz_pi, Tz)
-            p_unit_t = np.matmul(T, p_unit_ned)
             _angle = np.arctan2(p_unit_t[1], p_unit_t[0])*R2D
         # 3D ATA
         else:
-            T = np.matmul(Tz_pi, np.matmul(Tx, np.matmul(Ty, Tz)))
-            p_unit_t = np.matmul(T, p_unit_ned)
-            _angle = np.arccos(np.clip(p_unit_t[0],-1.0,1.0))*R2D
             # 3D에서는 부호가 정의가 안되서... 아래는 수정이 필요할 수 있다.
             sign = 1
             if p_unit_t[1] < -0.10:
@@ -105,49 +113,22 @@ class GeometryInfo():
 
 
     def _get_antenna_train_angle(self, ownship_ned, target_ned, proj = False):
-        _angle = 0
-        roll, pitch, heading = ownship_ned[3]*D2R, ownship_ned[4]*D2R, ownship_ned[5]*D2R
-        Tx = np.array([[1, 0, 0], [0, np.cos(roll), np.sin(roll)], [0, -np.sin(roll), np.cos(roll)]])
-        Ty = np.array([[np.cos(pitch), 0, -np.sin(pitch)], [0, 1, 0], [np.sin(pitch), 0, np.cos(pitch)]])
-        Tz = np.array([[np.cos(heading), np.sin(heading), 0], [-np.sin(heading), np.cos(heading), 0], [0, 0, 1]])
-        
-        p_ned = target_ned[0:3] - ownship_ned[0:3] 
-        p_norm_ned = la.norm(p_ned)
-        if p_norm_ned != 0:
-            p_unit_ned = p_ned/p_norm_ned
-        
-        else:
-            p_unit_ned = p_ned
+        p_unit_t = _body_los(ownship_ned.dtype.str, ownship_ned[:6].tobytes(),
+                             target_ned.dtype.str, target_ned[:3].tobytes(), proj)
         
         # 2D ATA
         if (proj == True):
-            p_unit_t = np.matmul(Tz, p_unit_ned)
             _angle = np.arctan2(p_unit_t[1], p_unit_t[0])*R2D
         # 3D ATA
         else:
-            T = np.matmul(Tx, np.matmul(Ty, Tz))
-            p_unit_t = np.matmul(T, p_unit_ned)
             _angle = np.arccos(np.clip(p_unit_t[0], -1.0, 1.0))*R2D
 
         return _angle
 
 
     def _get_los_angle(self, ownship_ned, target_ned):
-        p_own = ownship_ned[:3]
-        p_target = target_ned[:3]
-        dis_ned = p_target - p_own
-        
-        if la.norm(dis_ned) != 0:
-            dis_unit_ned = dis_ned / la.norm(dis_ned)
-        else:
-            dis_unit_ned = dis_ned
-        
-        phi, theta, psi = D2R*ownship_ned[3], D2R*ownship_ned[4], D2R*ownship_ned[5]
-        tx = np.array([[1, 0, 0], [0, np.cos(phi), np.sin(phi)], [0, -np.sin(phi), np.cos(phi)]])
-        ty = np.array([[np.cos(theta), 0, -np.sin(theta)], [0, 1, 0], [np.sin(theta), 0, np.cos(theta)]])
-        tz = np.array([[np.cos(psi), np.sin(psi), 0], [-np.sin(psi), np.cos(psi), 0], [0, 0, 1]])
-        T_nb = np.matmul(tx, np.matmul(ty, tz))
-        dis_body_norm = np.matmul(T_nb, dis_unit_ned)
+        dis_body_norm = _body_los(ownship_ned.dtype.str, ownship_ned[:6].tobytes(),
+                                 target_ned.dtype.str, target_ned[:3].tobytes(), False)
         
         _az = np.arctan2(dis_body_norm[1], dis_body_norm[0])*R2D  # -180 ~ 180
         _el = -np.arcsin(np.clip(dis_body_norm[2], -1.0, 1.0))*R2D  # -90 ~ 90

@@ -84,29 +84,45 @@ _PY = sys.executable
 # directories instead. See scripts/sweep_headon_separation.py.
 _OUT = Path(os.environ.get("DOGFIGHT_LEAGUE_OUT_DIR") or (_ROOT / "artifacts" / "eval"))
 
-# ---- Randomised start conditions (F61 matrix, 2026-09-04) -----------------------------
-# The 본선 randomises initial altitude and speed every game and DOES NOT PUBLISH THE BAND
-# (COMPETITION_RULES.md 5.1, asked of the organizers 2026-09-03). These defaults are a
-# best-evidence proxy, not a reproduction of a known rule -- change them the moment the real
-# band arrives.
+# ---- Randomised start conditions -- ORGANIZER-CONFIRMED 2026-09-11 --------------------
+# The band is no longer a proxy. The organizers stated it directly: the 2000/2500/3000 ft
+# settable in the viewer is the DISTANCE BETWEEN AIRCRAFT at engagement start, and initial
+# speed and altitude are drawn at random every round --
 #
-# ALTITUDE 1,000-7,700 m. The two SPAWN altitudes this project has actually observed are
-# 4,572 m (the F7 viewer preset) and 7,703 m (the 8-27 trajectory, F62). The 0-1,067 m band in
-# F38 is NOT a spawn observation -- those are in-flight frames sampled across a match, a
-# different quantity, and reading them as spawn altitudes would be the same category error F38
-# itself warns about. The low end is set at 1,000 m rather than lower on purpose: it sits just
-# above Gate 0's 914 m trigger, so episodes spawning near it descend into the regime F38/F62
-# care about during normal manoeuvring, WITHOUT gifting spawn-deaths at the 304.8 m floor that
-# would swamp the result with noise unrelated to config quality.
+#     초기 속력 : 200~300 m/s,  초기 고도 : 2000ft ~ 30000ft
 #
-# SPEED 150-280 m/s. 200 m/s is the preset; 281 m/s is the 8-27 trace's opening speed. The low
-# end keeps every spawn comfortably above stall at the top of the altitude band.
-DEFAULT_ALTITUDE_RANGE_M = "1000,7700"
-DEFAULT_SPEED_RANGE_MPS = "150,280"
+# 2,000 ft = 609.6 m and 30,000 ft = 9,144.0 m. The separations (609.6 / 762.0 / 914.4 m in
+# student/match_scenario_wrapper.py) are confirmed correct by the same message.
+#
+# WHAT THIS INVALIDATES. The previous proxy was "1000,7700" / "150,280" (F61 matrix,
+# 2026-09-04), and EVERY CSV in artifacts/ predating 2026-09-11 was produced under it. Those
+# runs are not comparable with anything measured after this line changed:
+#   - ~37% of the real spawn space was never sampled: below 1,000 m (4.6% of the altitude
+#     band) and 7,700-9,144 m (16.9%), plus 280-300 m/s (20% of the speed band).
+#   - ~38% of the old speed draws (150-200 m/s) sit BELOW the real minimum and sampled a
+#     regime that never occurs.
+#
+# THE LOW END IS THE ONE THAT BITES. The old floor of 1,000 m was chosen to sit just above
+# Gate 0's 914 m trigger and to avoid gifting spawn-deaths. The real floor is 609.6 m, which
+# is BELOW SHIP_HARD_DECK_M (1,000 m) -- and below the deck _tracking_stick returns None and
+# hands the aircraft to the BT (student/controller_providers.py:801). So ~4.6% of real rounds
+# begin with the tuned controller switched off through the merge, a case the old band made
+# structurally impossible to observe. Model 2 is unaffected (hard_deck_m = 0.0).
+DEFAULT_ALTITUDE_RANGE_M = "609.6,9144"
+DEFAULT_SPEED_RANGE_MPS = "200,300"
 
 # ---- Candidates: what we might ship. Ownship side. ------------------------------------
 # Flags mirror the SHIP_* constants in student/controller_providers.py; `ship` is the current
 # adopted config (F59) and is the control every other row is read against.
+#
+# STALE AS OF 2026-09-12: the SHIP_* constants moved ahead of this row. `adaptive300_deckttc`
+# below (standoff 300, adaptive-range on, deck-ttc 5) is now what SHIP_STANDOFF_M /
+# SHIP_ADAPTIVE_RANGE / SHIP_DECK_TTC_S actually build, confirmed on two independent N=100
+# seeds vs cutoff (pooled win 53.5% vs 45.5%, n=200 each) -- see the comment there. Left
+# UNCHANGED here rather than edited, because `aggressor` below is asserted byte-identical to
+# this exact flag set (is_self_play()'s minimax-floor exclusion depends on that), and reworking
+# both together this close to the deadline is not worth the risk for a measurement-harness
+# label. Read this row as "Model 1, pre-2026-09-12", not as the current ship default.
 CANDIDATES: dict[str, list[str]] = {
     "ship_6000_120_deck": ["--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120",
                            "--ownship-vptrack-throttle", "1", "--ownship-vptrack-hard-deck", "1000"],
@@ -180,11 +196,27 @@ CANDIDATES: dict[str, list[str]] = {
     # no new plumbing. All three default OFF, which is what every register number was measured
     # at, so each is a single-knob delta from the shipped config and attributable on its own.
     #
-    #   corner  -- hold ~440 KTAS for peak turn rate. The confirmed spawn is 389 kt, i.e. BELOW
-    #              corner, so the aircraft starts slower than its best-turn-rate speed and
-    #              nothing currently tries to fix that. Plausible for the closure failure that
-    #              27 of 44 cutoff losses show (200 s timeout, zero damage dealt).
-    #   defensive -- break off when losing the gun duel. Parked at F26-DEFENSIVE with the note
+    #   corner  -- hold ~440 KTAS for peak turn rate. RATIONALE CORRECTED 2026-09-09: the spawn
+    #              is 389 kt, but the aircraft does not stay there. corner_speed_probe.py on the
+    #              current DLL reports mean TAS **506.4 kt** (min episode mean 374.2), i.e. we
+    #              fight ~66 kt ABOVE the 430-450 band, not below it. So this knob DECELERATES,
+    #              and being above corner widens the turn radius -- a candidate mechanism for the
+    #              measured overshoot (median ep_min_distance 19.9 m against a 152.4 m
+    #              zero-damage floor; 80/100 episodes go inside that floor vs the cutoff).
+    #              MEASURED 2026-09-09 AND REJECTED, N=40/cell vs the N=100 shipped control.
+    #              WEZ-entry falls on all three archetypes: cutoff 60.0 -> 47.5 (z=-1.35),
+    #              aggressor 72.0 -> 65.0 (z=-0.82), sniper 91.0 -> 65.0 (z=-3.75). Damage
+    #              differential vs cutoff -0.078 -> -0.191. The radius mechanism is REFUTED
+    #              too: below-floor moved only 80.0% -> 82.5% vs the cutoff, and against
+    #              `sniper` -- the archetype we do NOT overshoot into -- slowing made it WORSE
+    #              (median min range 242 -> 102 m, below-floor 35% -> 55%). Speed is not what
+    #              puts us at 20 m. The untested lever is the AIM POINT: see STANDOFF_M.
+    #              Note student/controller_providers.py's own comment still cites 339.6 kt from
+    #              2026-08-07; that predates the 6000/120 envelope, the deck and three rebuilds.
+    #   defensive -- break off when losing the gun duel. NOTE its blind spot: _losing_gun_duel()
+    #              requires 152.4 <= rng, and our median closest approach is 20 m, so it cannot
+    #              fire in the geometry we actually fly -- range discipline is a prerequisite.
+    #              Parked at F26-DEFENSIVE with the note
     #              "worth re-testing against an opponent that out-shoots us". We now HAVE that
     #              measurement: against `aggressor` we die 31 times to their 23, and against the
     #              cutoff damage taken (0.549) exceeds dealt (0.471). That is the condition the
@@ -203,6 +235,81 @@ CANDIDATES: dict[str, list[str]] = {
     "deckttc_on":         ["--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120",
                            "--ownship-vptrack-throttle", "1", "--ownship-vptrack-hard-deck", "1000",
                            "--ownship-vptrack-deck-ttc", "5"],
+
+    # ---- AIM-POINT STANDOFF (2026-09-09) -- the first lever aimed at the overshoot ------------
+    #
+    # THE DEFECT: median ep_min_distance 19.9 m against a 152.4 m zero-damage floor, with 80/100
+    # episodes inside that floor vs the cutoff. We hold <=1 deg for a mean of 173.5 steps but
+    # only 62.6 of them are inside the scoring band. The first gate trace says the same from the
+    # tree's side: Gun_DistLt914 passes on 1,056 of 15,611 ticks, Gun_Track runs on 0.2%.
+    #
+    # WHY THIS AND NOT THE TWO EXISTING RANGE MECHANISMS: both are THROTTLE-only
+    # (Task_GunTrack.cpp's GUNTRACK_TARGET_RANGE_M and TARGET_RANGE_M, the latter already ON in
+    # the shipped config) and throttle cannot arrest a merge. STANDOFF_M is the first thing that
+    # biases the AIM POINT, which is what decides whether the flight path intersects the target.
+    # corner_on above already ruled out the energy explanation, so this is the remaining one.
+    #
+    # 220 m is where the damage coefficient peaks and what both existing mechanisms target, so
+    # all three would finally agree. 400 m brackets it from the long side.
+    "standoff220_deck":   ["--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120",
+                           "--ownship-vptrack-throttle", "1", "--ownship-vptrack-hard-deck", "1000",
+                           "--ownship-vptrack-standoff-m", "220"],
+    "standoff400_deck":   ["--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120",
+                           "--ownship-vptrack-throttle", "1", "--ownship-vptrack-hard-deck", "1000",
+                           "--ownship-vptrack-standoff-m", "400"],
+
+    # GATED STANDOFF, 2026-09-09. The standoff knob was rewritten after the phase analysis: it
+    # now stands down whenever a Phase-1 shot is already in hand (range 500-3000 ft AND LOS
+    # < 1 deg). Rationale: Phase 1 is 92.6% of all expected damage, its angle is a BINARY gate
+    # while range is only a smooth multiplier, so nudging the aim point off-target to gain range
+    # can score zero instead of 1.0. The ungated version lost its N=100 confirmation (bo3 1.53
+    # vs 1.60) after looking strong at N=40, and this is the mechanism that best explains it.
+    #
+    # 200 m = 656 ft sits nearer the damage peak than 220 m did: the Phase-1 curve is
+    # 1.0 * (3000 - r_ft)/2500, so 656 ft pays 0.937 against 722 ft's 0.911, and the floor at
+    # 500 ft pays 1.00 but is the edge of a zero-damage cliff. 200 m keeps a margin above it.
+    "standoff200_gated":  ["--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120",
+                           "--ownship-vptrack-throttle", "1", "--ownship-vptrack-hard-deck", "1000",
+                           "--ownship-vptrack-standoff-m", "200"],
+
+    # TIME-PHASED ACCEPTANCE. Same gated standoff, but the window it stands down for widens with
+    # the match clock exactly as the server's scoring cone does (Sec 6.2: LOS 1/2/3 deg and
+    # 3000/3500/4000 ft at t=0/100/150 s). Early: hold ~200 m and only break off for a Phase-1
+    # solution. Late: accept the wider, longer shots that now actually score rather than
+    # manoeuvring away from them. 43% of cutoff episodes end on the clock and a timeout is
+    # decided purely on damage differential, so 0.1-coefficient hits that currently score zero
+    # can flip one. Acceptance only ever WIDENS, so a 1.0 solution is never displaced.
+    "standoff200_phased": ["--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120",
+                           "--ownship-vptrack-throttle", "1", "--ownship-vptrack-hard-deck", "1000",
+                           "--ownship-vptrack-standoff-m", "200",
+                           "--ownship-vptrack-phased-window", "1"],
+
+    # ADAPTIVE RANGE. Range multiplies the angular differential rather than creating it, so the
+    # right separation depends on who is out-angling whom -- measured dealt/taken is 0.86 vs the
+    # cutoff, 0.96 vs aggressor, 1.42 vs mirror, i.e. no single fixed standoff can be right for
+    # all three. Extend while they hold the tighter angle, close when we do. 300 m rather than
+    # 200 m because our measured range-holding scatter is large (median closest approach 65 ft,
+    # 80% of episodes inside the 500 ft dead zone), and the damage-optimal setpoint moves OUTWARD
+    # as scatter grows: ~620 ft at +/-50 ft of control, ~1040 ft at +/-400 ft.
+    "adaptive300":        ["--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120",
+                           "--ownship-vptrack-throttle", "1", "--ownship-vptrack-hard-deck", "1000",
+                           "--ownship-vptrack-standoff-m", "300",
+                           "--ownship-vptrack-adaptive-range", "1"],
+    # The same policy stacked with the deck guard, which is the only arm so far to move the
+    # dominant failure mode (nopoint 35% -> 20%, WEZ entry 72.5% -> 85%).
+    "adaptive300_deckttc":["--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120",
+                           "--ownship-vptrack-throttle", "1", "--ownship-vptrack-hard-deck", "1000",
+                           "--ownship-vptrack-standoff-m", "300",
+                           "--ownship-vptrack-adaptive-range", "1",
+                           "--ownship-vptrack-deck-ttc", "5"],
+
+    # STACKED. The two knobs touch different code paths (aim point in the control law vs the
+    # hand-back guard), so if both are individually non-negative this is the natural candidate.
+    # They can still interact through the handover: deck_ttc returns None and gives the stick to
+    # the BT, and the standoff only acts while the control law HAS the stick.
+    "standoff220_deckttc": ["--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120",
+                           "--ownship-vptrack-throttle", "1", "--ownship-vptrack-hard-deck", "1000",
+                           "--ownship-vptrack-standoff-m", "220", "--ownship-vptrack-deck-ttc", "5"],
 }
 
 # ---- Archetypes: who we might face. Target side. --------------------------------------
@@ -235,6 +342,23 @@ ARCHETYPES: dict[str, list[str]] = {
                   "--target-vptrack-throttle", "1", "--target-vptrack-hard-deck", "1000"],
     # Rule-based floor. Never shoots (HANDOFF.md), so it is a sanity check, not a real opponent.
     "bt_only":   ["--target-backend", "bt"],
+
+    # THE PHASE-EXPLOITER (2026-09-09). The threat model we could not otherwise test: an opponent
+    # that widens what it accepts as a shot with the match clock, exactly as the server's scoring
+    # cone widens (Sec 6.2), and so banks cheap Phase 2/3 damage late that a Phase-1-only pilot
+    # declines. If such an opponent beats the shipped config, adopting the same behaviour is
+    # justified; if it does not, the phased window is not worth shipping.
+    #
+    # NOTE what the scouting actually supports. OPPONENTS_ANALYSIS.md records that an earlier
+    # read of this project credited a real team with a "Battle Phase gate" that turned out to be
+    # the competition's own widening -- every team gets those phases. Teams ARE observed landing
+    # late Phase-3 hits (MotherGoose: 3 hits at t~190 s), but no opponent binary examined so far
+    # contains a clock-reading gate; the organizers' own cutoff has no RunningTime symbol at all.
+    # So this archetype is a HYPOTHESIS about an opponent, not a replica of a measured one.
+    "phased":    ["--target-backend", "vptrack",
+                  "--target-vptrack-range-m", "6000", "--target-vptrack-los-deg", "120",
+                  "--target-vptrack-throttle", "1", "--target-vptrack-hard-deck", "1000",
+                  "--target-vptrack-standoff-m", "200", "--target-vptrack-phased-window", "1"],
 }
 
 

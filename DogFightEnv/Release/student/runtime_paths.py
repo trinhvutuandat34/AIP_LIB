@@ -95,21 +95,62 @@ def _coerce_port(value) -> int | None:
     return port if 1 <= port <= 65535 else None
 
 
-def load_network_config(path: Path | None = None) -> tuple[str, int, str]:
+def _argv_value(argv: list[str], name: str) -> str | None:
+    """First `name value` or `name=value` in `argv`, else None.
+
+    A manual scan, not argparse: `student/my_submission.py` (the frozen entry point) has never
+    called `parse_args()` -- F69 found that the only place that did was `run_unreal_inference.py`,
+    a dev tool that never ships. A real argparse instance would reject any flag it does not know,
+    which is exactly the startup-crash class F42/F69 exist to rule out. This only looks for what
+    it needs and silently ignores everything else the organizer's launcher passes alongside it.
+    """
+    prefix = name + "="
+    for i, tok in enumerate(argv):
+        if tok == name and i + 1 < len(argv):
+            return argv[i + 1]
+        if tok.startswith(prefix):
+            return tok[len(prefix):]
+    return None
+
+
+def load_network_config(path: Path | None = None, argv: list[str] | None = None) -> tuple[str, int, str]:
     """Return `(ip, port, source)` for the engagement server.
 
     Resolution order, most specific first:
-      1. `DOGFIGHT_SERVER_IP` / `DOGFIGHT_SERVER_PORT` in the environment -- kept because every
-         rehearsal script and the match-day runbook use them, and they are the only channel a
-         frozen exe has if `config.json` is ever missing on the day.
-      2. `config.json` beside the executable.
-      3. The organizers' fixed values, 127.0.0.1:9999.
+      1. `--server-ip` / `--server-port` on the command line -- CORRECTED 2026-09-12. The
+         2026-09-08 organizer answer on record said connection info is fixed (127.0.0.1:9999 via
+         config.json); the team's later understanding is that the real match address is handed to
+         the exe the same way the organizers launch their own `unreal_bt_client.exe`, i.e.
+         `--server-ip <ip> --server-port <port>` (see `LIVE_AND_CUTOFF_COMMANDS.md`'s flag dump
+         for that binary). This is a submission that gets ONE shot (F39), so both delivery
+         mechanisms are honoured rather than betting on which organizer answer holds -- CLI wins
+         because it is the one that matches how the reference client is actually run.
+      2. `DOGFIGHT_SERVER_IP` / `DOGFIGHT_SERVER_PORT` in the environment -- kept because every
+         rehearsal script and the match-day runbook use them, and they are a channel that needs
+         no relaunch flags if the exe is already wrapped by a launcher script.
+      3. `config.json` beside the executable.
+      4. The organizers' 2026-09-08 fixed values, 127.0.0.1:9999 -- now just the last-resort
+         default for local testing, not an assumption about match day.
 
     NEVER RAISES. A malformed or unreadable config.json falls through to the defaults with a
     printed warning: the values are fixed and known, so a parse error must not cost the match.
     `source` says which rung answered, so the startup banner can show it and an operator can see
-    at a glance whether their config.json was actually read.
+    at a glance whether their config.json (or launch flags) were actually read.
     """
+    cli_argv = sys.argv[1:] if argv is None else argv
+    cli_ip = _argv_value(cli_argv, "--server-ip")
+    cli_port = _coerce_port(_argv_value(cli_argv, "--server-port"))
+    if cli_ip and cli_port:
+        return cli_ip, cli_port, "cli"
+    if cli_ip or cli_port:
+        # ALL-OR-NOTHING. These are typed at the machine moments before the match, unlike
+        # config.json -- half-applying one good CLI value and falling through to a DIFFERENT
+        # source for the other would silently connect to an ip:port neither source actually
+        # named. Warn and ignore both rather than guess.
+        print(f"[runtime_paths] incomplete --server-ip/--server-port on the command line "
+              f"(ip={cli_ip!r} port={_argv_value(cli_argv, '--server-port')!r}); "
+              "ignoring both, falling through to env/config.json/default", flush=True)
+
     env_ip = os.environ.get("DOGFIGHT_SERVER_IP")
     env_port = _coerce_port(os.environ.get("DOGFIGHT_SERVER_PORT"))
     if env_ip and env_port:
@@ -137,6 +178,9 @@ def load_network_config(path: Path | None = None) -> tuple[str, int, str]:
         print(f"[runtime_paths] {cfg_path} unreadable ({exc}); "
               f"using {DEFAULT_SERVER_IP}:{DEFAULT_SERVER_PORT}", flush=True)
 
+    # CLI never reaches here with only one of the two set -- either both were valid and returned
+    # above, or the incomplete-CLI branch already warned and this falls through as if CLI said
+    # nothing at all.
     return (env_ip or ip or DEFAULT_SERVER_IP,
             env_port or port or DEFAULT_SERVER_PORT,
             "environment" if (env_ip or env_port) else source)

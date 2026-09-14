@@ -63,6 +63,7 @@ from dogfight.ai.bt_action_provider import BTActionProvider
 from dogfight.sim.state_schema import StateIndex
 from student.inference_providers import StudentHybridProvider
 from student.g_limiter import GLimiter, G_LIMIT as G_LIMIT_DEFAULT
+from student.reward_lib import WEZ_PHASES as _WEZ_PHASES
 
 RADTODEG = 180.0 / np.pi
 
@@ -168,10 +169,29 @@ SHIP_THROTTLE_CONTROL = True
 # RISES 0.341 -> 0.394. NOT a global default -- applied to 6000/90 (which never crashed) it
 # measured slightly WORSE, so it is a fix for wide envelopes specifically.
 SHIP_HARD_DECK_M = 1000.0
-# Time-to-impact deck guard (F62). 0.0 = OFF, which is what ships today -- the knob exists so
-# the matrix can measure it. Adopting it is a one-line change here, and both entry points read
-# this constant (the F44 single-source guarantee), so there is nowhere else to remember.
-SHIP_DECK_TTC_S = 0.0
+# Time-to-impact deck guard (F62). ON as of 2026-09-12 -- see SHIP_STANDOFF_M below, adopted
+# together as one arm (`adaptive300_deckttc`). Both entry points read this constant (the F44
+# single-source guarantee), so there is nowhere else to remember.
+SHIP_DECK_TTC_S = 5.0
+# Range standoff + adaptive range, ADOPTED 2026-09-12 as one arm (`adaptive300_deckttc` in
+# scripts/league.py CANDIDATES) on the organizer-corrected spawn band (609.6-9144 m,
+# 200-300 m/s; see league.py's DEFAULT_ALTITUDE_RANGE_M). Confirmed on TWO independent seeds
+# vs the real cutoff binary, N=100 each, paired against the same-seed shipped-config control
+# (band_nonotch_s1/s2_vs_cutoff.csv): bo3 +0.45 (+1.28 SE) and +0.31 (+0.99 SE), same direction
+# both times -- pooled win rate 53.5% vs 45.5% (n=200 each). Screened at N=40 against aggressor
+# with no floor-violation reversal (bo3 +0.23, +0.46 SE, not itself significant but no red flag
+# either -- nopoint rate fell 17.5% -> 12.5%, consistent with the mechanism producing more
+# decisive outcomes instead of stalemates).
+#
+# HONEST CAVEAT, kept because every other register entry keeps its caveats: the damage
+# differential barely moves (+0.009 / +0.007 NET, still negative both times) -- the win-rate
+# gain is from converting more decisive kills (both "kills" and "died" rise together), not from
+# winning the raw damage race. Real, replicated, but not a free lunch.
+#
+# Model 2 (head-on) is DELIBERATELY UNTOUCHED -- this was only measured against Model 1's
+# profile (6000/120/hard-deck 1000). See MODEL_PROFILES[2] below.
+SHIP_STANDOFF_M = 300.0
+SHIP_ADAPTIVE_RANGE = True
 
 # ---- Model 1 / Model 2 profiles (2026-09-05, F61) ---------------------------------------
 # The finals accept TWO artifacts: Model 1 (main, plays every standard game) and Model 2 (used
@@ -199,6 +219,8 @@ MODEL_PROFILES: dict[int, dict[str, object]] = {
         "throttle_control": SHIP_THROTTLE_CONTROL,
         "hard_deck_m": SHIP_HARD_DECK_M,
         "deck_ttc_s": SHIP_DECK_TTC_S,
+        "standoff_m": SHIP_STANDOFF_M,
+        "adaptive_range": SHIP_ADAPTIVE_RANGE,
     },
 }
 # MODEL 2 ADOPTED 2026-09-05 (F74): `prev_6000_90` -- 6000 m, LOS 90 deg, throttle ON, NO hard
@@ -355,15 +377,35 @@ THROTTLE_CONTROL = os.environ.get("DOGFIGHT_VPTRACK_THROTTLE", "0") not in ("0",
 # self-play cannot answer whether it matters: neither side ever fights at corner. The
 # asymmetric harness can.
 #
-# MEASURED 2026-08-07 -- HARMFUL AT 440 kt. Default OFF.
+# RE-MEASURED 2026-09-09 -- THE PREMISE BELOW IS STALE AND THE SIGN HAS FLIPPED.
+# corner_speed_probe.py on the CURRENT DLL and the shipped 6000/120 config (N=20 self-play,
+# match_base) reports mean TAS **506.4 kt** (min episode mean 374.2, max 594.0) -- we now fly
+# ~66 kt ABOVE the 430-450 band, not ~100 below it. The 339.6 kt figure below was measured
+# 2026-08-07, before the 6000/120 envelope, the hard deck and three tree rebuilds.
+# So CORNER_KT = 440 is now a DECELERATING setpoint, and the 2026-08-07 rejection ("forcing it
+# ~100 kt faster widens the turn radius") argued against a change this knob no longer makes.
+# Being above corner widens the radius the same way, which is a candidate mechanism for the
+# measured overshoot (median ep_min_distance 19.9 m vs the 152.4 m zero-damage floor).
+# Weak directional support from the same probe: won episodes carry +3.19 pp of corner-time
+# advantage vs +1.22 lost (+0.72 pooled SD).
+#
+# RE-MEASURED 2026-09-09 WITH THE CORRECTED PREMISE -- STILL HARMFUL. N=40/cell against the
+# N=100 shipped control: WEZ-entry cutoff 60.0 -> 47.5%, aggressor 72.0 -> 65.0%, sniper
+# 91.0 -> 65.0% (z = -3.75); damage differential vs cutoff -0.078 -> -0.191. And the radius
+# story is refuted by its own arm -- against `sniper`, the one archetype we do NOT overshoot
+# into, slowing made the overshoot WORSE (median min range 242 -> 102 m). Two independent
+# measurements now reject this knob from opposite sides of the band. KEEP IT OFF.
+#
+# MEASURED 2026-08-07 -- HARMFUL AT 440 kt. Default OFF. (Stale premise; see above.)
 #     self-play vs champion  7W/16D/7L, identical to control (23.3%)
 #     vs BT                  73.1% win rate but 0 KILLS and 0.63 damage (champion: 8 and 14.29)
 # The win RATE survived while damage collapsed 96%: dealing 0.63 against an opponent dealing
 # zero still scores as a differential win. Win rate alone would have passed this change --
 # check damage and kills alongside it.
-# Most likely the setpoint, not the idea: the probe shows this airframe settles naturally at
+# Most likely the setpoint, not the idea: the 2026-08-07 probe showed this airframe settling at
 # 339.6 kt, and forcing it ~100 kt faster widens the turn radius so it cannot hold a 152-914 m
-# WEZ. 430-450 kt is a real-F-16 figure at a particular weight and altitude; this JSBSim model's
+# WEZ. THAT SETTLING SPEED NO LONGER HOLDS -- it is 506.4 kt now, so the same argument now runs
+# the other way. 430-450 kt is a real-F-16 figure at a particular weight and altitude; this JSBSim model's
 # rate may well peak near where it already settles. A proper test is an IN-SIM rate sweep
 # (turn rate vs TAS at fixed G) to find this model's actual corner, not the article's number.
 # Enable with DOGFIGHT_VPTRACK_CORNER=1, and sweep DOGFIGHT_VPTRACK_CORNER_KT if so.
@@ -404,9 +446,22 @@ THROTTLE_AUTHORITY = float(os.environ.get("DOGFIGHT_VPTRACK_THR_AUTH", "0.7"))
 # is slightly worse. Breaking off a shot to avoid one is a wash when both sides shoot equally
 # well -- and the competition scores a timeout on differential, not on survival
 # (COMPETITION_RULES.md Sec 5).
-# WORTH RE-TESTING against an opponent that out-shoots us, where trading 1:1 is a gain rather
-# than a wash -- e.g. the organizers' cutoff model. Enable with DOGFIGHT_VPTRACK_DEFENSIVE=1
-# or --{side}-vptrack-defensive 1.
+# RE-TESTED 2026-09-09 AGAINST THE CUTOFF -- THE OPPONENT THIS WAS PARKED WAITING FOR. It lost,
+# and worse than the 2026-08-06 wash. N=40/cell against the N=100 shipped control:
+#
+#     vs cutoff     wins 38% -> 15%;  dealt 0.471 -> 0.301, TAKEN 0.549 -> 0.605
+#                   damage differential -0.078 -> -0.304
+#     vs aggressor  dealt 0.600 -> 0.271, taken 0.626 -> 0.535; differential -0.027 -> -0.264
+#     vs sniper     dealt 0.821 -> 0.667, taken 0.084 -> 0.048; differential +0.737 -> +0.619
+#
+# Note the cutoff column: damage taken went UP. Against that opponent the break does not even
+# deny damage, it only spoils our own solution. The likely reason is the guard's own blind spot
+# -- _losing_gun_duel() requires 152.4 <= rng and the median closest approach is ~20 m, so it
+# fires late and rarely, in a geometry where breaking cannot buy separation.
+#
+# F26-DEFENSIVE IS THEREFORE CLOSED, not parked. Re-open it only if the overshoot is fixed first
+# (see STANDOFF_M), which would put the fight back inside the band where this test can fire.
+# Enable with DOGFIGHT_VPTRACK_DEFENSIVE=1 or --{side}-vptrack-defensive 1.
 # ---- Hard-deck guard (2026-09-03) ------------------------------------------------------
 # THE DEFECT IT ADDRESSES. This controller overrides roll/pitch/rudder for every step inside the
 # engagement envelope, and it has no altitude term at all. Widen the envelope far enough and it
@@ -465,9 +520,129 @@ _DECK_MIN_SINK_MPS = 5.0
 # the live path, so it is used defensively here and never trusted blindly.
 _DECK_DT_MIN_S, _DECK_DT_MAX_S = 1e-4, 1.0
 
+# ---- Range standoff on the AIM POINT (2026-09-09) --------------------------------------
+# THE DEFECT IT ADDRESSES, measured on the current DLL (artifacts/eval/ab_fixed_0908, N=100 vs
+# the organizers' cutoff): median ep_min_distance is **19.9 m** and **80 of 100 episodes go
+# inside the 152.4 m zero-damage floor**. We hold <=1 deg for a mean of 173.5 steps but only
+# 62.6 of them are inside the scoring band -- 64% of our pointing time is spent where the gun
+# scores nothing. The first gate trace ever taken says the same thing from the other side: the
+# Gun_DistLt914 decorator passes on 1,056 of 15,611 ticks and Gun_Track ends up running on 0.2%.
+#
+# WHY THE TWO EXISTING RANGE MECHANISMS CANNOT FIX IT. Both are THROTTLE-only --
+# GUNTRACK_TARGET_RANGE_M in Task_GunTrack.cpp and TARGET_RANGE_M below, the latter already
+# active in the shipped config. Throttle cannot arrest a merge; the aim point is what decides
+# whether the flight path intersects the target or passes behind it. Nothing anywhere biases the
+# aim point for range, so the law flies pure pursuit -- a collision course -- every tick.
+#
+# WHAT THIS DOES. Inside the standoff radius, aim at a point on the target's SIX rather than at
+# the target: lag grows as (standoff - rng), so at the boundary this is exactly pure pursuit (no
+# discontinuity) and at 20 m it points 200 m behind their tail. That is lag pursuit -- the
+# textbook answer to an overshoot -- and it opens range instead of trading nose position for it.
+#
+# DEFAULT 0.0 = OFF, so every register measurement stays valid and the shipped config is
+# unchanged until a measurement says otherwise (F59/F60: unmeasured knobs do not ship). Enable
+# with DOGFIGHT_VPTRACK_STANDOFF_M or --{side}-vptrack-standoff-m. 220 m is the natural first
+# value -- it is where the damage coefficient peaks and what both existing mechanisms already
+# target, so the three would finally agree instead of two of them being ignored.
+STANDOFF_M = float(os.environ.get("DOGFIGHT_VPTRACK_STANDOFF_M", "0.0"))
+
 DEFENSIVE_BREAK = os.environ.get("DOGFIGHT_VPTRACK_DEFENSIVE", "0") not in ("0", "false", "False")
 THREAT_ATA_DEG = float(os.environ.get("DOGFIGHT_VPTRACK_THREAT_ATA", "8.0"))
 WEZ_MIN_M, WEZ_MAX_M = 152.4, 914.4
+# Phase 1's half-angle gate (COMPETITION_RULES Sec 6.2; `reward_lib.WEZ_PHASES` stores the same
+# thing as a FULL cone width, hence 2.0 there and 1.0 here). Binary: inside it a hit pays the
+# full 1.0 coefficient, outside it pays nothing at all in Phase 1.
+PHASE1_LOS_DEG = 1.0
+
+# ---- Time-phased engagement window (2026-09-09) ----------------------------------------
+# COMPETITION_RULES Sec 6.2: the server WIDENS the scoring cone as the 200 s clock runs down --
+# LOS < 1/2/3 deg and 500-3000/3500/4000 ft at t = 0/100/150 s -- explicitly to stop draws. Until
+# now nothing on our side knew that: every engagement threshold in this file and in the Rule XML
+# is a fixed constant, so the aircraft flew identical geometry at t = 10 s and t = 190 s.
+#
+# WHAT THIS CHANGES. Only what counts as "I already have a shot, stop manoeuvring for range".
+# Late in the match a wider, longer cone genuinely scores, so treating it as a shot is correct;
+# early it does not, and the tighter Phase 1 gate should hold.
+#
+# THE ARGUMENT AGAINST, recorded because it is real and this may still lose: later phases pay
+# 0.3 and 0.1 against Phase 1's 1.0, and a Phase-1-quality shot pays 1.0 AT ANY TIME (narrowest
+# qualifying phase wins). Measured over the shipped config's own traces, Phase 1 is ~92.6% of
+# expected damage. So widening our own acceptance can only help where a Phase 1 shot was NOT
+# available anyway -- it must never displace one, which is why `shot_in_hand` keeps using the
+# tightest qualifying phase.
+#
+# THE ARGUMENT FOR: 43% of episodes against the cutoff end on the 200 s clock, and a timeout is
+# adjudicated purely on damage differential. In a match decided by a hair, 0.1-coefficient hits
+# that would otherwise be zero can flip it. That is a real mechanism, not a rounding error.
+#
+# Sourced from reward_lib.WEZ_PHASES so the schedule cannot drift from the one the scorer uses.
+# DEFAULT OFF: every register number was measured without it.
+# ---- Adaptive range: close when we out-angle them, extend when we do not (2026-09-09) ------
+# THE MECHANIC THIS EXPLOITS. Damage is SYMMETRIC in range: at separation r the damage to them is
+# f(r) if OUR ata is in the cone, and the damage to us is the SAME f(r) if THEIR ata is in it
+# (COMPETITION_RULES Sec 6.2; f is monotonically decreasing in r). So range does not create
+# advantage -- it MULTIPLIES whatever angular advantage already exists:
+#
+#     differential = f(r) x [ 1{we are in cone} - 1{they are in cone} ]
+#
+# Closing amplifies that bracket. If it is positive, closing wins harder; if it is NEGATIVE,
+# closing loses harder. A fixed standoff distance cannot express this, because the right answer
+# genuinely differs by opponent: measured dealt/taken is 0.86 vs the cutoff (we lose the
+# exchange), 0.96 vs aggressor (even) and 1.42 vs mirror (we win it).
+#
+# THE POLICY. Extend only while the bandit holds the tighter angle; otherwise close and press.
+# That is `_losing_gun_duel`'s comparison reused as a RANGE controller rather than as a break
+# trigger, and it composes with the Phase-1 gate below: a shot already in hand always wins.
+#
+# WHY NOT JUST PICK A BETTER FIXED NUMBER. Because the damage-optimal setpoint is opponent
+# independent (~620 ft at tight range control, drifting outward as range-holding degrades) but
+# the DIFFERENTIAL-optimal setpoint is not: against an opponent who out-angles us, the best range
+# is as far as possible, and against one we out-angle it is as close as the 500 ft floor allows.
+#
+# DEFAULT OFF. Enable with DOGFIGHT_VPTRACK_ADAPTIVE_RANGE=1 or --{side}-vptrack-adaptive-range.
+# ---- Match clock that survives the live wire (2026-09-10) ------------------------------
+# THE DEFECT. `plane_info_to_state()` zeroes a 51-slot array and fills ONLY indices 0-8:
+# position, rotation, velocity. The wire struct ("<iQb3f3f3f") carries nothing else. But
+# StateIndex.SIM_TIME is index 41 and StateIndex.HEALTH is 45, so BOTH ARE PERMANENTLY ZERO IN
+# COMPETITION -- they exist only inside the local simulator.
+#
+# Anything keyed on them therefore works in every benchmark we run and does nothing at all on
+# match day. That already bit one shipped-adjacent knob: DECK_TTC_S finite-differences altitude
+# over `dt` taken from SIM_TIME, so live `dt` is 0.0, which fails its own _DECK_DT_MIN_S guard
+# and the time-to-impact deck guard can never fire. It measured fine locally because locally
+# SIM_TIME is real. This is the F46 train/deploy divergence class, and it is why HARD_DECK_M's
+# comment insists on altitude rather than VZ.
+#
+# THE FIX. compute_action() is called exactly once per frame, so counting calls gives elapsed
+# time without the wire. SIM_TIME is still preferred when it is actually populated, so every
+# local measurement stays bit-identical and only the live path changes behaviour.
+#
+# THE CEILING, named because it is real: the counter assumes one call per frame at TICK_HZ. If
+# the harness ever double-steps or drops frames the clock drifts, silently. It is reset per
+# episode in reset(). A native clock exists and is correct (CPPBehaviorTree.cpp:297 advances
+# BB->RunningTime by DeltaSecond, verified 0.02 to 199.98 s over 374,748 traced ticks), but
+# reaching it from Python needs a DLL rebuild, which would invalidate every current benchmark.
+TICK_HZ = 60.0
+
+ADAPTIVE_RANGE = os.environ.get("DOGFIGHT_VPTRACK_ADAPTIVE_RANGE", "0") not in ("0", "false", "False")
+
+PHASED_WINDOW = os.environ.get("DOGFIGHT_VPTRACK_PHASED_WINDOW", "0") not in ("0", "false", "False")
+
+
+def phase_window(sim_time_s: float) -> tuple[float, float]:
+    """(max_range_m, los_half_angle_deg) of the WIDEST cone scoring at this match time.
+
+    WEZ_PHASES stores angle_deg as the FULL cone width; the half-angle is what an ATA compares
+    against, hence the /2. Falls back to Phase 1 on a non-finite clock -- a bad timestamp must
+    tighten us to the highest-paying cone, never loosen us into one that scores nothing.
+    """
+    if not np.isfinite(sim_time_s):
+        return WEZ_MAX_M, PHASE1_LOS_DEG
+    widest = _WEZ_PHASES[0]
+    for ph in _WEZ_PHASES:
+        if sim_time_s >= ph["min_time_s"]:
+            widest = ph
+    return float(widest["max_range_m"]), float(widest["angle_deg"]) / 2.0
 
 # Aim at the target LOS, not the BT's VP. The VP is 86.4-86.8 deg off target during gun-hold,
 # which is the whole problem. Flip to True to A/B the VP-following path.
@@ -528,6 +703,13 @@ class VPTrackingProvider(BTActionProvider):
         self.pitch_floor = float(kwargs.pop("pitch_floor", PITCH_FLOOR))
         self.roll_taper_deg = float(kwargs.pop("roll_taper_deg", ROLL_TAPER_DEG))
         self.threat_ata_deg = float(kwargs.pop("threat_ata_deg", THREAT_ATA_DEG))
+        self.standoff_m = float(kwargs.pop("standoff_m", STANDOFF_M))
+        self.phased_window = bool(kwargs.pop("phased_window", PHASED_WINDOW))
+        self.adaptive_range = bool(kwargs.pop("adaptive_range", ADAPTIVE_RANGE))
+        # Frames seen this episode; the last-resort clock. See TICK_HZ above.
+        self._ticks = 0
+        # The server's own frame counter when the context carries one; preferred over _ticks.
+        self._frame_index: int | None = None
         self.hard_deck_m = float(kwargs.pop("hard_deck_m", HARD_DECK_M))
         self.deck_ttc_s = float(kwargs.pop("deck_ttc_s", DECK_TTC_S))
         # Previous sample for the finite difference. None until the second call.
@@ -548,7 +730,29 @@ class VPTrackingProvider(BTActionProvider):
         # depend on. Same argument for the range memory below.
         self._los_error_sum = 0.0
         self._prev_range_m = None
+        self._ticks = 0
+        self._frame_index = None
         return super().reset(context)
+
+    def _match_time_s(self, own) -> float:
+        """Elapsed match seconds, working on the live wire as well as in the simulator.
+
+        Three sources, most authoritative first:
+          1. StateIndex.SIM_TIME, when populated. Local runs therefore stay bit-identical.
+          2. The SERVER's frame index, from context.info. Both live sites in
+             dogfight/unreal/policies.py pass "frame_index" and the local env passes "timestep",
+             so this is monotonic and immune to a harness that double-steps or drops frames.
+          3. Our own call count, as a last resort if a caller supplies neither.
+
+        Never returns a bare 0.0 for "unknown", because 0.0 reads as "Phase 1 forever" and "no
+        time has passed" to every caller downstream.
+        """
+        t = float(own[StateIndex.SIM_TIME])
+        if np.isfinite(t) and t > 0.0:
+            return t
+        if self._frame_index is not None:
+            return self._frame_index / TICK_HZ
+        return self._ticks / TICK_HZ
 
     def _losing_gun_duel(self, own, tgt, rng: float, own_ata_deg: float) -> bool:
         """True when the opponent will score before we do.
@@ -617,10 +821,10 @@ class VPTrackingProvider(BTActionProvider):
             if np.isfinite(own_alt_m):
                 if self.hard_deck_m > 0.0 and own_alt_m < self.hard_deck_m:
                     self._deck_prev_alt_m = own_alt_m
-                    self._deck_prev_t_s = float(own[StateIndex.SIM_TIME])
+                    self._deck_prev_t_s = self._match_time_s(own)
                     return None
                 if self.deck_ttc_s > 0.0:
-                    t_s = float(own[StateIndex.SIM_TIME])
+                    t_s = self._match_time_s(own)
                     prev_alt, prev_t = self._deck_prev_alt_m, self._deck_prev_t_s
                     self._deck_prev_alt_m, self._deck_prev_t_s = own_alt_m, t_s
                     if prev_alt is not None and prev_t is not None:
@@ -632,7 +836,7 @@ class VPTrackingProvider(BTActionProvider):
                                     return None
                 else:
                     self._deck_prev_alt_m = own_alt_m
-                    self._deck_prev_t_s = float(own[StateIndex.SIM_TIME])
+                    self._deck_prev_t_s = self._match_time_s(own)
 
         # N-E-Up: D is negated, matching the eval replica and GetStick's own frame.
         rel = np.array([
@@ -651,6 +855,66 @@ class VPTrackingProvider(BTActionProvider):
             vp_n = float(np.linalg.norm(vp))
             if np.isfinite(vp_n) and vp_n > 0:
                 aim_u = vp / vp_n
+
+        # RANGE STANDOFF. Slide the aim point back along the TARGET's own forward axis -- i.e.
+        # toward their six -- by however far inside the standoff radius we are. Zero lag exactly
+        # at the boundary, so enabling this does not put a step in the command; full effect only
+        # in the knife-fight regime the measurement says we live in. Guarded so the default
+        # (0.0) leaves this function bit-identical to before it existed.
+        # DO NOT TRADE ANGLE FOR RANGE WHILE A SHOT IS ON THE TABLE (2026-09-09).
+        #
+        # COMPETITION_RULES Sec 6.2: Phase 1 pays `1.0 * (3000 - r_ft) / 2500` and needs range
+        # 500-3000 ft AND LOS < 1 deg. Range is a SMOOTH multiplier; the angle is a BINARY GATE.
+        # Sliding the aim point off the target to open range therefore risks dropping us out of
+        # the cone entirely and scoring zero, in exchange for a fractional improvement in a
+        # multiplier. That asymmetry is almost certainly why the ungated standoff lost its N=100
+        # confirmation (bo3 1.53 vs 1.60 control) after looking strong at N=40.
+        #
+        # Phase 1 is 92.6% of expected damage (measured from the per-phase step counts and the
+        # rules' own formulas), so protecting the Phase-1 gate dominates every range refinement.
+        # Lag only when we do NOT already have the shot.
+        own_ata_deg = float(np.arccos(_clamp(float(np.dot(fwd, rel_u)), -1.0, 1.0)) * RADTODEG)
+        if self.phased_window:
+            # The server's cone widens at 100 s and 150 s (COMPETITION_RULES Sec 6.2). Accept the
+            # widest cone that actually scores right now, so a late shot that pays 0.3 or 0.1 is
+            # treated as a shot instead of being manoeuvred away from. It can only ADD acceptance:
+            # Phase 1 stays inside every later phase, so a 1.0-coefficient solution is never
+            # displaced by a cheaper one.
+            _max_r, _los = phase_window(self._match_time_s(own))
+        else:
+            _max_r, _los = WEZ_MAX_M, PHASE1_LOS_DEG
+        shot_in_hand = (WEZ_MIN_M <= rng <= _max_r) and own_ata_deg <= _los
+        # ADAPTIVE RANGE. Extend only while they out-angle us; otherwise close and press the
+        # advantage, because f(r) multiplies the differential in whichever direction it points.
+        losing_angle = True
+        if self.adaptive_range:
+            _tf, _, _ = body_axes(tgt)
+            _to_us = np.array([
+                float(own[StateIndex.N]) - float(tgt[StateIndex.N]),
+                float(own[StateIndex.E]) - float(tgt[StateIndex.E]),
+                -(float(own[StateIndex.D]) - float(tgt[StateIndex.D]))])
+            _n = float(np.linalg.norm(_to_us))
+            if np.isfinite(_n) and _n > 0:
+                _tgt_ata = float(np.arccos(_clamp(float(np.dot(_tf, _to_us / _n)), -1.0, 1.0)) * RADTODEG)
+                losing_angle = _tgt_ata < own_ata_deg
+            # A degenerate relative vector leaves losing_angle True, i.e. falls back to the
+            # cautious branch: extend. Erring toward separation cannot cost more than the
+            # multiplier, while erring toward closure hands the exchange to a better-angled foe.
+
+        if (self.standoff_m > 0.0 and rng < self.standoff_m
+                and not shot_in_hand and losing_angle):
+            tgt_fwd, _, _ = body_axes(tgt)
+            # CAP THE LAG AT THE RANGE ITSELF (<= 45 deg of lag). Uncapped, the deficit grows
+            # without bound as range collapses: at 30 m inside a 220 m standoff the aim point
+            # lands 190 m BEHIND the target, i.e. behind US, los_deg exceeds engage_los_deg and
+            # `_tracking_stick` silently returns None and hands the aircraft to the BT. Caught by
+            # scripts/test_standoff_aimpoint.py -- the knob would have quietly disabled the
+            # controller in exactly the knife-fight geometry it was built to fix.
+            lag_m = min(self.standoff_m - rng, rng)
+            aim_vec = rel - tgt_fwd * lag_m
+            aim_n = float(np.linalg.norm(aim_vec))
+            if np.isfinite(aim_n) and aim_n > 1e-6:
+                aim_u = aim_vec / aim_n
 
         los_deg = float(np.arccos(_clamp(float(np.dot(fwd, aim_u)), -1.0, 1.0)) * RADTODEG)
         if not np.isfinite(los_deg):
@@ -703,7 +967,11 @@ class VPTrackingProvider(BTActionProvider):
         # tracking solution and break INTO them at max rate: same roll (put the threat in the
         # pull plane) but full pitch instead of error-proportional. Overrides the offensive
         # commands rather than blending, because a half-committed break is the worst of both.
-        if self.defensive_break and self._losing_gun_duel(own, tgt, rng, los_deg):
+        # Deliberately NOT los_deg: with a standoff active that is the angle to the LAG POINT,
+        # and _losing_gun_duel compares our ATA against theirs. Feeding it the lag angle would
+        # make us look worse-aligned than we are and fire the break spuriously. Computed inside
+        # the guard so the default path (defensive_break off) does no extra work at all.
+        if self.defensive_break and self._losing_gun_duel(own, tgt, rng, own_ata_deg):
             self._break_steps += 1
             # Deliberately UNTAPERED: this is a max-rate break, not a tracking command, and it
             # only fires when we are losing the gun duel -- holding a steady pipper is exactly
@@ -731,6 +999,24 @@ class VPTrackingProvider(BTActionProvider):
         return roll_cmd, pitch_cmd, rudder_cmd, throttle_cmd
 
     def compute_action(self, context: ActionContext) -> ActionResult:
+        # ONE FRAME. Counted here rather than in _tracking_stick, which returns early on several
+        # paths (hard deck, degenerate range, outside the envelope) and would under-count the
+        # clock exactly when the aircraft is in trouble. See TICK_HZ for why a counted clock is
+        # needed at all: StateIndex.SIM_TIME is index 41 and the live wire fills only 0-8.
+        self._ticks += 1
+        # PREFER THE SERVER'S OWN FRAME COUNTER. Both live construction sites in
+        # dogfight/unreal/policies.py pass info={"frame_index": ...}, and the local env passes
+        # info={"timestep": ...}. Either is monotonic and authoritative, so it cannot drift the
+        # way counting our own calls can if the harness ever double-steps or drops a frame.
+        # Reading it needs no change to src/dogfight -- it is already in the context.
+        _info = getattr(context, "info", None) or {}
+        _fi = _info.get("frame_index", _info.get("timestep"))
+        if _fi is not None:
+            try:
+                self._frame_index = int(_fi)
+            except (TypeError, ValueError):
+                pass
+
         # Always tick the BT first: it owns throttle, and its blackboard/gates/maneuver phases
         # must advance whether or not we use its stick this step.
         result = super().compute_action(context)

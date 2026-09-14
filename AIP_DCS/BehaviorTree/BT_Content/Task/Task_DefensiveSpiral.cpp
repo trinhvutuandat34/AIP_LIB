@@ -12,6 +12,28 @@ namespace Action
 	// fast too. Shares Task_Evade's EnemyInSight_Target/phase-claim idiom; unlike the Scissors
 	// family (Task_FlatScissors/Task_RollingScissors), this does NOT oscillate -- a spiral is one
 	// sustained turn direction, not an alternating reversal.
+	// MEASURED DEAD 2026-09-09 -- THIS NODE HAS NEVER RUN. The first AIP_BT_GATE_TRACE capture
+	// ever taken on this project (6 episodes, match_base self-play, shipped 6000/120 config on
+	// the current DLL) shows Gate1_DefensiveSpiral REACHED 7,287 times -- both its decorators
+	// pass -- and returning FAILURE on all 7,287. scripts/audit_unreachable_nodes.py classifies
+	// it NEVER-SUCCEEDS.
+	//
+	// THE BLOCKER IS THE CONJUNCTION BELOW, NOT THIS CONSTANT ALONE. An earlier reading of the
+	// same probe said "the aircraft never goes near 300 kt" -- that was wrong, and it was drawn
+	// from episode MEANS. Per-episode MINIMUM TAS (scripts/corner_speed_probe.py, N=20, same
+	// binary): median 305.3 kt, low 96.5 kt, and **9 of 20 episodes do dip below this 299.4 kt
+	// line**. The speed condition is satisfiable; it is just brief.
+	//
+	// What never coincides is all three at once. Of the 7,287 ticks on which this node was
+	// actually reached, only 1,113 (15%) had Distance < 2000 m, and the sub-300 kt dips are
+	// short. The fresh-claim gate samples the conjunction on ONE tick, so a brief dip that
+	// happens while the bandit is outside 2 km buys nothing.
+	//
+	// DO NOT just lower this number -- a nudge here is unmeasurable and the node's doctrine IS
+	// the low-energy case. If this node is to earn its place it needs the conjunction relaxed in
+	// TIME (claim on "was slow recently", not "is slow this tick"), which is real state and a
+	// DLL rebuild. Lower priority than the Gate-1 gun-solution carve-out, which is what actually
+	// suppresses defence: see the Rule XML's Gate1_*_NotGunSolution_OwnATA_Ge8 decorators.
 	static const float SPIRAL_SPEED_TRIGGER_MS = 154.0f;  // ~300kt -- same "slow" line Task_Evade
 	                                                       // already uses for its own nose-down bias
 	static const float SPIRAL_RANGE_TRIGGER_M = 2000.0f;  // close rear-hemisphere threat, same band

@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Full systematic matrix: every config candidate against every archetype.
+#
+# league.py handles the pairing, the corrected scorer, resume-on-rerun and the _is_selfplay()
+# floor. Driven in a loop because long runs get externally killed (F65) -- re-invoking the same
+# command tops up whatever is short, so this is safe to run unattended and safe to re-run.
+#
+# ONLY CONFIG CANDIDATES ARE HERE, NOT BT VARIANTS. Both aircraft read one global Rule XML, so a
+# tree change lands on both sides against every vptrack archetype and against bt_only, and
+# cancels exactly. `cutoff` is the only opponent running its own binary. BT behaviour therefore
+# stays cutoff-only evidence unless scripts/setup_peer_bt.py is stood up.
+set -u
+cd "$(dirname "$0")/.."
+PY="C:/Users/user/.conda/envs/aip/python.exe"
+# PREFLIGHT. activate_rule_xml() restores the shipped Rule XML from a sibling .bak, and that is
+# not safe across a killed or overlapping run -- on 2026-09-09 the backup was found to be
+# byte-for-byte bt_minimal.xml, one process exit from becoming the shipped tree. Every arm below
+# that does NOT pass --bt-rule-xml reads that file, so a contaminated tree would be measured and
+# reported as a configuration result, silently (F70). Refuse to start instead.
+"$PY" scripts/assert_baseline.py || { echo "[preflight] baseline is not clean; repairing";   "$PY" scripts/assert_baseline.py --repair;   "$PY" scripts/assert_baseline.py || { echo "[preflight] STILL not clean, aborting"; exit 1; }; }
+
+# EVERY LIVE MODE. Closed candidates are deliberately absent, with the measurement that closed
+# them: corner_on and defensive_on (rejected 2026-09-09, both directions), taper5/taper15
+# (z = -2.97 / -2.65), los140 (36% earned 0%), alt_8000_90 and the wide_* range arms (byte
+# identical to ship -- range is saturated above 6000 m). Re-running them would burn hours to
+# reproduce known negatives.
+#   ship_6000_120_deck   Model 1, the shipped config and the control
+#   prev_6000_90         the previously shipped config; also the Model 2 incumbent
+#   m2_6000_90_deck      Model 2 candidate -- F78 says re-decide it on the corrected scorer
+#   standoff*/deckttc    this session's candidates
+CANDS="ship_6000_120_deck prev_6000_90 m2_6000_90_deck standoff220_deck standoff400_deck standoff220_deckttc deckttc_on"
+for pass in 1 2 3 4 5 6 7 8 9 10; do
+  echo "[matrix] ---- pass $pass ----"
+  "$PY" scripts/league.py --candidates $CANDS \
+      --archetypes cutoff mirror sniper aggressor bt_only \
+      --episodes 40 --chunk-episodes 20 --jobs 3 --seed 20260909 \
+      >> artifacts/eval/MATRIX_0909.log 2>&1
+  if grep -q "every pair has reached 40 episodes" artifacts/eval/MATRIX_0909.log; then
+    echo "[matrix] complete"; break
+  fi
+done
+"$PY" scripts/matrix_report.py --candidates $CANDS
+echo "[matrix] done"
