@@ -1,0 +1,1 @@
+[bt_rule_manager] active Rule XML already in place: C:\Users\user\AppData\Local\Temp\_MEI000039682\Rule_forTraining.xml
