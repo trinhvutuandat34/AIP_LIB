@@ -144,7 +144,8 @@ namespace GateTrace
 	// tree_node.cpp (which IS compiled here) implements it.
 	inline void Attach(State& st, BT::Tree& tree)
 	{
-		if (st.attached)
+		// Disabled Record() never drains pending: do not subscribe or accumulate it.
+		if (st.attached || !Enabled())
 			return;
 		st.attached = true;
 

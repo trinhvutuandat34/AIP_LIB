@@ -33,8 +33,10 @@ VARIANT=experiments/rule_variants/bt_no_notch.xml
 
 # Same start-condition bands as run_bt_final/run_bt_stack, so these are comparable with the
 # cutoff arms rather than a third set of conditions.
-export DOGFIGHT_MATCH_ALTITUDE_RANGE_M="1000,7700"
-export DOGFIGHT_MATCH_SPEED_RANGE_MPS="150,280"
+# BAND CORRECTED 2026-09-11 (organizer-confirmed). Was "1000,7700"/"150,280"; any CSV in
+# artifacts/ older than this date was produced on that band and is NOT comparable across it.
+export DOGFIGHT_MATCH_ALTITUDE_RANGE_M="609.6,9144"
+export DOGFIGHT_MATCH_SPEED_RANGE_MPS="200,300"
 
 OWN="--ownship-backend vptrack --ownship-vptrack-range-m 6000 --ownship-vptrack-los-deg 120 \
      --ownship-vptrack-throttle 1 --ownship-vptrack-hard-deck 1000"

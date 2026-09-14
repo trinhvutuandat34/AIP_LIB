@@ -774,6 +774,21 @@ def parse_args():
                             f"the controller hands back to the BT (default 0 = off). F62: an "
                             f"altitude threshold cannot express how long you have -- 914 m at "
                             f"236 m/s of sink is 3.9 s, and an inverted recovery needs more.")
+        p.add_argument(f"--{_side}-vptrack-adaptive-range", type=int, choices=[0, 1], default=None,
+                       help="Extend only while the bandit out-angles us, close when we out-angle "
+                            "them. Damage is symmetric in range, so f(r) multiplies whichever "
+                            "side holds the tighter angle. Requires --vptrack-standoff-m.")
+        p.add_argument(f"--{_side}-vptrack-phased-window", type=int, choices=[0, 1], default=None,
+                       help="Widen the accepted firing window with the match clock, per "
+                            "COMPETITION_RULES Sec 6.2 (LOS 1/2/3 deg, 3000/3500/4000 ft at "
+                            "t=0/100/150 s). Only affects when the standoff stands down, so it "
+                            "is inert unless --vptrack-standoff-m is also set.")
+        p.add_argument(f"--{_side}-vptrack-standoff-m", type=float, default=None,
+                       help="Aim-point range standoff in metres (0 = off, the default). Inside "
+                            "this radius the aim point slides toward the target's six by "
+                            "(standoff - range), i.e. lag pursuit, so the flight path stops "
+                            "intersecting the target. Addresses the measured overshoot: median "
+                            "ep_min_distance 19.9 m against a 152.4 m zero-damage floor.")
         p.add_argument(f"--{_side}-vptrack-roll-taper", type=float, default=None,
                        help=f"{_side}: taper the ROLL command by pointing-error magnitude "
                             f"below this many degrees (0 = off, the shipped default). See "
@@ -875,6 +890,11 @@ def main():
         vptrack_roll_taper=args.ownship_vptrack_roll_taper,
         vptrack_hard_deck=args.ownship_vptrack_hard_deck,
         vptrack_deck_ttc=args.ownship_vptrack_deck_ttc,
+        vptrack_standoff_m=args.ownship_vptrack_standoff_m,
+        vptrack_adaptive_range=(None if args.ownship_vptrack_adaptive_range is None
+                                else bool(args.ownship_vptrack_adaptive_range)),
+        vptrack_phased_window=(None if args.ownship_vptrack_phased_window is None
+                               else bool(args.ownship_vptrack_phased_window)),
     )
     # Capture vp_valid so a SAFE_VP zero substitution is distinguishable from a genuine zero
     # aimpoint. Wrapping is transparent; see VPProbe.
@@ -897,6 +917,11 @@ def main():
         vptrack_roll_taper=args.target_vptrack_roll_taper,
         vptrack_hard_deck=args.target_vptrack_hard_deck,
         vptrack_deck_ttc=args.target_vptrack_deck_ttc,
+        vptrack_standoff_m=args.target_vptrack_standoff_m,
+        vptrack_adaptive_range=(None if args.target_vptrack_adaptive_range is None
+                                else bool(args.target_vptrack_adaptive_range)),
+        vptrack_phased_window=(None if args.target_vptrack_phased_window is None
+                               else bool(args.target_vptrack_phased_window)),
     )
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)

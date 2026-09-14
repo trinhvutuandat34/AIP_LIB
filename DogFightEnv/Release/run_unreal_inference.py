@@ -48,10 +48,12 @@ from student.inference_providers import (
 # DQ hardening (2026-08-05): reconnect supervisor + never-throw provider wrapper. See the
 # module docstring for the two client fragilities this guards against (COMPETITION_RULES Sec8).
 from student.controller_providers import (
+    SHIP_ADAPTIVE_RANGE,
     SHIP_DECK_TTC_S,
     SHIP_ENGAGE_LOS_DEG,
     SHIP_ENGAGE_RANGE_M,
     SHIP_HARD_DECK_M,
+    SHIP_STANDOFF_M,
     SHIP_THROTTLE_CONTROL,
     EnvelopeGatedHybridProvider,
     GLimitedProvider,
@@ -94,8 +96,15 @@ def parse_args():
     parser.add_argument(
         "--vptrack-deck-ttc", type=float, default=SHIP_DECK_TTC_S,
         help=f"seconds-to-impact at the current sink rate below which the controller hands back "
-             f"to the BT (default {SHIP_DECK_TTC_S:.0f} = OFF, the shipped value). Wired now so "
-             f"adopting it later is a one-line change to SHIP_DECK_TTC_S (F44/F62).",
+             f"to the BT (default {SHIP_DECK_TTC_S:.0f} s -- SHIPPED; 0 disables).",
+    )
+    parser.add_argument(
+        "--vptrack-standoff-m", type=float, default=SHIP_STANDOFF_M,
+        help=f"aim-point standoff radius (default {SHIP_STANDOFF_M:.0f} m -- SHIPPED; 0 disables).",
+    )
+    parser.add_argument(
+        "--vptrack-adaptive-range", type=int, choices=[0, 1], default=int(SHIP_ADAPTIVE_RANGE),
+        help="Apply standoff only while the opponent has the better pointing angle.",
     )
     parser.add_argument(
         "--vptrack-throttle", type=int, choices=[0, 1], default=int(SHIP_THROTTLE_CONTROL),
@@ -256,6 +265,8 @@ def _build_action_provider_raw(args, effective_observation_mode: str):
             engage_range_m=args.vptrack_range_m,
             hard_deck_m=args.vptrack_hard_deck,
             deck_ttc_s=args.vptrack_deck_ttc,
+            standoff_m=args.vptrack_standoff_m,
+            adaptive_range=args.vptrack_adaptive_range,
             engage_los_deg=args.vptrack_los_deg,
         )
 
@@ -291,6 +302,8 @@ def _build_action_provider_raw(args, effective_observation_mode: str):
             engage_range_m=args.vptrack_range_m,
             hard_deck_m=args.vptrack_hard_deck,
             deck_ttc_s=args.vptrack_deck_ttc,
+            standoff_m=args.vptrack_standoff_m,
+            adaptive_range=args.vptrack_adaptive_range,
             engage_los_deg=args.vptrack_los_deg,
         )
         if args.mode == "hybrid_gated":

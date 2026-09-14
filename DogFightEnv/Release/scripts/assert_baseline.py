@@ -30,10 +30,11 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
 
-# The rebuilt tree that ships today (2026-09-08, commit c282d56).
+# Release|x64 build, 2026-09-13: disabled gate tracing no longer subscribes or accumulates text.
+# Command-equivalence and performance results: artifacts/performance_20260912/.
 CURRENT = {
-    "AIP_BASE.dll": 1131281049,
-    "AIP_BASE_target.dll": 1131281049,
+    "AIP_BASE.dll": 2335424739,
+    "AIP_BASE_target.dll": 2335424739,
 }
 # The pre-spiral fallback, commit c0aa0ff. Kept as the Track A safety net.
 FALLBACK = {

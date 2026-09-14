@@ -114,6 +114,15 @@ DEFAULT_SPEED_RANGE_MPS = "200,300"
 # ---- Candidates: what we might ship. Ownship side. ------------------------------------
 # Flags mirror the SHIP_* constants in student/controller_providers.py; `ship` is the current
 # adopted config (F59) and is the control every other row is read against.
+#
+# STALE AS OF 2026-09-12: the SHIP_* constants moved ahead of this row. `adaptive300_deckttc`
+# below (standoff 300, adaptive-range on, deck-ttc 5) is now what SHIP_STANDOFF_M /
+# SHIP_ADAPTIVE_RANGE / SHIP_DECK_TTC_S actually build, confirmed on two independent N=100
+# seeds vs cutoff (pooled win 53.5% vs 45.5%, n=200 each) -- see the comment there. Left
+# UNCHANGED here rather than edited, because `aggressor` below is asserted byte-identical to
+# this exact flag set (is_self_play()'s minimax-floor exclusion depends on that), and reworking
+# both together this close to the deadline is not worth the risk for a measurement-harness
+# label. Read this row as "Model 1, pre-2026-09-12", not as the current ship default.
 CANDIDATES: dict[str, list[str]] = {
     "ship_6000_120_deck": ["--ownship-vptrack-range-m", "6000", "--ownship-vptrack-los-deg", "120",
                            "--ownship-vptrack-throttle", "1", "--ownship-vptrack-hard-deck", "1000"],

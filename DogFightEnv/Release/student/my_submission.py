@@ -408,6 +408,9 @@ def _build_action_provider_raw():
               f"throttle_control={profile['throttle_control']}, "
               f"engage={profile['engage_range_m']:.0f}m/{profile['engage_los_deg']:.0f}deg, "
               f"hard_deck={profile['hard_deck_m']:.0f}m, "
+              f"deck_ttc={profile.get('deck_ttc_s', 0.0):.1f}s, "
+              f"standoff={profile.get('standoff_m', 0.0):.0f}m, "
+              f"adaptive_range={profile.get('adaptive_range', False)}, "
               f"server={SERVER_IP}:{SERVER_PORT} [{SERVER_CONFIG_SOURCE}])")
         return VPTrackingProvider(
             dll_name=BT_DLL, throttle_control=profile["throttle_control"],
@@ -415,6 +418,8 @@ def _build_action_provider_raw():
             engage_los_deg=profile["engage_los_deg"],
             hard_deck_m=profile["hard_deck_m"],
             deck_ttc_s=profile["deck_ttc_s"],
+            standoff_m=profile.get("standoff_m", 0.0),
+            adaptive_range=profile.get("adaptive_range", False),
         )
 
     # BUNDLE_DIR 가드 (2026-08-11): 여기 도달했다는 것은 MODE가 rl/hybrid* 계열이라는

@@ -169,10 +169,29 @@ SHIP_THROTTLE_CONTROL = True
 # RISES 0.341 -> 0.394. NOT a global default -- applied to 6000/90 (which never crashed) it
 # measured slightly WORSE, so it is a fix for wide envelopes specifically.
 SHIP_HARD_DECK_M = 1000.0
-# Time-to-impact deck guard (F62). 0.0 = OFF, which is what ships today -- the knob exists so
-# the matrix can measure it. Adopting it is a one-line change here, and both entry points read
-# this constant (the F44 single-source guarantee), so there is nowhere else to remember.
-SHIP_DECK_TTC_S = 0.0
+# Time-to-impact deck guard (F62). ON as of 2026-09-12 -- see SHIP_STANDOFF_M below, adopted
+# together as one arm (`adaptive300_deckttc`). Both entry points read this constant (the F44
+# single-source guarantee), so there is nowhere else to remember.
+SHIP_DECK_TTC_S = 5.0
+# Range standoff + adaptive range, ADOPTED 2026-09-12 as one arm (`adaptive300_deckttc` in
+# scripts/league.py CANDIDATES) on the organizer-corrected spawn band (609.6-9144 m,
+# 200-300 m/s; see league.py's DEFAULT_ALTITUDE_RANGE_M). Confirmed on TWO independent seeds
+# vs the real cutoff binary, N=100 each, paired against the same-seed shipped-config control
+# (band_nonotch_s1/s2_vs_cutoff.csv): bo3 +0.45 (+1.28 SE) and +0.31 (+0.99 SE), same direction
+# both times -- pooled win rate 53.5% vs 45.5% (n=200 each). Screened at N=40 against aggressor
+# with no floor-violation reversal (bo3 +0.23, +0.46 SE, not itself significant but no red flag
+# either -- nopoint rate fell 17.5% -> 12.5%, consistent with the mechanism producing more
+# decisive outcomes instead of stalemates).
+#
+# HONEST CAVEAT, kept because every other register entry keeps its caveats: the damage
+# differential barely moves (+0.009 / +0.007 NET, still negative both times) -- the win-rate
+# gain is from converting more decisive kills (both "kills" and "died" rise together), not from
+# winning the raw damage race. Real, replicated, but not a free lunch.
+#
+# Model 2 (head-on) is DELIBERATELY UNTOUCHED -- this was only measured against Model 1's
+# profile (6000/120/hard-deck 1000). See MODEL_PROFILES[2] below.
+SHIP_STANDOFF_M = 300.0
+SHIP_ADAPTIVE_RANGE = True
 
 # ---- Model 1 / Model 2 profiles (2026-09-05, F61) ---------------------------------------
 # The finals accept TWO artifacts: Model 1 (main, plays every standard game) and Model 2 (used
@@ -200,6 +219,8 @@ MODEL_PROFILES: dict[int, dict[str, object]] = {
         "throttle_control": SHIP_THROTTLE_CONTROL,
         "hard_deck_m": SHIP_HARD_DECK_M,
         "deck_ttc_s": SHIP_DECK_TTC_S,
+        "standoff_m": SHIP_STANDOFF_M,
+        "adaptive_range": SHIP_ADAPTIVE_RANGE,
     },
 }
 # MODEL 2 ADOPTED 2026-09-05 (F74): `prev_6000_90` -- 6000 m, LOS 90 deg, throttle ON, NO hard
