@@ -1,0 +1,3408 @@
+=== 진짜보라매 경진대회 클라이언트 시작 ===
+서버: 203.0.113.55:54321
+모드: vptrack
+[진짜보라매] VP 트래킹 백엔드 사용 (RL 없음): C:\Users\user\AppData\Local\Temp\_MEI000039682\AIP_BASE.dll (model=1, throttle_control=True, engage=6000m/120deg, hard_deck=1000m, deck_ttc=5.0s, standoff=300m, adaptive_range=True, server=203.0.113.55:54321 [cli])
+[resilience] connect attempt 1 -> 203.0.113.55:54321
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=0.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: no packets yet
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+no packet yet
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=0.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=1, MT_ClientInfo=1
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.20
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=0.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=1, MT_ClientInfo=1
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.40
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[resilience] WARNING: no frames from server yet (203.0.113.55:54321) -- connected but never received a PlaneInfo on this connection. Check SERVER_IP/port and that the match has started.
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=0.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=1, MT_ClientInfo=1
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.60
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=0.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=1, MT_ClientInfo=1
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.80
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=1.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=2, MT_ClientInfo=2
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.00
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=1.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=2, MT_ClientInfo=2
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.21
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=1.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=2, MT_ClientInfo=2
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.41
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=1.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=2, MT_ClientInfo=2
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.61
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=1.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=2, MT_ClientInfo=2
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.81
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=2.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=3, MT_ClientInfo=3
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.01
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=2.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=3, MT_ClientInfo=3
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.21
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=2.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=3, MT_ClientInfo=3
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.41
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=2.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=3, MT_ClientInfo=3
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.62
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=2.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=3, MT_ClientInfo=3
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.84
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=3.1 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=4, MT_ClientInfo=4
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.08
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=3.3 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=4, MT_ClientInfo=4
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.28
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=3.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=4, MT_ClientInfo=4
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.48
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=3.7 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=4, MT_ClientInfo=4
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.68
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=3.9 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=4, MT_ClientInfo=4
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.89
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=4.1 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=5, MT_ClientInfo=5
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.08
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=4.3 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=5, MT_ClientInfo=5
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.30
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=4.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=5, MT_ClientInfo=5
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.52
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=4.7 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=5, MT_ClientInfo=5
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.72
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=4.9 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=5, MT_ClientInfo=5
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.92
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=5.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=6, MT_ClientInfo=6
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.17
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=5.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=6, MT_ClientInfo=6
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.38
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=5.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=6, MT_ClientInfo=6
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.61
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[resilience] WARNING: no frames from server yet (203.0.113.55:54321) -- connected but never received a PlaneInfo on this connection. Check SERVER_IP/port and that the match has started.
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=5.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=6, MT_ClientInfo=6
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.82
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=6.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=7, MT_ClientInfo=7
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.02
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=6.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=7, MT_ClientInfo=7
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.22
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=6.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=7, MT_ClientInfo=7
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.42
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=6.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=7, MT_ClientInfo=7
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.62
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=6.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=7, MT_ClientInfo=7
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.83
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=7.1 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=8, MT_ClientInfo=8
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.02
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=7.3 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=8, MT_ClientInfo=8
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.23
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=7.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=8, MT_ClientInfo=8
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.43
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=7.7 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=8, MT_ClientInfo=8
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.63
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=7.9 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=8, MT_ClientInfo=8
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.83
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=8.1 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=9, MT_ClientInfo=9
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.03
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=8.3 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=9, MT_ClientInfo=9
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.23
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=8.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=9, MT_ClientInfo=9
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.44
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=8.7 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=9, MT_ClientInfo=9
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.68
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=8.9 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=9, MT_ClientInfo=9
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.88
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=9.1 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=10, MT_ClientInfo=10
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.08
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=9.3 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=10, MT_ClientInfo=10
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.28
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=9.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=10, MT_ClientInfo=10
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.48
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=9.7 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=10, MT_ClientInfo=10
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.69
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=9.9 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=10, MT_ClientInfo=10
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.89
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=10.1 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=11, MT_ClientInfo=11
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.07
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=10.3 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=11, MT_ClientInfo=11
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.27
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=10.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=11, MT_ClientInfo=11
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.47
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=10.7 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=11, MT_ClientInfo=11
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.67
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[resilience] WARNING: no frames from server yet (203.0.113.55:54321) -- connected but never received a PlaneInfo on this connection. Check SERVER_IP/port and that the match has started.
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=10.9 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=11, MT_ClientInfo=11
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.87
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=11.1 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=12, MT_ClientInfo=12
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.07
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=11.3 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=12, MT_ClientInfo=12
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.28
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=11.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=12, MT_ClientInfo=12
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.48
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=11.7 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=12, MT_ClientInfo=12
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.68
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=11.9 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=12, MT_ClientInfo=12
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.89
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=12.1 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=13, MT_ClientInfo=13
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.09
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=12.3 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=13, MT_ClientInfo=13
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.29
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=12.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=13, MT_ClientInfo=13
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.49
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=12.7 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=13, MT_ClientInfo=13
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.69
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=12.9 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=13, MT_ClientInfo=13
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.89
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=13.1 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=14, MT_ClientInfo=14
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.09
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=13.3 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=14, MT_ClientInfo=14
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.29
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=13.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=14, MT_ClientInfo=14
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.50
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=13.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=14, MT_ClientInfo=14
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.70
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=14.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=14, MT_ClientInfo=14
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.90
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=14.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=15, MT_ClientInfo=15
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.10
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=14.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=15, MT_ClientInfo=15
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.30
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=14.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=15, MT_ClientInfo=15
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.50
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=14.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=15, MT_ClientInfo=15
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.71
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=15.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=15, MT_ClientInfo=15
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.91
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=15.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=16, MT_ClientInfo=16
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.11
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=15.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=16, MT_ClientInfo=16
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.31
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=15.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=16, MT_ClientInfo=16
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.51
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=15.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=16, MT_ClientInfo=16
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.71
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[resilience] WARNING: no frames from server yet (203.0.113.55:54321) -- connected but never received a PlaneInfo on this connection. Check SERVER_IP/port and that the match has started.
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=16.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=16, MT_ClientInfo=16
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.92
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=16.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=17, MT_ClientInfo=17
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.12
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=16.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=17, MT_ClientInfo=17
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.32
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=16.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=17, MT_ClientInfo=17
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.52
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=16.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=17, MT_ClientInfo=17
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.72
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=17.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=17, MT_ClientInfo=17
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.92
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=17.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=18, MT_ClientInfo=18
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.12
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=17.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=18, MT_ClientInfo=18
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.32
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=17.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=18, MT_ClientInfo=18
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.53
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=17.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=18, MT_ClientInfo=18
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.73
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=18.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=18, MT_ClientInfo=18
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.93
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=18.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=19, MT_ClientInfo=19
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.13
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=18.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=19, MT_ClientInfo=19
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.33
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=18.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=19, MT_ClientInfo=19
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.53
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=18.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=19, MT_ClientInfo=19
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.74
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=19.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=19, MT_ClientInfo=19
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.94
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=19.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=20, MT_ClientInfo=20
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.14
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=19.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=20, MT_ClientInfo=20
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.34
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=19.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=20, MT_ClientInfo=20
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.54
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=19.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=20, MT_ClientInfo=20
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.74
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=20.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=20, MT_ClientInfo=20
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.95
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=20.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=21, MT_ClientInfo=21
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.15
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=20.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=21, MT_ClientInfo=21
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.35
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=20.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=21, MT_ClientInfo=21
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.55
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=20.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=21, MT_ClientInfo=21
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.75
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[resilience] WARNING: no frames from server yet (203.0.113.55:54321) -- connected but never received a PlaneInfo on this connection. Check SERVER_IP/port and that the match has started.
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=21.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=21, MT_ClientInfo=21
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.95
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=21.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=22, MT_ClientInfo=22
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.15
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=21.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=22, MT_ClientInfo=22
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.35
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=21.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=22, MT_ClientInfo=22
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.55
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=21.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=22, MT_ClientInfo=22
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.76
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=22.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=22, MT_ClientInfo=22
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.96
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=22.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=23, MT_ClientInfo=23
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.16
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=22.4 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=23, MT_ClientInfo=23
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.37
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=22.6 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=23, MT_ClientInfo=23
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.57
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=22.8 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=23, MT_ClientInfo=23
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.77
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=23.0 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=23, MT_ClientInfo=23
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.97
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=23.2 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=24, MT_ClientInfo=24
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.18
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=23.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=24, MT_ClientInfo=24
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.39
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=23.7 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=24, MT_ClientInfo=24
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.59
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=23.9 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=24, MT_ClientInfo=24
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.79
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=24.1 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=24, MT_ClientInfo=24
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.99
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=24.3 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=25, MT_ClientInfo=25
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.20
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=24.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=25, MT_ClientInfo=25
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.40
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=24.7 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=25, MT_ClientInfo=25
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.60
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=24.9 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=25, MT_ClientInfo=25
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.80
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=25.1 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=26, MT_ClientInfo=26
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.00
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=25.3 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=26, MT_ClientInfo=26
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.21
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
+[2J[H=== Unreal UDP Packet Monitor ===
+server=203.0.113.55:54321 team=진짜보라매 ai_type=Fusion
+udp_mode=connected local=10.185.16.247:59401
+running=True uptime_sec=25.5 plane_id=-1 frame_index=0
+
+[Context]
+own_plane.valid=False own_plane.id=-1 own_plane.frame=0
+enemy_plane.valid=False enemy_plane.id=-1 enemy_plane.frame=0
+game_control.command=n/a
+
+[Counters]
+RX: no packets yet
+TX: MT_SimState=26, MT_ClientInfo=26
+
+[PlaneInfo Latest]
+plane_id=0 no packet yet
+plane_id=1 no packet yet
+
+[Last RX]
+no packet yet
+
+[Last TX]
+type=MT_ClientInfo size_bytes=39 age_sec=0.41
+to=203.0.113.55:54321
+team_name=진짜보라매
+ai_type=Fusion
+plane_id=-1
